@@ -45,6 +45,16 @@ Transformar uma meta ampla em um plano operacional com fases, skills, modelo rec
 - Subagents so devem ser recomendados quando houver tarefas paralelas independentes.
 - O primeiro passo precisa ser executavel imediatamente.
 
+## Arquivos de apoio
+Escolha o workflow por fase; nao recriar a sequencia aqui.
+- Workflow: ../../workflows/feature-build.md
+- Workflow: ../../workflows/bugfix.md
+- Workflow: ../../workflows/api-refactor.md
+- Workflow: ../../workflows/frontend-refactor.md
+- Workflow: ../../workflows/release.md
+- Workflow: ../../workflows/agent-handoff.md
+- Workflow: ../../workflows/long-conversation-handoff.md
+
 ## Exemplos de uso
 - Codex: `$workflow-orchestrator Planeje a entrega desta feature com fases, skills e riscos.`
 - Claude Code: `/workflow-orchestrator Organize esta refatoracao entre agentes e checks.`

@@ -33,6 +33,11 @@ Gerar opcoes fortes, comparar caminhos e convergir para uma direcao pratica sem 
 - Evite ideias vagas; cada opcao precisa ser acionavel.
 - Declare suposicoes relevantes.
 
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Rubric: ../../rubrics/architecture.md (ao avaliar tradeoffs tecnicos)
+- Template: ../../templates/prompt-package.md (ao empacotar a direcao escolhida)
+
 ## Exemplos curtos de uso
 - `$brainstorm-lab Como podemos reduzir abandono no onboarding B2B?`
 - `$brainstorm-lab Gere alternativas para migrar este app sem reescrever tudo.`

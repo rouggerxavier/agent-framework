@@ -25,23 +25,25 @@ Revisar mudancas de codigo com foco em risco real: regressao, quebra de contrato
 
 ## Workflow
 1. Entenda objetivo e escopo real do diff.
-2. Leia mudancas por risco: contrato, estado, dados, auth, erros e concorrencia.
-3. Procure regressao, edge cases e testes ausentes.
-4. Classifique achados por severidade.
-5. Separe bloqueadores de melhorias opcionais.
+2. Aplique a rubric de revisao e a de testes (ver Arquivos de apoio).
+3. Separe bloqueadores de melhorias opcionais.
+4. Reporte no formato do template de auditoria.
 
 ## Saida obrigatoria
-- Achados priorizados por severidade.
-- Evidencia com arquivo/linha quando disponivel.
-- Impacto e sugestao de correcao.
-- Testes faltantes ou verificacao recomendada.
-- Resumo curto se nao houver achados.
+Conforme `../../templates/audit-report.md`, com achados priorizados por
+severidade antes do resumo.
 
 ## Criterios de aceite
-- Findings devem vir antes do resumo.
+- Findings antes do resumo; cada achado com risco concreto e evidencia.
 - Nao marcar preferencia pessoal como bug.
-- Cada achado deve explicar risco concreto.
 - Informe limites da revisao e testes nao executados.
+- Demais criterios: rubric em Arquivos de apoio.
+
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Rubric: ../../rubrics/diff-review.md
+- Rubric: ../../rubrics/testing.md
+- Template: ../../templates/audit-report.md
 
 ## Exemplos de uso
 - Codex: `$diff-reviewer Revise o diff atual antes do merge.`

@@ -32,18 +32,18 @@ Produzir decisao de arquitetura defensavel, rastreavel e pratica para guiar impl
 5. Defina consequencias, riscos e criterio de revisao.
 
 ## Saida obrigatoria
-- Contexto.
-- Opcoes consideradas.
-- Decisao.
-- Consequencias.
-- Riscos e mitigacoes.
-- Validacao ou experimento recomendado.
+Preencha `../../templates/adr.md` (contexto, opcoes, decisao, consequencias,
+riscos, validacao recomendada).
 
 ## Criterios de aceite
-- A decisao deve orientar codigo.
-- Tradeoffs devem incluir manutencao e reversibilidade.
-- Evite conclusao sem criterio.
-- Indique quando revisar a decisao.
+- A decisao deve orientar codigo e indicar quando ser revisada.
+- Tradeoffs incluem manutencao e reversibilidade.
+- Demais criterios: rubric de arquitetura em Arquivos de apoio.
+
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Rubric: ../../rubrics/architecture.md
+- Template: ../../templates/adr.md
 
 ## Exemplos de uso
 - Codex: `$architecture-decision Decida entre fila, cron ou webhook para processamento assincrono.`

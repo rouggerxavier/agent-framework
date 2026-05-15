@@ -38,10 +38,16 @@ Definir cobertura de testes suficiente para uma mudanca sem exagerar custo nem d
 - Lacunas e criterio de aceite.
 
 ## Criterios de aceite
-- Testes devem ser proporcionais ao risco.
-- Mudancas criticas precisam de regressao explicita.
+- Testes proporcionais ao risco; mudancas criticas com regressao explicita.
 - Nao recomendar e2e pesado quando unit/integration cobre melhor.
 - Declarar o que nao sera coberto.
+- Mapa risco->cobertura: rubric de testes em Arquivos de apoio.
+
+## Arquivos de apoio
+Nao copie a matriz de risco na skill; aplique a rubric.
+- Rubric: ../../rubrics/testing.md
+- Workflow: ../../workflows/bugfix.md
+- Workflow: ../../workflows/feature-build.md
 
 ## Exemplos de uso
 - Codex: `$test-strategy-builder Defina testes para esta mudanca de billing.`

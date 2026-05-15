@@ -25,24 +25,25 @@ Criar plano incremental para implementar mudancas com baixo risco, verificacao c
 - Riscos ou dependencias conhecidas.
 
 ## Workflow
-1. Resuma objetivo e limites.
-2. Identifique arquivos, modulos e contratos afetados.
-3. Divida em fases pequenas e ordenadas.
-4. Defina testes e verificacoes por fase.
-5. Liste riscos, mitigacoes e rollback.
+Para feature, siga `../../workflows/feature-build.md`. Especifico desta skill:
+1. Resuma objetivo e limites; identifique arquivos/modulos/contratos.
+2. Divida em fases pequenas, ordenadas, com teste por fase.
+3. Liste riscos, mitigacoes e rollback.
 
 ## Saida obrigatoria
-- Plano por fases.
-- Escopo de arquivos ou modulos.
-- Criterios de aceite.
-- Testes e comandos de verificacao.
-- Riscos, mitigacoes e rollback.
+Preencha `../../templates/implementation-plan.md` (fases, escopo, aceite,
+testes/comandos, riscos, rollback).
 
 ## Criterios de aceite
-- Cada fase deve deixar o projeto coerente.
-- O plano deve evitar refatoracao lateral.
-- Verificacao deve ser proporcional ao risco.
-- Dependencias bloqueantes devem estar explicitas.
+- Cada fase deixa o projeto coerente; sem refatoracao lateral.
+- Verificacao proporcional ao risco; dependencias bloqueantes explicitas.
+- Decisoes de arquitetura: rubric em Arquivos de apoio.
+
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Workflow: ../../workflows/feature-build.md
+- Rubric: ../../rubrics/architecture.md
+- Template: ../../templates/implementation-plan.md
 
 ## Exemplos de uso
 - Codex: `$implementation-planner Planeje a implementacao de billing em fases.`

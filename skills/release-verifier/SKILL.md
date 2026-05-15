@@ -25,25 +25,26 @@ Determinar se uma entrega esta pronta para release com evidencias suficientes, r
 - Checklist de produto, QA, seguranca ou operacao.
 
 ## Workflow
+Siga `../../workflows/release.md`. Especifico desta skill:
 1. Confirme escopo, versao e ambiente.
-2. Verifique testes automatizados, smoke test e fluxos criticos.
-3. Revise migrations, flags, config, observabilidade e rollback.
-4. Classifique blockers, non-blockers e riscos aceitos.
-5. Emita decisao go/no-go com evidencias.
+2. Aplique a rubric de testes e a de docs-sync (ver Arquivos de apoio).
+3. Classifique blockers/non-blockers e emita go/no-go com evidencias.
 
 ## Saida obrigatoria
-- Decisao go/no-go.
-- Checks executados e resultados.
-- Blockers e pendencias.
-- Riscos aceitos.
-- Plano de rollback ou mitigacao.
-- Itens para release notes.
+Preencha `../../templates/release-checklist.md` (decisao go/no-go, checks e
+resultados, blockers, riscos aceitos, rollback, itens de release notes).
 
 ## Criterios de aceite
 - Nao aprovar release com blocker aberto.
-- Diferenciar evidencia executada de suposicao.
-- Incluir comandos, ambientes ou artefatos usados.
-- A decisao deve ser operacionalmente clara.
+- Evidencia executada vs suposicao; comandos/ambientes usados.
+- Decisao operacionalmente clara.
+
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Workflow: ../../workflows/release.md
+- Rubric: ../../rubrics/testing.md
+- Rubric: ../../rubrics/docs-sync.md
+- Template: ../../templates/release-checklist.md
 
 ## Exemplos de uso
 - Codex: `$release-verifier Verifique se este PR esta pronto para merge.`

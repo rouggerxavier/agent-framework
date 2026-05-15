@@ -43,6 +43,11 @@ Roteirizar trabalho para modelo, agente ou ferramenta adequada, com fallback, ef
 - Inclua validacao para alto impacto.
 - Evite recomendacao vaga.
 
+## Arquivos de apoio
+Capacidades e uso por agente ficam nos docs; nao duplicar aqui.
+- Docs: ../../docs/usage-claude.md
+- Docs: ../../docs/usage-codex.md
+
 ## Exemplos de uso
 - Codex: `$model-routing Escolha modelos para auditar UI, corrigir codigo e escrever release notes.`
 - Claude Code: `/model-routing Monte matriz Codex vs Claude vs ChatGPT para este fluxo.`

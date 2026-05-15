@@ -25,25 +25,24 @@ Produzir handoff compacto e suficiente para outra pessoa ou agente continuar sem
 - Destinatario do handoff.
 
 ## Workflow
-1. Resuma objetivo original e estado atual.
-2. Liste decisoes tomadas e motivo.
-3. Registre arquivos ou artefatos alterados.
-4. Inclua comandos executados e resultados relevantes.
-5. Descreva pendencias, riscos e proximo passo.
+Siga `../../workflows/agent-handoff.md`. Para conversa longa, rode antes a
+skill `context-compressor`. Especifico desta skill:
+1. Resuma objetivo, estado atual e decisoes com motivo.
+2. Registre arquivos alterados, comandos e resultados.
+3. Descreva pendencias, riscos e proximo passo.
 
 ## Saida obrigatoria
-- Contexto breve.
-- Estado atual.
-- Mudancas feitas.
-- Validacao executada.
-- Pendencias e riscos.
-- Proximo passo recomendado.
+Preencha `../../templates/handoff-summary.md` (contexto, estado, mudancas,
+validacao, pendencias/riscos, proximo passo).
 
 ## Criterios de aceite
-- O handoff deve ser curto e operacional.
-- Nao omitir falhas ou lacunas.
-- Use caminhos e comandos exatos quando existirem.
-- Separe fatos de recomendacoes.
+- Handoff curto e operacional; nao omitir falhas ou lacunas.
+- Caminhos e comandos exatos; separe fatos de recomendacoes.
+
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Workflow: ../../workflows/agent-handoff.md
+- Template: ../../templates/handoff-summary.md
 
 ## Exemplos de uso
 - Codex: `$handoff-builder Crie um handoff para outro agente continuar esta feature.`

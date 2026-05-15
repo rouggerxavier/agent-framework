@@ -31,17 +31,21 @@ Validar comportamento real do software em execucao, cobrindo fluxos criticos, er
 5. Classifique bloqueadores antes de melhorias.
 
 ## Saida obrigatoria
-- Ambiente testado.
-- Cenarios executados.
-- Resultado pass/fail por cenario.
-- Bugs com severidade, passos, esperado, obtido e evidencia.
-- Riscos residuais e lacunas.
+Conforme `../../templates/audit-report.md`: ambiente, cenarios, pass/fail,
+bugs com severidade/passos/esperado/obtido/evidencia, riscos residuais.
 
 ## Criterios de aceite
 - Nao declarar aprovado sem dizer o que foi testado.
-- Bugs devem ser reproduziveis ou marcados como intermitentes.
-- Logs relevantes devem ser resumidos.
+- Bugs reproduziveis ou marcados intermitentes; logs resumidos.
 - Separe falha funcional de ajuste visual.
+- Cobertura e performance: rubrics em Arquivos de apoio.
+
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Workflow: ../../workflows/release.md
+- Rubric: ../../rubrics/testing.md
+- Rubric: ../../rubrics/performance-budget.md
+- Template: ../../templates/audit-report.md
 
 ## Exemplos de uso
 - Codex: `$runtime-qa-audit Rode QA no fluxo de signup local.`

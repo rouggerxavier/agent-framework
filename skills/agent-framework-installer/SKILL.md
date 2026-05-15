@@ -46,6 +46,11 @@ Guiar a instalacao, atualizacao, verificacao e sincronizacao do `~/agent-framewo
 - Nao apagar skills externas fora dos nomes do framework.
 - Verificar `SKILL.md`, `name` e `description` antes de instalar.
 
+## Arquivos de apoio
+Regras e portabilidade ficam nos docs; nao duplicar aqui.
+- Docs: ../../docs/maintenance.md
+- Docs: ../../docs/portability.md
+
 ## Exemplos de uso
 - Codex: `$agent-framework-installer Verifique e instale minhas skills neste computador.`
 - Claude Code: `/agent-framework-installer Atualize o framework via git pull seguro e sincronize.`

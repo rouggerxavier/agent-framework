@@ -24,24 +24,27 @@ Transformar um sintoma em bug reproduzivel, causa provavel e correcao minima val
 - Escopo permitido para investigacao e correcao.
 
 ## Workflow
+Siga `../../workflows/bugfix.md` de ponta a ponta. Especifico desta skill:
 1. Registre esperado, obtido, ambiente e passos conhecidos.
 2. Reproduza ou documente por que nao foi possivel reproduzir.
-3. Levante hipoteses e valide por codigo, logs ou testes.
-4. Aplique ou recomende fix minimo.
-5. Execute verificacao focada e registre risco de regressao.
+3. Aplique fix minimo e valide regressao pela rubric de testes.
 
 ## Saida obrigatoria
-- Passos de reproducao ou tentativa.
-- Esperado vs obtido.
-- Causa provavel com evidencia.
-- Mudanca aplicada ou recomendada.
-- Verificacao e riscos restantes.
+- Passos de reproducao ou tentativa; esperado vs obtido.
+- Causa provavel com evidencia; mudanca aplicada ou recomendada.
+- Verificacao e riscos restantes (formato `../../templates/audit-report.md`).
 
 ## Criterios de aceite
-- Nao corrigir apenas por palpite quando houver caminho de reproducao.
-- Bug nao reproduzido deve sair como hipotese.
-- Fix deve ser pequeno e alinhado ao sistema.
-- Inclua teste de regressao ou justificativa.
+- Nao corrigir por palpite quando houver caminho de reproducao.
+- Bug nao reproduzido sai como hipotese; fix pequeno e alinhado.
+- Regressao conforme rubric de testes em Arquivos de apoio.
+
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Workflow: ../../workflows/bugfix.md
+- Rubric: ../../rubrics/testing.md
+- Rubric: ../../rubrics/diff-review.md
+- Template: ../../templates/audit-report.md
 
 ## Exemplos de uso
 - Codex: `$bug-repro-lab Reproduza e corrija o erro no checkout.`

@@ -24,26 +24,24 @@ Preservar o estado essencial de uma conversa longa para outro agente, modelo, ch
 - Nivel de detalhe desejado.
 
 ## Workflow
+Siga `../../workflows/long-conversation-handoff.md`. Especifico desta skill:
 1. Extraia objetivo original e estado atual.
-2. Liste decisoes tomadas e contexto necessario.
-3. Registre arquivos alterados ou relevantes.
-4. Separe pendencias, riscos, validacoes e lacunas.
-5. Termine com proximos passos e prompt de retomada.
+2. Separe decisoes, arquivos, pendencias, riscos e lacunas.
+3. Termine com proximos passos e prompt de retomada.
 
 ## Saida obrigatoria
-- Estado atual.
-- Decisoes tomadas.
-- Arquivos alterados ou relevantes.
-- Pendencias.
-- Riscos.
-- Proximos passos.
-- Prompt de retomada para outro agente/chat.
+Preencha `../../templates/handoff-summary.md` (estado, decisoes, arquivos,
+pendencias, riscos, proximos passos, prompt de retomada).
 
 ## Criterios de aceite
 - O resumo deve permitir continuidade sem reler a conversa.
 - Nao omitir bloqueadores, falhas de teste ou incertezas.
-- Use caminhos e comandos exatos quando disponiveis.
-- Mantenha curto e priorizado.
+- Caminhos e comandos exatos; curto e priorizado.
+
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Workflow: ../../workflows/long-conversation-handoff.md
+- Template: ../../templates/handoff-summary.md
 
 ## Exemplos de uso
 - Codex: `$context-compressor Comprima esta conversa para continuar em outro agente.`

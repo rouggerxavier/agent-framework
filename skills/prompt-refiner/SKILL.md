@@ -31,16 +31,18 @@ Converter uma intencao ambigua em prompt operacional com contexto, escopo, restr
 5. Gere versao pronta para uso.
 
 ## Saida obrigatoria
-- Prompt refinado.
-- Suposicoes.
-- Criterios de aceite.
-- Perguntas bloqueantes, se existirem.
+Preencha `../../templates/prompt-package.md` (prompt refinado, suposicoes,
+criterios de aceite, perguntas bloqueantes).
 
 ## Criterios de aceite
 - O prompt deve ser executavel sem explicacao adicional.
 - Deve limitar escopo e preservar contexto essencial.
 - Deve incluir verificacao quando houver codigo, UI, API ou release.
 - Nao deve inventar contexto ausente.
+
+## Arquivos de apoio
+Nao copie a estrutura do pacote na skill; use o template.
+- Template: ../../templates/prompt-package.md
 
 ## Exemplos de uso
 - Codex: `$prompt-refiner Melhore este pedido para uma tarefa de bugfix.`

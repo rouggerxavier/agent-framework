@@ -24,24 +24,27 @@ Encontrar riscos de quebra em APIs e orientar mudancas compativeis, testaveis e 
 - Mudanca pretendida ou bug report.
 
 ## Workflow
+Para refator de API, siga `../../workflows/api-refactor.md`. Especifico:
 1. Identifique consumidores, endpoints, schemas e comportamento publico.
-2. Revise request, response, erros, auth, idempotencia e paginacao.
-3. Avalie compatibilidade e versionamento.
-4. Liste testes de contrato e casos limite.
-5. Recomende mitigacao, migracao ou comunicacao.
+2. Aplique a rubric de contrato e a de testes (ver Arquivos de apoio).
+3. Recomende mitigacao, migracao ou comunicacao.
 
 ## Saida obrigatoria
-- Contratos afetados.
-- Riscos de breaking change.
-- Problemas de request, response, status ou error shape.
-- Testes de contrato recomendados.
-- Plano de mitigacao ou versionamento.
+Conforme `../../templates/audit-report.md`: contratos afetados, riscos de
+breaking change, problemas de request/response/status/error e plano de
+mitigacao ou versionamento.
 
 ## Criterios de aceite
 - Diferencie contrato publico de detalhe interno.
-- Inclua exemplos concretos quando possivel.
 - Nao aprove quebra sem plano de migracao.
-- Considere auth, erro e idempotencia quando relevantes.
+- Demais criterios: rubric de contrato em Arquivos de apoio.
+
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Workflow: ../../workflows/api-refactor.md
+- Rubric: ../../rubrics/api-contract.md
+- Rubric: ../../rubrics/testing.md
+- Template: ../../templates/audit-report.md
 
 ## Exemplos de uso
 - Codex: `$api-contract-auditor Revise esta mudanca de endpoint antes do deploy.`

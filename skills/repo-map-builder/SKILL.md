@@ -43,6 +43,11 @@ Produzir um mapa tecnico navegavel do repositorio para acelerar onboarding, refa
 - Separe fato observado de opiniao arquitetural.
 - O mapa deve reduzir tempo de navegacao no repo.
 
+## Arquivos de apoio
+Etapa inicial dos workflows abaixo; nao duplicar os passos deles aqui.
+- Workflow: ../../workflows/api-refactor.md
+- Workflow: ../../workflows/frontend-refactor.md
+
 ## Exemplos de uso
 - Codex: `$repo-map-builder Crie um mapa do repo antes da refatoracao de API.`
 - Claude Code: `/repo-map-builder Encontre entrypoints, rotas e testes deste projeto.`

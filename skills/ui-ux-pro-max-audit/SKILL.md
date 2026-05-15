@@ -25,24 +25,26 @@ Identificar problemas de experiencia e interface que afetam clareza, conversao, 
 
 ## Workflow
 1. Entenda a tarefa principal do usuario.
-2. Revise hierarquia, layout, densidade, navegacao e microcopy.
-3. Verifique responsividade, contraste, foco, teclado e estados.
-4. Use a skill/ferramenta UI UX Pro Max para auxiliar decisões de design sempre que disponível.
-5. Priorize achados por impacto e esforco.
-6. Sugira correcoes concretas e verificaveis.
+2. Aplique a rubric de UI/UX (ver Arquivos de apoio).
+3. Use a skill/ferramenta UI UX Pro Max para auxiliar decisões de design sempre que disponível.
+4. Priorize achados por impacto e esforco; sugira correcoes verificaveis.
+5. Para refator de UI, siga `../../workflows/frontend-refactor.md`.
 
 ## Saida obrigatoria
-- Veredito geral.
-- Achados priorizados com severidade.
-- Evidencia visual ou referencia de tela.
-- Recomendacao de correcao.
-- Checklist final de QA visual.
+Conforme `../../templates/audit-report.md`: veredito, achados priorizados com
+severidade, evidencia visual e recomendacao de correcao.
 
 ## Criterios de aceite
 - Diferencie bug, risco de UX e opiniao estetica.
-- Toda critica deve ter acao de melhoria.
-- Considere mobile e desktop quando aplicavel.
+- Toda critica deve ter acao de melhoria; mobile e desktop quando aplicavel.
 - Nao proponha redesign amplo sem necessidade.
+- Demais criterios: rubric de UI/UX em Arquivos de apoio.
+
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Rubric: ../../rubrics/ui-ux.md
+- Workflow: ../../workflows/frontend-refactor.md
+- Template: ../../templates/audit-report.md
 
 ## Exemplos de uso
 - Codex: `$ui-ux-pro-max-audit Audite esta tela de checkout em desktop e mobile.`

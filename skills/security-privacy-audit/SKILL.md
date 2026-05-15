@@ -31,17 +31,19 @@ Identificar riscos praticos de seguranca e privacidade e recomendar mitigacoes p
 5. Recomende mitigacao minima, teste e monitoramento.
 
 ## Saida obrigatoria
-- Escopo revisado.
-- Superficies e dados sensiveis envolvidos.
-- Achados com severidade.
-- Evidencia tecnica.
-- Mitigacoes e verificacoes recomendadas.
+Conforme `../../templates/audit-report.md`: escopo, superficies e dados
+sensiveis, achados com severidade, evidencia, mitigacoes e verificacoes.
 
 ## Criterios de aceite
-- Nao afirmar seguranca total.
+- Nao afirmar seguranca total; indicar quando exige revisao especializada.
 - Separar risco real de hardening opcional.
-- Incluir privacidade em logs, analytics e terceiros.
-- Indicar quando precisa de revisao especializada.
+- Demais criterios: rubric de seguranca/privacidade em Arquivos de apoio.
+
+## Arquivos de apoio
+Nao copie estes checklists na skill; aplique-os a partir daqui.
+- Rubric: ../../rubrics/security-privacy.md
+- Rubric: ../../rubrics/diff-review.md
+- Template: ../../templates/audit-report.md
 
 ## Exemplos de uso
 - Codex: `$security-privacy-audit Audite este fluxo de auth e dados pessoais.`

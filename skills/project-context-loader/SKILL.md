@@ -43,6 +43,12 @@ Criar um resumo curto e reutilizavel do projeto para reduzir repeticao de contex
 - Nao invente comandos ausentes.
 - O resumo deve caber em prompt de retomada.
 
+## Arquivos de apoio
+Etapa inicial dos workflows abaixo; nao duplicar os passos deles aqui.
+- Workflow: ../../workflows/feature-build.md
+- Workflow: ../../workflows/bugfix.md
+- Rubric: ../../rubrics/coding-standards.md (padroes a observar no repo)
+
 ## Exemplos de uso
 - Codex: `$project-context-loader Prepare contexto para implementar login neste repo.`
 - Claude Code: `/project-context-loader Mapeie stack, comandos e convencoes antes do bugfix.`
