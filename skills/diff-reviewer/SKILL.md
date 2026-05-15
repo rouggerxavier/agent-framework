@@ -43,6 +43,7 @@ severidade antes do resumo.
 Nao copie estes checklists na skill; aplique-os a partir daqui.
 - Rubric: ../../rubrics/diff-review.md
 - Rubric: ../../rubrics/testing.md
+- Rubric: ../../rubrics/data-migration.md (se o diff toca migration/dados)
 - Template: ../../templates/audit-report.md
 
 ## Exemplos de uso

@@ -44,6 +44,7 @@ Nao copie estes checklists na skill; aplique-os a partir daqui.
 - Workflow: ../../workflows/release.md
 - Rubric: ../../rubrics/testing.md
 - Rubric: ../../rubrics/docs-sync.md
+- Rubric: ../../rubrics/data-migration.md (se a release inclui migration)
 - Template: ../../templates/release-checklist.md
 
 ## Exemplos de uso

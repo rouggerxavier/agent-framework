@@ -31,11 +31,8 @@ Definir cobertura de testes suficiente para uma mudanca sem exagerar custo nem d
 5. Declare lacunas e aceite de risco.
 
 ## Saida obrigatoria
-- Matriz risco -> teste.
-- Testes recomendados por prioridade.
-- Comandos de verificacao.
-- Cenarios manuais, se necessarios.
-- Lacunas e criterio de aceite.
+Preencha `../../templates/test-plan.md` (matriz risco->teste, comandos,
+cenarios manuais, lacunas e aceite).
 
 ## Criterios de aceite
 - Testes proporcionais ao risco; mudancas criticas com regressao explicita.
@@ -44,8 +41,9 @@ Definir cobertura de testes suficiente para uma mudanca sem exagerar custo nem d
 - Mapa risco->cobertura: rubric de testes em Arquivos de apoio.
 
 ## Arquivos de apoio
-Nao copie a matriz de risco na skill; aplique a rubric.
+Nao copie a matriz de risco na skill; aplique a rubric e o template.
 - Rubric: ../../rubrics/testing.md
+- Template: ../../templates/test-plan.md
 - Workflow: ../../workflows/bugfix.md
 - Workflow: ../../workflows/feature-build.md
 

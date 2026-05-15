@@ -43,6 +43,7 @@ testes/comandos, riscos, rollback).
 Nao copie estes checklists na skill; aplique-os a partir daqui.
 - Workflow: ../../workflows/feature-build.md
 - Rubric: ../../rubrics/architecture.md
+- Rubric: ../../rubrics/data-migration.md (se a fase mexe em schema/dados)
 - Template: ../../templates/implementation-plan.md
 
 ## Exemplos de uso
