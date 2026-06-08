@@ -10,10 +10,10 @@
 |  |  |  |  |
 
 ## Consequences
-- 
+-
 
 ## Validation
-- 
+-
 
 ## Review Trigger
-- 
+-

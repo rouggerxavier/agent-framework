@@ -20,7 +20,7 @@
 - Evidence:
 
 ## Residual Risk
-- 
+-
 
 ## Next Steps
-- 
+-

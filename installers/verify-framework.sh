@@ -21,19 +21,47 @@ for skill in "$SKILLS_DIR"/*; do
   skill_file="$skill/SKILL.md"
   echo "- $name"
 
+  case "$name" in
+    *[!a-z0-9-]*|-*|*-|*--*)
+      echo "  problem: invalid skill directory name; use kebab-case"
+      problems=$((problems + 1))
+      ;;
+  esac
+
   if [ ! -f "$skill_file" ]; then
     echo "  problem: missing SKILL.md"
     problems=$((problems + 1))
     continue
   fi
 
-  if ! grep -Eq '^name:[[:space:]]*.+' "$skill_file"; then
+  frontmatter_name="$(sed -n 's/^name:[[:space:]]*//p' "$skill_file" | head -n 1)"
+  description="$(sed -n 's/^description:[[:space:]]*//p' "$skill_file" | head -n 1)"
+
+  if [ -z "$frontmatter_name" ]; then
     echo "  problem: missing frontmatter name"
+    problems=$((problems + 1))
+  elif [ "$frontmatter_name" != "$name" ]; then
+    echo "  problem: frontmatter name does not match directory ($frontmatter_name != $name)"
     problems=$((problems + 1))
   fi
 
-  if ! grep -Eq '^description:[[:space:]]*.+' "$skill_file"; then
+  if [ -z "$description" ]; then
     echo "  problem: missing frontmatter description"
+    problems=$((problems + 1))
+  elif [ "${#description}" -gt 240 ]; then
+    echo "  problem: description too long (${#description} chars, max 240)"
+    problems=$((problems + 1))
+  fi
+
+  for heading in "## Objetivo" "## Workflow" "## Saida"; do
+    if ! grep -Eq "^$heading" "$skill_file"; then
+      echo "  problem: missing required heading prefix: $heading"
+      problems=$((problems + 1))
+    fi
+  done
+
+  if ! grep -Eq '^## Criterios' "$skill_file"; then
+    echo "  problem: missing criteria heading"
     problems=$((problems + 1))
   fi
 done

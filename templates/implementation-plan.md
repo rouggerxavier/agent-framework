@@ -12,10 +12,10 @@
 | 1 |  |  |  |  |
 
 ## Risks
-- 
+-
 
 ## Rollback
-- 
+-
 
 ## Acceptance Criteria
-- 
+-

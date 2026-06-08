@@ -8,6 +8,8 @@
 - Revise `description` de cada skill para nao poluir contexto.
 - Evite duplicar a mesma checklist em varias skills.
 - Prefira exemplos curtos de uso para Codex e Claude Code.
+- Use `docs/skill-standards.md` para criar ou revisar skills.
+- Use `skills/skill-evolution-loop` para transformar recorrencia real em skill, rubric, workflow ou template.
 - Rode `bash installers/verify-framework.sh` antes de commit.
 
 ## Atualizar uma skill
@@ -24,3 +26,10 @@
 2. Use nome em kebab-case.
 3. Inclua objetivo, quando usar, quando nao usar, entradas, workflow, saida, aceite e exemplos.
 4. Rode `verify-framework.sh`.
+
+## Evoluir por recorrencia
+
+1. Atualize `docs/task-memory.md` ao detectar padrao reutilizavel.
+2. Conte apenas ocorrencias distintas.
+3. Ao chegar em 3 ocorrencias, decida se o melhor asset e skill, rubric, workflow ou template.
+4. Registre a decisao na memoria e rode verificacao.

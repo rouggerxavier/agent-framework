@@ -14,10 +14,10 @@
 - [ ] Rollback plan ready
 
 ## Blockers
-- 
+-
 
 ## Risks Accepted
-- 
+-
 
 ## Go/No-Go
 - Decision:

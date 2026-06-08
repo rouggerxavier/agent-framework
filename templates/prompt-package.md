@@ -20,7 +20,7 @@ Use the following skill instructions...
 ```
 
 ## Acceptance Criteria
-- 
+-
 
 ## Verification
-- 
+-
