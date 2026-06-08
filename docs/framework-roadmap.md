@@ -15,7 +15,7 @@ Criar um framework que ajude o agente a fazer quatro coisas bem:
 
 ## Lacunas atuais
 - A skill de auditoria de qualidade existe; falta usa-la em revisoes reais para calibrar severidade e duplicacao.
-- Existem rubrics sem skill correspondente: docs sync, data migration, performance budget e coding standards.
+- Rubrics agora tem skill correspondente (docs sync, data migration, performance budget e coding standards); manter essa paridade ao criar novas rubrics.
 - Falta inventario de dependencias entre skills, rubrics, workflows e templates.
 - Falta criterio de versao/changelog para mudancas grandes no framework.
 - Falta uma camada de exemplos reais por skill, mesmo que minima.
@@ -59,11 +59,11 @@ Criar um framework que ajude o agente a fazer quatro coisas bem:
 | deadcode-orphan-mapper | Mapeia codigo morto/orfao, exports nao usados, rotas mortas, jobs, configs, prompts e tools desconectados. | criada |
 | agent-optimization-auditor | Otimiza agentes quanto a tokens, latencia, tool calls, retries, cache, prompt size, model tier e contexto. | criada |
 | performance-budget-auditor | Audita budget de performance em backend e agentes: latencia, custo, memoria, queries, batch, cache e timeout. | criada |
+| coding-standards-enforcer | Descobre e aplica padroes locais (nomes, estrutura, estilo, erros, testes) antes de refatorar, gerar patch ou criar arquivo. | criada |
 
 ## Backlog de novas skills
 | Prioridade | Skill | Por que ajuda |
 | --- | --- | --- |
-| Media | coding-standards-enforcer | Aplica padroes locais antes de refatorar, revisar ou gerar patch. |
 | Baixa | local-env-doctor | Diagnostica setup local, comandos, portas, env vars e falhas comuns. |
 | Baixa | observability-runbook-builder | Cria runbook de logs, metricas, alertas, rollback e troubleshooting. |
 | Baixa | skill-example-curator | Mantem exemplos curtos de prompts e saidas esperadas por skill. |

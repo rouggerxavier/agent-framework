@@ -44,6 +44,7 @@ Dado um pedido, apontar rapidamente os assets certos do `~/agent-framework`. Dis
 | Estrategia de testes | test-strategy-builder | rubrics/testing, templates/test-plan |
 | Mapa de confianca de testes | test-confidence-mapper | templates/test-confidence-map, test-strategy-builder, release-verifier |
 | Revisar diff/PR | diff-reviewer | rubrics/diff-review, templates/audit-report |
+| Aplicar padroes locais antes de codar | coding-standards-enforcer | rubrics/coding-standards, repo-map-builder, diff-reviewer |
 | Contrato de API | api-contract-auditor | rubrics/api-contract, workflows/api-refactor |
 | Auditar dependencia | dependency-risk-auditor | templates/dependency-risk-report, security-privacy-audit, architecture-decision |
 | Auditar migration/dados | data-migration-auditor | templates/data-migration-report, rubrics/data-migration, release-verifier |
