@@ -1,6 +1,6 @@
 ---
 name: agent-observability-auditor
-description: Use para auditar observabilidade de agentes: logs, traces, metrics, cost tracking, prompt/tool audit, redaction e debug readiness.
+description: "Use para auditar observabilidade de agentes: logs, traces, metrics, cost tracking, prompt/tool audit, redaction e debug readiness."
 ---
 
 # Agent Observability Auditor

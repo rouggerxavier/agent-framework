@@ -1,6 +1,6 @@
 ---
 name: config-surface-auditor
-description: Use para revisar superficie de configuracao: env vars, defaults, overrides, secrets, .env.example, .gitignore, logs e artefatos locais.
+description: "Use para revisar superficie de configuracao: env vars, defaults, overrides, secrets, .env.example, .gitignore, logs e artefatos locais."
 ---
 
 # Config Surface Auditor

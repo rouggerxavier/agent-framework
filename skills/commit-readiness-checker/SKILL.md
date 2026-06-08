@@ -1,6 +1,6 @@
 ---
 name: commit-readiness-checker
-description: Use para checar se um commit esta pronto: diff, escopo, testes, docs, secrets, arquivos mistos, mensagem e validacao pendente.
+description: "Use para checar se um commit esta pronto: diff, escopo, testes, docs, secrets, arquivos mistos, mensagem e validacao pendente."
 ---
 
 # Commit Readiness Checker

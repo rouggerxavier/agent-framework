@@ -1,6 +1,6 @@
 ---
 name: deadcode-orphan-mapper
-description: Use para mapear codigo morto ou orfao: exports nao usados, rotas mortas, jobs sem trigger, configs antigas, prompts e tools desconectados.
+description: "Use para mapear codigo morto ou orfao: exports nao usados, rotas mortas, jobs sem trigger, configs antigas, prompts e tools desconectados."
 ---
 
 # Deadcode Orphan Mapper

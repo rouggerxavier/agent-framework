@@ -1,6 +1,6 @@
 ---
 name: tool-contract-auditor
-description: Use para auditar contratos de tools de agente: schema, payloads, erros, permissao, side effects, timeout, retry, idempotencia e logs.
+description: "Use para auditar contratos de tools de agente: schema, payloads, erros, permissao, side effects, timeout, retry, idempotencia e logs."
 ---
 
 # Tool Contract Auditor

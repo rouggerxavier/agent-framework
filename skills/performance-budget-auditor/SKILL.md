@@ -1,6 +1,6 @@
 ---
 name: performance-budget-auditor
-description: Use para auditar budget de performance em backend e agentes: latencia, custo, memoria, queries, batch, cache, timeout e medicao.
+description: "Use para auditar budget de performance em backend e agentes: latencia, custo, memoria, queries, batch, cache, timeout e medicao."
 ---
 
 # Performance Budget Auditor

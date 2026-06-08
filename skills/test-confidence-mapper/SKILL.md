@@ -1,6 +1,6 @@
 ---
 name: test-confidence-mapper
-description: Use para mapear comandos de verificacao por nivel de confianca: inner loop, PR ready, merge/release e caminhos especiais de backend.
+description: "Use para mapear comandos de verificacao por nivel de confianca: inner loop, PR ready, merge/release e caminhos especiais de backend."
 ---
 
 # Test Confidence Mapper

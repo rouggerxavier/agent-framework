@@ -1,6 +1,6 @@
 ---
 name: task-mode-router
-description: Use para escolher o peso certo de execucao de uma tarefa: fast, quick, full ou audit, evitando processo caro quando uma rota leve basta.
+description: "Use para escolher o peso certo de execucao de uma tarefa: fast, quick, full ou audit, evitando processo caro quando uma rota leve basta."
 ---
 
 # Task Mode Router

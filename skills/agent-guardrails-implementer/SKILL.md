@@ -1,6 +1,6 @@
 ---
 name: agent-guardrails-implementer
-description: Use para especificar ou implementar guardrails de agentes: input validation, output constraints, permissions, escalation, stop conditions e audit logs.
+description: "Use para especificar ou implementar guardrails de agentes: input validation, output constraints, permissions, escalation, stop conditions e audit logs."
 ---
 
 # Agent Guardrails Implementer
