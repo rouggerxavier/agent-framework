@@ -23,11 +23,18 @@ Dado um pedido, apontar rapidamente os assets certos do `~/agent-framework`. Dis
 3. Se >1 fase ou >4 assets, encaminhe para `workflow-orchestrator` e pare.
 4. Indique o primeiro asset a invocar.
 
+## Prioridade alta
+- Se o pedido mencionar brief, documentacao de feature/refatoracao, plano de execucao, organizar tarefa, quebrar em etapas ou preparar trabalho para outro agente, priorize `execution-plan-builder`.
+- Se o pedido mencionar prompts por etapa, prompt para proximo agente, pacote de prompts ou delegar execucao, priorize `execution-prompt-builder`.
+- Para esse fluxo, referencie `workflows/execution-brief` e mantenha o router como dispatcher.
+
 ## Tabela de roteamento
 | Intencao | Skill | Apoio |
 |---|---|---|
 | Entrar em repo novo | project-context-loader, repo-map-builder | — |
 | Ideias / objetivo aberto | brainstorm-lab | — |
+| Brief/documentacao/plano de execucao | execution-plan-builder | workflows/execution-brief, brainstorm-lab, plan-quality-checker |
+| Prompts por etapa para execucao | execution-prompt-builder | templates/execution-prompt-package, handoff-builder, code-review-gate |
 | Criar/refatorar agente | agent-builder | workflows/agent-workflow, templates/agent-design |
 | Auditar hardcode em agente | agent-anti-hardcode-auditor | templates/agent-hardcode-report, model-flexibility-auditor, config-surface-auditor |
 | Auditar flexibilidade de modelo | model-flexibility-auditor | templates/model-flexibility-report, model-routing, runtime-qa-audit |

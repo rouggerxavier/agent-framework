@@ -1,0 +1,4 @@
+interface:
+  display_name: "Execution Plan Builder"
+  short_description: "Cria briefs e planos de execução enxutos."
+  default_prompt: "Crie um brief e plano de execução por etapas para esta feature, refatoração ou organização."

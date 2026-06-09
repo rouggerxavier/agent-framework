@@ -1,0 +1,4 @@
+interface:
+  display_name: "Execution Prompt Builder"
+  short_description: "Cria prompts por etapa para execução delegável."
+  default_prompt: "Transforme este plano em prompts por etapa para o próximo agente executar com relatório final e code review."
