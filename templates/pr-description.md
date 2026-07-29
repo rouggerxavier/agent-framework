@@ -11,6 +11,11 @@
 | --- | --- | --- |
 |  |  |  |
 
+## Tasks / Commits
+| Task | Commit | Spec review | Quality review |
+| --- | --- | --- | --- |
+|  |  |  |  |
+
 ## Risk / Mitigation
 -
 
@@ -25,3 +30,9 @@
 
 ## Known Gaps
 -
+
+## Kernel State
+- Status:
+- Evidence ledger:
+- Blockers:
+- Waivers:

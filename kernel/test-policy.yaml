@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "business_logic": {
+    "default": "red-green-required",
+    "required_trace": ["red", "green", "refactor"]
+  },
+  "bugfix": {
+    "default": "regression-first-required",
+    "required_trace": ["red", "green", "refactor"]
+  },
+  "legacy_code": {
+    "default": "characterization-first",
+    "required_trace": ["characterize", "change", "verify-difference"]
+  },
+  "api_contract": {
+    "default": "integration-required",
+    "required_types": ["integration"]
+  },
+  "database_migration": {
+    "default": "forward-and-rollback-required",
+    "required_trace": ["precheck", "forward", "validate", "rollback-or-recovery"]
+  },
+  "external_integration": {
+    "default": "contract-and-integration-required",
+    "required_types": ["contract", "integration"]
+  },
+  "ui_behavior": {
+    "default": "component-or-runtime-required",
+    "required_types_any": ["component", "runtime"]
+  },
+  "documentation": {
+    "default": "test-exempt"
+  },
+  "configuration": {
+    "default": "targeted-verification",
+    "required_types_any": ["targeted", "runtime", "integration"]
+  }
+}
+

@@ -18,10 +18,13 @@ Dado um pedido, apontar rapidamente os assets certos do `~/agent-framework`. Dis
 - Skill alvo ja obvia: chame-a direto.
 
 ## Workflow
-1. Classifique a tarefa por intencao (tabela abaixo).
-2. Liste 1-4 assets relevantes; corte o resto.
-3. Se >1 fase ou >4 assets, encaminhe para `workflow-orchestrator` e pare.
-4. Indique o primeiro asset a invocar.
+1. Se `.agent/STATE.md` existir ou o pedido for de retomada, encaminhe primeiro
+   para `framework-next`.
+2. Classifique a tarefa por intencao (tabela abaixo).
+3. Liste 1-4 assets relevantes; corte o resto.
+4. Se >1 fase ou >4 assets, encaminhe para `workflow-planner`; mantenha
+   `workflow-orchestrator` apenas como alias legado.
+5. Indique o primeiro asset a invocar.
 
 ## Prioridade alta
 - Se o pedido mencionar brief, documentacao de feature/refatoracao, plano de execucao, organizar tarefa, quebrar em etapas ou preparar trabalho para outro agente, priorize `execution-plan-builder`.
@@ -31,6 +34,12 @@ Dado um pedido, apontar rapidamente os assets certos do `~/agent-framework`. Dis
 ## Tabela de roteamento
 | Intencao | Skill | Apoio |
 |---|---|---|
+| Inicializar ou retomar estado persistente | framework-next | kernel/protocol, templates/project-state |
+| Especificar e planejar fase persistente | workflow-planner | execution-plan-builder, plan-quality-checker |
+| Executar plano persistente | workflow-runner | task-runner, kernel/state-machine |
+| Executar contrato de tarefa | task-runner | kernel/test-policy, templates/task-result |
+| Revisar conformidade com spec | spec-compliance-reviewer | templates/spec-compliance-review |
+| Revisar qualidade depois da spec | code-quality-reviewer | diff-reviewer, code-review-gate |
 | Entrar em repo novo | project-context-loader, repo-map-builder | — |
 | Ideias / objetivo aberto | brainstorm-lab | — |
 | Brief/documentacao/plano de execucao | execution-plan-builder | workflows/execution-brief, brainstorm-lab, plan-quality-checker |
@@ -92,7 +101,7 @@ Dado um pedido, apontar rapidamente os assets certos do `~/agent-framework`. Dis
 ## Saida obrigatoria
 - Intencao detectada.
 - Assets selecionados (skill + apoio).
-- Primeiro asset a invocar, ou encaminhamento para `workflow-orchestrator`.
+- Primeiro asset a invocar, ou encaminhamento para `workflow-planner`.
 
 ## Criterios de aceite
 - No maximo 4 assets; sem listar tudo.

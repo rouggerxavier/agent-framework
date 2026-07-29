@@ -3,6 +3,7 @@
 ## Decision
 - Status: pass | pass with caveats | blocked
 - Summary:
+- Kernel transition: verifying → ready_to_ship | executing | reviewing | blocked
 
 ## Must-Have Coverage
 | Must-Have | Evidence | Status | Gap / Note |
@@ -28,3 +29,11 @@
 
 ## Risks Accepted
 -
+
+## Kernel Guards
+- Acceptance evidence:
+- Required verification:
+- Reviews:
+- Blockers:
+- Waivers:
+- Evidence commit/context:

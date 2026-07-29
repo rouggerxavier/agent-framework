@@ -6,8 +6,12 @@
 
 ## Scope
 - Objective:
+- Task ID:
 - Files/areas:
 - Current branch/status:
+- Base branch:
+- Starting commit:
+- Worktree:
 
 ## Risk
 | Area | Touched? | Evidence | Impact |
@@ -34,3 +38,9 @@
 
 ## Residual Risk
 -
+
+## Worktree Lifecycle
+- Required:
+- Creation/validation:
+- Reuse decision:
+- Finalization/cleanup:

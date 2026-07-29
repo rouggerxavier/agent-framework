@@ -24,11 +24,13 @@ Definir cobertura de testes suficiente para uma mudanca sem exagerar custo nem d
 - Risco, prazo e ambientes disponiveis.
 
 ## Workflow
-1. Classifique a mudanca: UI, API, dados, auth, infra, refactor ou bugfix.
+1. Classifique conforme `kernel/test-policy.yaml`: business logic, bugfix,
+   legacy, API, migration, integracao, UI, docs ou config.
 2. Identifique contratos, regressao e caminhos criticos.
-3. Escolha testes por prioridade e profundidade.
-4. Defina comandos e cenarios manuais.
-5. Declare lacunas e aceite de risco.
+3. Aplique o default executavel ou registre override aprovado.
+4. Defina comandos, estagios RED/GREEN/caracterizacao e cenarios runtime.
+5. Declare lacunas; waiver exige justificativa e evidencia alternativa.
+6. Persista a politica no contrato para validacao pelo `task-runner`.
 
 ## Saida obrigatoria
 Preencha `../../templates/test-plan.md` (matriz risco->teste, comandos,
@@ -39,6 +41,7 @@ cenarios manuais, lacunas e aceite).
 - Nao recomendar e2e pesado quando unit/integration cobre melhor.
 - Declarar o que nao sera coberto.
 - Mapa risco->cobertura: rubric de testes em Arquivos de apoio.
+- A recomendacao deve ser consumivel por `validate-result`, nao apenas prosa.
 
 ## Arquivos de apoio
 Nao copie a matriz de risco na skill; aplique a rubric e o template.
@@ -46,6 +49,8 @@ Nao copie a matriz de risco na skill; aplique a rubric e o template.
 - Template: ../../templates/test-plan.md
 - Workflow: ../../workflows/bugfix.md
 - Workflow: ../../workflows/feature-build.md
+- Politica: ../../kernel/test-policy.yaml
+- Executor: ../../skills/task-runner/SKILL.md
 
 ## Exemplos de uso
 - Codex: `$test-strategy-builder Defina testes para esta mudanca de billing.`

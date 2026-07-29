@@ -36,7 +36,11 @@ Escolher a proxima acao de git sem automatismo perigoso: commit direto, esperar 
    - `leave unstaged`: work in progress, diff misto, risco incerto ou falta de aceite.
 4. Se commit for permitido, chamar `commit-readiness-checker`.
 5. Se PR for recomendado, chamar `pr-description-builder`.
-6. Registre decisao, motivo, bloqueios e proximo comando sugerido sem executar git destrutivo.
+6. Use worktree proporcional quando houver subagente, paralelo, arvore principal
+   suja, alto risco, isolamento exigido ou conflito possivel.
+7. Registre base/branch/worktree/starting commit em `STATE.md`; valide antes de
+   reutilizar e finalize/limpe explicitamente.
+8. Registre decisao, bloqueios e comando sugerido sem executar Git destrutivo.
 
 ## Saida obrigatoria
 Preencha `../../templates/git-decision-report.md` com decisao, motivo, gates pendentes, acao recomendada e riscos.
@@ -46,6 +50,7 @@ Preencha `../../templates/git-decision-report.md` com decisao, motivo, gates pen
 - Separar arquivos relacionados de sujeira nao relacionada no working tree.
 - Se houver secrets, dados ou env vars, bloquear ate auditoria apropriada.
 - Respeitar pedido explicito do usuario sobre nao commitar ou esperar validacao.
+- Nao misturar mudancas pre-existentes do usuario no commit da tarefa.
 
 ## Arquivos de apoio
 - Template: ../../templates/git-decision-report.md

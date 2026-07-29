@@ -5,6 +5,8 @@
 - Summary:
 
 ## Commit Scope
+- Task ID:
+- Starting commit:
 - Intended files:
 - Excluded files:
 - Objective:
@@ -17,6 +19,10 @@
 | Tests/verification adequate |  |  |  |
 | Docs/config updated if needed |  |  |  |
 | Review/QA gates satisfied |  |  |  |
+| Spec compliance passed |  |  |  |
+| Code quality approved |  |  |  |
+| Evidence ledger current |  |  |  |
+| No open blockers |  |  |  |
 
 ## Suggested Commit Message
 ```text
@@ -28,3 +34,7 @@
 
 ## Notes
 -
+
+## Kernel Record
+- Task commit:
+- Commit unavailable reason:

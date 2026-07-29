@@ -33,16 +33,22 @@ Verificar se um plano esta pronto para execucao por agente ou humano sem depende
 5. Cheque aceite: cada criterio deve ser verificavel por teste, comportamento, comando ou evidencia.
 6. Cheque dependencias e ordem: migrations, contratos e callers devem entrar em sequencia segura.
 7. Cheque gates backend: API, dados, auth, security, dependencies, rollback e docs quando aplicavel.
-8. Emita veredito e correcoes minimas para deixar o plano executavel.
+8. No kernel, valide contrato integral, grafo sem ciclos/conflitos, risco,
+   politica de testes, evidencia esperada e isolamento.
+9. Emita veredito e correcoes minimas; somente `approved` autoriza
+   `specified → planned`.
 
 ## Saida obrigatoria
 Preencha `../../templates/plan-quality-report.md` com veredito, achados, gates ausentes, revisao sugerida e verificacao recomendada.
+Registre o resultado em `EVIDENCE.md` e `STATE.md.gates.plan_quality`.
 
 ## Criterios de aceite
 - Achados aparecem antes do resumo.
 - Cada blocker/high tem evidencia no plano ou lacuna concreta.
 - Nao exigir burocracia para tarefa de baixo risco.
 - O resultado diz exatamente o que editar no plano.
+- Contrato ausente, dependencia invalida, aceite sem evidencia ou risco nao
+  classificado bloqueia `planned`.
 
 ## Arquivos de apoio
 - Template: ../../templates/plan-quality-report.md
