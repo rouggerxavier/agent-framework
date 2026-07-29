@@ -33,6 +33,7 @@ from .state_machine import (
     validate_state,
     validate_transition,
 )
+from .worktree import normalize_worktree
 
 
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[2]
@@ -101,6 +102,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate = subparsers.add_parser("validate", help="validate STATE.md and references")
     validate.add_argument("--project", dest="validate_project")
+
+    normalize = subparsers.add_parser(
+        "normalize-worktree",
+        help=(
+            "rewrite a legacy absolute git.worktree as '.'; validation never "
+            "edits STATE.md, this operation is the only one that does"
+        ),
+    )
+    normalize.add_argument("--project", dest="normalize_project")
+    normalize.add_argument(
+        "--check",
+        action="store_true",
+        help="report what would change without writing",
+    )
 
     transition = subparsers.add_parser("transition", help="apply a guarded state transition")
     transition.add_argument("--project", dest="transition_project")
@@ -235,8 +250,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             )
             if issues:
                 print(json.dumps(issues, ensure_ascii=False, indent=2))
+            if any(issue["severity"] == "error" for issue in issues):
                 return 2
             print("state: valid")
+            return 0
+        if args.command == "normalize-worktree":
+            root = _project(args.normalize_project or args.project)
+            outcome = normalize_worktree(
+                root / ".agent" / "STATE.md", root, apply=not args.check
+            )
+            if args.json:
+                print(json.dumps(outcome, ensure_ascii=False, indent=2))
+            else:
+                print(
+                    "worktree: {}{}".format(
+                        outcome["message"],
+                        " (not written; --check)"
+                        if args.check and outcome["changed"]
+                        else "",
+                    )
+                )
             return 0
         if args.command == "transition":
             root = _project(args.transition_project or args.project)
