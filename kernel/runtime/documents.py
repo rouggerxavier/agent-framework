@@ -78,18 +78,22 @@ def write_frontmatter(path: Path, data: Dict[str, Any], body: str) -> None:
 
 
 def resolve_project_root(start: Path) -> Path:
-    """Resolve the nearest initialized project, then the nearest Git root."""
+    """Resolve the nearest initialized project, then the Git repository root.
+
+    Works from the repository root, from any subdirectory, and from a linked
+    worktree, because the fallback authority is `git rev-parse --show-toplevel`
+    rather than a persisted path.
+    """
+    from .worktree import git_toplevel
+
     candidate = start.expanduser().resolve()
     if candidate.is_file():
         candidate = candidate.parent
 
-    git_candidate: Optional[Path] = None
     for directory in (candidate,) + tuple(candidate.parents):
         if (directory / ".agent" / "STATE.md").is_file():
             return directory
-        if git_candidate is None and (directory / ".git").exists():
-            git_candidate = directory
-    return git_candidate or candidate
+    return git_toplevel(candidate) or candidate
 
 
 def safe_project_path(root: Path, relative: str) -> Path:

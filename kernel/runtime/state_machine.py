@@ -19,6 +19,7 @@ from .contracts import (
 )
 from .documents import DocumentError, git_snapshot, safe_project_path, utc_now
 from .execution_modes import state_execution_mode
+from .worktree import resolve_worktree
 
 
 STATES = {
@@ -270,15 +271,11 @@ def validate_state(
                     ),
                 )
             )
-        registered_worktree = git_state.get("worktree")
-        if registered_worktree:
-            if Path(str(registered_worktree)).expanduser().resolve() != root.resolve():
-                issues.append(
-                    _issue(
-                        "git-worktree-mismatch",
-                        "registered worktree is not the current project root",
-                    )
-                )
+        resolution = resolve_worktree(git_state.get("worktree"), root)
+        if resolution.code:
+            issues.append(
+                _issue(resolution.code, resolution.message, resolution.severity)
+            )
     return issues
 
 
