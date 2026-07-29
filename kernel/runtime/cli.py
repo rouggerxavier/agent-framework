@@ -26,6 +26,7 @@ from .evidence import append_evidence_event
 from .execution_modes import state_execution_mode, validate_lightweight_state
 from .next_operation import determine_next_operation
 from .project import initialize_phase, initialize_project
+from .reconcile import reconcile_phase
 from .reviews import validate_quality_review, validate_spec_review
 from .state_machine import (
     compute_plan_fingerprint,
@@ -99,6 +100,22 @@ def build_parser() -> argparse.ArgumentParser:
     seal.add_argument("--decision", required=True)
     seal.add_argument("--evidence", required=True)
     seal.add_argument("--actor", required=True)
+
+    reconcile = subparsers.add_parser(
+        "reconcile-phase",
+        help=(
+            "point the state at a phase already executed and committed, and "
+            "re-seal its plan under a recorded decision"
+        ),
+    )
+    reconcile.add_argument("--project", dest="reconcile_project")
+    reconcile.add_argument("--id", required=True)
+    reconcile.add_argument("--name", required=True)
+    reconcile.add_argument("--slug", required=True)
+    reconcile.add_argument("--decision", required=True)
+    reconcile.add_argument("--evidence", required=True)
+    reconcile.add_argument("--version", type=int, required=True)
+    reconcile.add_argument("--actor", required=True)
 
     validate = subparsers.add_parser("validate", help="validate STATE.md and references")
     validate.add_argument("--project", dest="validate_project")
@@ -235,6 +252,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             state["updated_by"] = args.actor
             write_frontmatter(state_path, state, body)
             print("plan sealed: version={} {}".format(args.version, state["plan_revision"]["fingerprint"]))
+            return 0
+        if args.command == "reconcile-phase":
+            root = _project(args.reconcile_project or args.project)
+            state, issues = reconcile_phase(
+                root,
+                phase_id=args.id,
+                phase_name=args.name,
+                slug=args.slug,
+                decision_id=args.decision,
+                evidence=args.evidence,
+                version=args.version,
+                actor=args.actor,
+            )
+            if issues:
+                return _emit_issues(
+                    [{"code": "reconciliation", "message": message} for message in issues],
+                    "reconcile-phase",
+                )
+            print(
+                "phase reconciled: {} -> verifying, plan revision {}".format(
+                    args.id, args.version
+                )
+            )
             return 0
         if args.command == "validate":
             root = _project(args.validate_project or args.project)

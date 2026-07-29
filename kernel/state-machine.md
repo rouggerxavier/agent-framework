@@ -64,6 +64,21 @@ Plan revisions use `planned → specified`, record a decision, update plan/contr
 rerun the plan gate, then return through `specified → planned`. They never mutate
 an executing workflow silently.
 
+## Reconciliation
+
+A phase whose work is already committed but was executed before the phase had an
+executable index cannot be expressed by the ordinary lifecycle: a plan may be
+sealed only from `specified`, and a phase may be initialized only before
+execution starts. `framework-next reconcile-phase` covers that case alone. It
+re-points the phase artifacts, re-seals `PLAN.md` and `TASKS.md` under a recorded
+decision with an increased revision, and leaves the status at `verifying` so the
+`verifying → ready_to_ship` gate still decides.
+
+It refuses to run when any task of the phase is unfinished, a blocker is open,
+the decision is absent from `DECISIONS.md`, the evidence file is missing, the
+plan revision does not increase, or the working tree carries uncommitted product
+changes. Reconciliation records finished work; it never approves it.
+
 ## Failure behavior
 
 - A blocking spec review or required quality change returns the task to

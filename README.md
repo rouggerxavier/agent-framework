@@ -204,6 +204,28 @@ converter o campo, use a operação explícita:
 Ela altera somente a linha `worktree`, é idempotente, nunca grava outro caminho
 absoluto e recusa executar quando não puder provar qual é o repositório.
 
+Quando o trabalho de uma fase já existe em Git mas o estado ficou preso numa
+fase anterior — commits, testes e revisões feitos antes de a fase ter índice
+executável —, use a reconciliação. Ela reaponta os artefatos, re-sela o plano sob
+uma decisão registrada e para em `verifying`, para que o portão de shipping
+continue decidindo:
+
+```bash
+./scripts/framework-next reconcile-phase \
+  --project /caminho/do/projeto \
+  --id E --name "Hardening" --slug E \
+  --decision D-021 \
+  --evidence .agent/phases/E/EVIDENCE.md#reconciliacao \
+  --version 4 \
+  --actor reconciliation
+```
+
+Ela recusa executar se alguma tarefa da fase não estiver `verified`, se houver
+blocker aberto, se a decisão não estiver em `DECISIONS.md`, se a evidência não
+existir, se a revisão do plano não aumentar, ou se houver mudança de produto não
+commitada. Nenhum portão é enfraquecido: a reconciliação descreve trabalho
+concluído, não o aprova.
+
 Para aplicar uma transição já suportada por evidência persistida:
 
 ```bash
