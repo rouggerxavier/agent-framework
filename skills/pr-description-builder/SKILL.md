@@ -28,7 +28,8 @@ Montar uma descricao de PR que permita revisar sem redescobrir contexto: o que m
 ## Workflow
 1. Resuma escopo: problema, solucao e fora de escopo.
 2. Liste mudancas principais por area.
-3. Consolide evidencias executadas: comandos, QA, review, logs/screenshots e verificadores.
+3. Consolide evidencias executadas do ledger: comandos, QA, spec review, quality
+   review, commits, logs/screenshots e verificadores.
 4. Liste riscos, mitigacoes, rollback e pontos que reviewer deve olhar.
 5. Inclua docs/config/env/migration quando aplicavel.
 6. Gere descricao pronta, honesta sobre gaps e sem dados sensiveis.
@@ -41,6 +42,8 @@ Preencha `../../templates/pr-description.md` com summary, changes, evidence, ris
 - Nao omitir blocker, teste ausente ou risco aceito.
 - Descricao deve ser curta o bastante para reviewer usar, mas completa para contexto.
 - Logs/screenshots devem ser referenciados sem expor secrets ou dados sensiveis.
+- Cada evidencia deve distinguir resultado executado de check recomendado.
+- Inclua estado, tarefas/commits e blockers/waivers relevantes.
 
 ## Arquivos de apoio
 - Template: ../../templates/pr-description.md

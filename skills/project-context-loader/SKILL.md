@@ -27,8 +27,10 @@ Criar um resumo curto e reutilizavel do projeto para reduzir repeticao de contex
 1. Localize manifestos, configs, docs e scripts.
 2. Identifique stack, runtime, comandos e entrypoints.
 3. Resuma padroes de arquitetura, estilo e testes.
-4. Liste riscos, lacunas e arquivos relevantes.
-5. Entregue contexto curto para reuso em prompts ou handoffs.
+4. Separe fatos observados, inferencias, assumptions e unknowns.
+5. Registre commit, branch, arquivos inspecionados e comandos verificados.
+6. Defina `stale_after`; mudanca material de commit/contrato invalida o contexto.
+7. Persista em `.agent/CONTEXT.md` quando o kernel estiver inicializado.
 
 ## Saida obrigatoria
 - Stack e runtime.
@@ -36,12 +38,16 @@ Criar um resumo curto e reutilizavel do projeto para reduzir repeticao de contex
 - Estrutura principal.
 - Padroes locais observados.
 - Riscos, lacunas e proximas leituras.
+- Metadados: `generated_at`, `source_commit`, `branch`, `files_inspected`,
+  `commands_verified`, `facts`, `assumptions`, `unknowns`, `stale_after`.
 
 ## Criterios de aceite
 - Diferencie fato observado de inferencia.
 - Inclua caminhos reais quando houver evidencia.
 - Nao invente comandos ausentes.
 - O resumo deve caber em prompt de retomada.
+- Informacao nao verificada nunca aparece como fato.
+- O contexto nao substitui `STATE.md` e deve ser revalidado quando stale.
 
 ## Arquivos de apoio
 Etapa inicial dos workflows abaixo; nao duplicar os passos deles aqui.

@@ -34,8 +34,10 @@ Transformar code review em gate proporcional ao risco, decidindo quando basta re
    - `cross-area`: mais de uma area critica ou mudanca dificil de reverter.
 3. Verifique precondicoes: testes proporcionais, runtime QA, logs, docs, security/env checks e goal coverage quando aplicavel.
 4. Se faltar gate essencial, marque `blocked`.
-5. Indique reviewer recomendado: `diff-reviewer`, `agent-code-reviewer`, `security-privacy-audit`, `api-contract-auditor` ou outro asset.
-6. Registre decisao e proximo passo minimo para liberar.
+5. Sempre roteie primeiro `spec-compliance-reviewer`.
+6. Depois do PASS, roteie `code-quality-reviewer`, que reutiliza
+   `diff-reviewer`, `agent-code-reviewer` e auditors especializados.
+7. Registre independencia, profundidade, evidencia e proximo passo.
 
 ## Saida obrigatoria
 Preencha `../../templates/code-review-gate-report.md` com decisao, nivel de review, bloqueios, reviewer e evidencias.
@@ -45,12 +47,16 @@ Preencha `../../templates/code-review-gate-report.md` com decisao, nivel de revi
 - Review profundo e obrigatorio para agente, tools, auth, secrets, dados, model routing ou runtime behavior.
 - Tarefa trivial pode passar sem burocracia, com justificativa curta.
 - Todo bloqueio deve apontar gate faltante e acao minima.
+- Implementacao executavel exige os dois reviews; `none` vale apenas para asset
+  textual trivial sem tarefa/runtime/contrato.
 
 ## Arquivos de apoio
 - Template: ../../templates/code-review-gate-report.md
 - Review geral: ../../skills/diff-reviewer/SKILL.md
 - Review de agente: ../../skills/agent-code-reviewer/SKILL.md
 - Cobertura: ../../skills/goal-coverage-verifier/SKILL.md
+- Spec: ../../skills/spec-compliance-reviewer/SKILL.md
+- Qualidade: ../../skills/code-quality-reviewer/SKILL.md
 
 ## Exemplos de uso
 - Codex: `$code-review-gate Decida o nivel de review antes de declarar pronto.`

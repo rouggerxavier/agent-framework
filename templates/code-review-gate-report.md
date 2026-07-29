@@ -20,9 +20,16 @@
 | Goal coverage needed/done |  |  |  |
 
 ## Reviewer Routing
-- Primary reviewer:
+- Review 1 — spec compliance:
+- Review 2 — code quality:
+- Primary quality reviewer:
 - Supporting skills:
 - Reason:
+
+## Independence
+- Executor:
+- Spec reviewer:
+- Quality reviewer:
 
 ## Blockers
 -

@@ -3,6 +3,9 @@
 ## Status
 - State: investigating | reproduced | cause-found | fixed | paused
 - Last updated:
+- Kernel blocker ID:
+- Blocked from:
+- Unblock conditions:
 
 ## Symptom
 - Expected:
@@ -32,5 +35,5 @@
 
 ## Resume Prompt
 ```text
-Continue this debug session from:
+Read .agent/STATE.md, run framework-next, and continue this debug session from:
 ```

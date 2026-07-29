@@ -9,6 +9,8 @@ node_modules/
 dist/
 build/
 .cache/
+__pycache__/
+*.py[cod]
 .DS_Store
 
 .agent-framework-backups/

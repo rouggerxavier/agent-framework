@@ -35,7 +35,10 @@ Verificar de tras para frente se o trabalho implementado cobre o objetivo origin
    - `high`: risco comum sem teste/evidencia;
    - `medium`: edge relevante, doc ou rollback faltante;
    - `low`: melhoria local ou evidencia desejavel.
-6. Recomende fix, teste adicional, aceite de risco ou release bloqueado.
+6. Confira reviews separados, waivers, blockers e commit/contexto da evidencia.
+7. Registre resultado no ledger e em `STATE.md.gates`.
+8. Autorize `verifying → ready_to_ship` somente quando todos os guards passarem;
+   caso contrario retorne a `executing`, `reviewing` ou `blocked` com evidencia.
 
 ## Saida obrigatoria
 Preencha `../../templates/goal-coverage-report.md` com matriz must-have -> evidencia, gaps, testes, riscos aceitos e decisao.
@@ -45,6 +48,7 @@ Preencha `../../templates/goal-coverage-report.md` com matriz must-have -> evide
 - Nao declarar cobertura por teste que nao foi executado.
 - Todo gap tem proximo passo ou aceite de risco explicito.
 - A decisao final e operacional: `pass`, `pass com ressalvas` ou `bloqueado`.
+- Somente o verifier promove `ready_to_ship`; teste ou review isolado nao basta.
 
 ## Arquivos de apoio
 - Template: ../../templates/goal-coverage-report.md

@@ -47,6 +47,10 @@ for skill in "$SOURCE_DIR"/*; do
   copied=$((copied + 1))
 done
 
+AGENT_FRAMEWORK_TARGET_ROOT="$(dirname "$TARGET_DIR")" \
+AGENT_FRAMEWORK_SHARED_BACKUP_DIR="$BACKUP_DIR/shared" \
+  bash "$FRAMEWORK_DIR/installers/install-shared-assets.sh"
+
 echo "done: copied=$copied replaced=$replaced skipped=$skipped target=$TARGET_DIR"
 if [ -d "$BACKUP_DIR" ]; then
   echo "backup: previous same-name skills moved to $BACKUP_DIR"

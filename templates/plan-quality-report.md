@@ -10,6 +10,9 @@
 |  |  |  |  |  |
 
 ## Missing Gates
+- Persistent state:
+- Full task contracts:
+- Dependency/conflict graph:
 - API:
 - Data/migration:
 - Auth/security:
@@ -22,3 +25,7 @@
 
 ## Verification Recommended
 -
+
+## Kernel Gate
+- `STATE.md.gates.plan_quality`: pending | passed | failed
+- Evidence ledger reference:

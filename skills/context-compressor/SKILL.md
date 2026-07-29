@@ -25,18 +25,22 @@ Preservar o estado essencial de uma conversa longa para outro agente, modelo, ch
 
 ## Workflow
 Siga `../../workflows/long-conversation-handoff.md`. Especifico desta skill:
-1. Extraia objetivo original e estado atual.
-2. Separe decisoes, arquivos, pendencias, riscos e lacunas.
-3. Termine com proximos passos e prompt de retomada.
+1. Leia `STATE.md` e artefatos ativos; nao trate a conversa como fonte superior.
+2. Extraia estado atual, tarefa ativa e trabalho concluido.
+3. Separe evidencias, comandos, blockers, decisoes abertas, arquivos e riscos.
+4. Copie a unica proxima operacao estruturada.
+5. Termine com instrucao para rodar `framework-next`.
 
 ## Saida obrigatoria
-Preencha `../../templates/handoff-summary.md` (estado, decisoes, arquivos,
-pendencias, riscos, proximos passos, prompt de retomada).
+Preencha `../../templates/handoff-summary.md` com estado, tarefa ativa, trabalho
+concluido, evidencias, comandos, blockers, decisoes abertas, arquivos, proxima
+operacao e instrucao de retomada.
 
 ## Criterios de aceite
 - O resumo deve permitir continuidade sem reler a conversa.
 - Nao omitir bloqueadores, falhas de teste ou incertezas.
 - Caminhos e comandos exatos; curto e priorizado.
+- O handoff complementa `STATE.md`; divergencia deve ser marcada, nao escondida.
 
 ## Arquivos de apoio
 Nao copie estes checklists na skill; aplique-os a partir daqui.

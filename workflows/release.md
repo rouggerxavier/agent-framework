@@ -1,15 +1,22 @@
 # Release Workflow
 
-Use para preparar, verificar e comunicar uma release.
+Use para promover `ready_to_ship` para entrega, PR ou release sem perder
+evidencia e rollback.
 
 ## Sequencia
-1. Confirme escopo e mudancas.
-2. Use `test-strategy-builder` para cobertura final.
-3. Use `runtime-qa-audit` para smoke test dos fluxos criticos.
-4. Use `security-privacy-audit` se tocar auth, dados, secrets ou permissoes.
-5. Use `release-verifier` para decisao go/no-go.
-6. Preencha `templates/release-checklist.md`.
-7. Use `handoff-builder` para operacao ou suporte.
+1. Use `framework-next`; `workflow-runner` coordena o fluxo e prossegue somente
+   em `ready_to_ship`.
+2. Confirme escopo, task commits, reviews, ledger e commit verificado.
+3. Use `goal-coverage-verifier` e `test-strategy-builder` para lacunas finais.
+4. Rode `runtime-qa-audit` nos fluxos criticos e registre resultado.
+5. Use gates especializados de seguranca, dados, API e dependencia conforme risco.
+6. Use `release-verifier`; blocker retorna a `verifying` ou `blocked`.
+7. Preencha `templates/release-checklist.md` com evidencia e rollback.
+8. Use `git-decision-router`: commit/branch/PR/handoff conforme ambiente.
+9. Antes de commit use `commit-readiness-checker`; antes de PR use
+   `pr-description-builder`.
+10. Registre commit/PR/release no ledger e somente entao solicite `shipped`.
+11. Use `context-compressor`/`handoff-builder` para operacao ou suporte.
 
 ## Saidas
 - Checks executados.
@@ -17,3 +24,4 @@ Use para preparar, verificar e comunicar uma release.
 - Plano de rollback.
 - Release notes.
 - Decisao go/no-go.
+- Estado final e referencia de commit/PR/release.

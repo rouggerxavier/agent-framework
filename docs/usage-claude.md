@@ -107,6 +107,25 @@ No Claude Code, chame skills com `/skill-name`.
 /handoff-builder Gere um handoff para Codex continuar.
 ```
 
+## Kernel persistente
+
+```text
+/framework-next Retome este projeto sem depender da conversa.
+/workflow-planner Planeje esta fase sem implementar.
+/workflow-runner Retome o plano pelo STATE.md.
+/task-runner Execute o contrato integral da tarefa ativa.
+/spec-compliance-reviewer Revise criterios, escopo e evidencias.
+/code-quality-reviewer Revise qualidade depois do PASS de spec.
+```
+
+Inicializacao e validacao executavel:
+
+```bash
+~/agent-framework/scripts/framework-next init --project . --name meu-projeto --mode full
+~/agent-framework/scripts/framework-next --project .
+```
+
 ## Dica
 
-Use `/task-mode-router` antes de tarefas de backend para evitar fluxo pesado sem necessidade. Use `/context-compressor` antes de trocar de chat ou quando a conversa ficar longa.
+Em projeto inicializado, comece por `/framework-next`. Use `/task-mode-router`
+antes de backend sem kernel e `/context-compressor` antes de trocar de chat.

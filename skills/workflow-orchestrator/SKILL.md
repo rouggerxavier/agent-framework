@@ -1,60 +1,56 @@
 ---
 name: workflow-orchestrator
-description: Use para decompor metas complexas em fases, escolher skills, modelo, effort, necessidade de subagents, riscos e plano de execucao.
+description: Use como alias compativel para rotear metas complexas ao workflow-planner e, quando solicitado, ao workflow-runner sob o protocolo persistente.
 ---
 
 # Workflow Orchestrator
 
 ## Objetivo
-Transformar uma meta ampla em um plano operacional com fases, skills, modelo recomendado, effort recomendado, uso ou nao de subagents, riscos e criterios de passagem.
+Preservar o nome historico enquanto separa planejamento e execucao. Novos fluxos
+devem invocar `workflow-planner` e `workflow-runner` diretamente.
 
 ## Quando usar
-- Antes de features grandes, auditorias, refatoracoes ou releases.
-- Quando varias skills podem ser combinadas.
-- Quando e preciso dividir trabalho entre Codex, Claude Code, ChatGPT, subagents ou humano.
+- Quando um consumidor existente ainda invoca `workflow-orchestrator`.
+- Antes de features grandes, auditorias, refatoracoes ou releases ainda nao
+  inicializadas no kernel.
+- Para migrar uma orquestracao antiga sem quebrar o nome publico.
 
 ## Quando nao usar
-- Para tarefa pequena com proximo passo obvio.
-- Para executar codigo diretamente sem planejamento.
-- Quando o usuario pediu apenas uma resposta pontual.
+- Para implementar codigo diretamente.
+- Para misturar criacao do plano e execucao de tarefas no mesmo papel.
+- Quando `framework-next` ja retornou um asset especifico.
 
 ## Entradas esperadas
-- Objetivo final e contexto do projeto.
-- Prazo, restricoes, risco e ferramentas disponiveis.
-- Estado atual, artefatos existentes e criterios de sucesso.
+- Objetivo, contexto e restricoes conhecidos.
+- Estado persistente, quando existir.
+- Intencao: planejar ou retomar execucao.
 
 ## Workflow
-1. Defina resultado final, escopo e criterios de sucesso.
-2. Escolha skills relevantes para cada fase.
-3. Recomende modelo/agente e effort por fase: low, medium, high ou xhigh.
-4. Decida se subagents ajudam; use apenas para subtarefas independentes e bem delimitadas.
-5. Liste riscos, dependencias, checkpoints e plano por fases.
-6. Indique a primeira acao concreta.
+1. Emita aviso curto: este nome e um alias de compatibilidade.
+2. Rode `framework-next` quando `.agent/` existir ou a continuidade for relevante.
+3. Para discutir, especificar ou planejar, encaminhe a `workflow-planner`.
+4. Para consumir um plano aprovado, encaminhe a `workflow-runner`.
+5. Preserve entradas antigas como contexto opcional; o estado persistente prevalece.
+6. Nunca permita que o alias implemente uma tarefa ou ignore uma transicao.
 
 ## Saida obrigatoria
-- Plano por fases.
-- Skills a usar em cada fase.
-- Modelo/agente e effort recomendados.
-- Decisao sobre subagents e motivo.
-- Riscos, dependencias e checkpoints.
-- Primeiro passo recomendado.
+- Aviso de compatibilidade.
+- Estado detectado, quando houver.
+- Asset de destino: `workflow-planner` ou `workflow-runner`.
+- Proxima operacao unica.
 
 ## Criterios de aceite
-- Cada fase deve ter entrada, saida e criterio de conclusao.
-- O plano deve evitar trabalho duplicado entre agentes.
-- Subagents so devem ser recomendados quando houver tarefas paralelas independentes.
-- O primeiro passo precisa ser executavel imediatamente.
+- Chamadas antigas continuam resolvendo.
+- Planejamento e execucao permanecem separados.
+- Estado e transicoes do kernel nao podem ser contornados.
+- O destino recebe entradas antigas sem trata-las como evidencia.
 
 ## Arquivos de apoio
-Escolha o workflow por fase; nao recriar a sequencia aqui.
-- Workflow: ../../workflows/feature-build.md
-- Workflow: ../../workflows/bugfix.md
-- Workflow: ../../workflows/api-refactor.md
-- Workflow: ../../workflows/frontend-refactor.md
-- Workflow: ../../workflows/release.md
-- Workflow: ../../workflows/agent-handoff.md
-- Workflow: ../../workflows/long-conversation-handoff.md
+- Planner: ../../skills/workflow-planner/SKILL.md
+- Runner: ../../skills/workflow-runner/SKILL.md
+- Retomada: ../../skills/framework-next/SKILL.md
+- Migracao: ../../docs/kernel-migration.md
 
 ## Exemplos de uso
-- Codex: `$workflow-orchestrator Planeje a entrega desta feature com fases, skills e riscos.`
-- Claude Code: `/workflow-orchestrator Organize esta refatoracao entre agentes e checks.`
+- Codex: `$workflow-orchestrator Planeje esta feature.` → `workflow-planner`
+- Claude Code: `/workflow-orchestrator Retome este plano.` → `workflow-runner`

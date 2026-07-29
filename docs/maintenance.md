@@ -11,6 +11,10 @@
 - Use `docs/skill-standards.md` para criar ou revisar skills.
 - Use `skills/skill-evolution-loop` para transformar recorrencia real em skill, rubric, workflow ou template.
 - Rode `bash installers/verify-framework.sh` antes de commit.
+- Mudancas em `kernel/`, estado, contratos ou reviews exigem
+  `python3 -m unittest discover -s tests -v`.
+- Nao altere transicao, contrato ou evidencia apenas na documentacao; mantenha
+  runtime, templates, skills e testes sincronizados.
 
 ## Atualizar uma skill
 
@@ -18,7 +22,8 @@
 2. Mantenha frontmatter `name` e `description`.
 3. Atualize rubrics/workflows/templates se a skill depender deles.
 4. Rode verificacao.
-5. Instale com `bash installers/install-all.sh`.
+5. Rode a suite do kernel quando aplicavel.
+6. Instale com `bash installers/install-all.sh`.
 
 ## Adicionar uma skill
 

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -eu
+
+FRAMEWORK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export PYTHONPATH="$FRAMEWORK_ROOT${PYTHONPATH:+:$PYTHONPATH}"
+
+exec python3 -m kernel.runtime.cli "$@"
