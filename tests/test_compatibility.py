@@ -4,10 +4,19 @@ import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 
+from kernel.runtime.execution_modes import state_execution_mode
 from tests.helpers import FRAMEWORK_ROOT
 
 
 class CompatibilityTests(unittest.TestCase):
+    def test_legacy_state_without_execution_mode_defaults_to_critical(self) -> None:
+        self.assertEqual(
+            "critical",
+            state_execution_mode(
+                {"schema_version": 1, "project": {"mode": "full"}}
+            ),
+        )
+
     def test_legacy_orchestrator_routes_to_split_roles(self) -> None:
         content = (
             FRAMEWORK_ROOT / "skills" / "workflow-orchestrator" / "SKILL.md"
@@ -49,11 +58,14 @@ class CompatibilityTests(unittest.TestCase):
             )
             self.assertEqual(0, completed.returncode, completed.stdout)
             self.assertTrue((root / "kernel" / "protocol.md").is_file())
+            self.assertTrue(
+                (root / "kernel" / "adaptive-execution-policy.md").is_file()
+            )
             self.assertTrue((root / "scripts" / "framework-next").is_file())
+            self.assertTrue((root / "scripts" / "agent-framework-route").is_file())
             self.assertTrue((skills / "framework-next" / "SKILL.md").is_file())
             self.assertEqual("external\n", unrelated.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
     unittest.main()
-

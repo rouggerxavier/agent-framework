@@ -1,65 +1,60 @@
 ---
 name: workflow-runner
-description: Use para executar um plano persistente pelo STATE.md, selecionar tarefa elegivel, acionar executor e reviews, registrar evidencias e aplicar somente transicoes permitidas.
+description: Use para coordenar plano leve em standard ou a maquina de estados completa em critical; nao e necessario em fast.
 ---
 
 # Workflow Runner
 
 ## Objetivo
 
-Ser o unico controlador da execucao de uma fase, consumindo o plano aprovado sem
-redesenha-lo livremente.
+Coordenar execucao proporcional: plano leve em `standard` ou fase persistente
+completa em `critical`.
 
 ## Quando usar
 
-- Nos estados `planned`, `executing`, `reviewing`, `verifying` ou `blocked`.
-- Para retomar uma fase apos interrupcao, falha, review ou troca de agente.
-- Quando tarefas e reviewers precisam de contexto limpo e limitado.
+- Em `standard`, quando um plano curto tem etapas dependentes.
+- Em `critical`, nos estados `planned`, `executing`, `reviewing`, `verifying` ou
+  `blocked`.
+- Para retomar estado persistente existente respeitando `execution_mode`.
 
 ## Quando nao usar
 
 - Para decidir requisitos ou arquitetura ainda aberta.
 - Para implementar diretamente o conteudo de uma tarefa.
-- Para aprovar evidencia, review ou verificacao do proprio executor.
+- Em `fast`, salvo pedido explicito.
 
 ## Entradas esperadas
 
-- `STATE.md` valido e artefatos referenciados.
-- Plano aprovado, contratos integrais, evidencia e estado do Git.
-- Politicas do kernel e gates selecionados pelo planner.
+- Modo e plano selecionados.
+- `standard`: plano curto, diff/contexto focado e verificacao.
+- `critical`: `STATE.md`, contratos, evidencia, Git e gates.
 
 ## Workflow
 
-1. Use `framework-next` e aceite somente a operacao unica retornada.
-2. Valide estado, contexto/Git, dependencias, contrato e conflitos.
-3. Selecione a primeira tarefa elegivel e monte o pacote definido pela politica
-   de delegacao.
-4. Acione `task-runner`; registre resultado e falhas no ledger.
-5. Depois de validar resultado, use `framework-next task-status` para registrar
-   `implementation_complete`; exija self-review antes de `executing → reviewing`.
-6. Acione primeiro `spec-compliance-reviewer`, depois
-   `code-quality-reviewer`; reviewers inspecionam codigo e evidencia diretamente.
-7. Em blocker, registre evidencia e retorne a `executing` ou `blocked`.
-8. Depois das aprovacoes, use `goal-coverage-verifier` e verificacao de runtime.
-9. Atualize estado somente por transicoes permitidas e determine novamente a
-   unica proxima operacao.
-10. Sincronize status do contrato e `current_task`; depois de verificar uma
-    tarefa, selecione a proxima elegivel ou inicie verificacao da fase.
-11. Revisoes do plano voltam a `specified`, registram decisao e repetem o plan gate.
+1. Confirme o `execution_mode` do router ou de `STATE.md`.
+2. Em `standard`, coordene os passos do plano curto, use `task-runner` sem
+   contrato formal quando adequado, registre resultados no proprio plano/retorno
+   e finalize com uma revisao integrada.
+3. Em `standard`, nao aplique plan seal, ledger completo, transicoes formais ou
+   reviewers separados.
+4. Em `critical`, use `framework-next`, valide estado/Git/contratos, selecione a
+   tarefa elegivel, acione `task-runner` e registre resultado no ledger.
+5. Em `critical`, preserve self-review → spec compliance → code quality →
+   goal coverage/runtime, com transicoes guardadas e plan revision formal.
+6. Depois de correcao localizada, revise apenas novo diff, criterios afetados e
+   regressoes relacionadas, salvo mudanca material de escopo.
 
 ## Saida obrigatoria
 
-- Tarefa/operacao selecionada e pacote de contexto.
-- Resultado validado e evidencia registrada.
-- Reviews independentes e transicao aplicada ou blocker.
-- Estado atualizado e uma unica proxima operacao.
+- `standard`: proximo passo, resultados, testes e review integrado.
+- `critical`: operacao, pacote, evidencia, reviews independentes, transicao e
+  proxima operacao.
 
 ## Criterios de aceite
 
-- Uma tarefa ativa por executor.
-- Nenhum conflito de arquivos ou contratos em paralelo.
-- Implementador nao marca `reviewed` ou `verified`.
-- Falha preserva evidencia e nunca avanca por inferencia.
+- `standard` permanece leve e nao simula lifecycle formal.
+- `critical` preserva separacao de autoridade, contratos e evidencia.
+- `fast` nao depende deste runner.
 
 ## Arquivos de apoio
 

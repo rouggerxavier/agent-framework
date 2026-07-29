@@ -1,18 +1,19 @@
 ---
 name: code-review-gate
-description: Use para decidir profundidade obrigatoria de code review e bloquear conclusao quando diff toca agentes, auth, secrets, tools, dados ou runtime.
+description: Use para escolher review integrado ou separado e profundidade proporcional ao modo e ao risco comprovado.
 ---
 
 # Code Review Gate
 
 ## Objetivo
-Transformar code review em gate proporcional ao risco, decidindo quando basta review simples, quando precisa review profundo e quando a entrega deve ficar bloqueada.
+Transformar code review em gate proporcional, sem duplicar reviewers em
+`fast`/`standard` nem bloquear por cenarios especulativos.
 
 ## Quando usar
 - Depois de implementar feature, bugfix, refatoracao ou mudanca de agente.
 - Antes de declarar pronto, abrir PR, fazer merge, release ou handoff.
-- Quando o diff toca agente, prompt, tools, model routing, runtime behavior, auth, secrets, dados, logs, env vars ou integracoes.
 - Quando ha duvida se `diff-reviewer` simples basta.
+- Em `critical`, antes dos reviews independentes.
 
 ## Quando nao usar
 - Antes de existir diff ou resumo de mudanca.
@@ -26,29 +27,38 @@ Transformar code review em gate proporcional ao risco, decidindo quando basta re
 - Riscos conhecidos, plano ou criterios de aceite.
 
 ## Workflow
-1. Classifique escopo e risco do diff.
-2. Escolha review:
-   - `none`: docs/copy trivial, sem contrato ou runtime;
-   - `simple`: mudanca pequena, baixo risco, testes claros;
-   - `deep`: agente, auth, dados, tools, env, security, runtime behavior, model routing ou integracao;
-   - `cross-area`: mais de uma area critica ou mudanca dificil de reverter.
-3. Verifique precondicoes: testes proporcionais, runtime QA, logs, docs, security/env checks e goal coverage quando aplicavel.
-4. Se faltar gate essencial, marque `blocked`.
-5. Sempre roteie primeiro `spec-compliance-reviewer`.
-6. Depois do PASS, roteie `code-quality-reviewer`, que reutiliza
-   `diff-reviewer`, `agent-code-reviewer` e auditors especializados.
-7. Registre independencia, profundidade, evidencia e proximo passo.
+1. Receba `mode`, objetivo, diff, arquivos, testes e riscos conhecidos.
+2. Retorne:
+   - `fast`: `review_mode: integrated`, `depth: light`;
+   - `standard`: `review_mode: integrated`, `depth: normal`;
+   - `critical`: `review_mode: split`, `depth: deep`.
+3. Defina `blocking_threshold: BLOCKER`.
+4. Em `fast`/`standard`, faca uma unica revisao de objetivo + qualidade + testes
+   + escopo. Nao chame automaticamente os dois reviewers independentes.
+5. Em `critical`, roteie `spec-compliance-reviewer` e depois
+   `code-quality-reviewer`, com auditors especializados quando o risco exigir.
+6. Classifique findings como `BLOCKER`, `IMPORTANT`, `NOTE` ou `SPECULATIVE`.
+   `BLOCKER` exige reachability, likelihood, impact, supporting evidence e base
+   material (requisito, seguranca, dados, regressao, operacao ou aceite).
+7. Correcao localizada reabre apenas novo diff, criterios afetados e regressoes
+   relacionadas.
+8. Aplique o budget de verificacao; sem risco concreto restante, pare passes
+   especulativos e registre notas nao bloqueantes.
 
 ## Saida obrigatoria
-Preencha `../../templates/code-review-gate-report.md` com decisao, nivel de review, bloqueios, reviewer e evidencias.
+```yaml
+review_mode: integrated | split
+depth: light | normal | deep
+blocking_threshold: BLOCKER
+```
+
+Preencha o template somente quando o modo/entrega justificar artefato.
 
 ## Criterios de aceite
-- Nao permitir concluir mudanca de alto risco sem review.
-- Review profundo e obrigatorio para agente, tools, auth, secrets, dados, model routing ou runtime behavior.
-- Tarefa trivial pode passar sem burocracia, com justificativa curta.
-- Todo bloqueio deve apontar gate faltante e acao minima.
-- Implementacao executavel exige os dois reviews; `none` vale apenas para asset
-  textual trivial sem tarefa/runtime/contrato.
+- Toda mudanca recebe ao menos self-review e diff inspection.
+- `fast`/`standard` nao executam reviews separados por default.
+- `critical` preserva spec → qualidade.
+- `SPECULATIVE` nunca bloqueia; blocker sem evidencia e reclassificado.
 
 ## Arquivos de apoio
 - Template: ../../templates/code-review-gate-report.md

@@ -1,6 +1,6 @@
 ---
 name: goal-coverage-verifier
-description: Use para verificar depois da implementacao se objetivo, decisoes, contratos, testes e riscos foram realmente cobertos.
+description: Use para verificar cobertura do objetivo diretamente no diff em fast, de forma integrada em standard ou formalmente em critical.
 ---
 
 # Goal Coverage Verifier
@@ -26,29 +26,33 @@ Verificar de tras para frente se o trabalho implementado cobre o objetivo origin
 - Contratos, decisoes e riscos declarados.
 
 ## Workflow
-1. Extraia must-haves do objetivo, plano e decisoes.
-2. Mapeie cada must-have para evidencia: arquivo, teste, comando, comportamento ou ausencia de evidencia.
-3. Verifique contratos backend: API, eventos, schemas, jobs, dados, auth e integracoes.
-4. Compare testes executados com riscos principais; marque lacunas sem inventar cobertura.
-5. Classifique gaps:
-   - `blocker`: objetivo ou contrato critico nao coberto;
-   - `high`: risco comum sem teste/evidencia;
-   - `medium`: edge relevante, doc ou rollback faltante;
-   - `low`: melhoria local ou evidencia desejavel.
-6. Confira reviews separados, waivers, blockers e commit/contexto da evidencia.
-7. Registre resultado no ledger e em `STATE.md.gates`.
-8. Autorize `verifying → ready_to_ship` somente quando todos os guards passarem;
-   caso contrario retorne a `executing`, `reviewing` ou `blocked` com evidencia.
+1. Confirme o modo e extraia must-haves do objetivo.
+2. Em `fast`, compare diretamente objetivo, diff, comportamento esperado e teste
+   direcionado; nao crie relatorio formal por default.
+3. Em `standard`, faca a revisao integrada de goal + qualidade + testes + escopo.
+4. Em `critical`, extraia must-haves de spec/plano/decisoes e mapeie cada um para
+   evidence ledger.
+5. Em todos os modos, separe evidencia real de inferencia e classifique gaps como
+   `BLOCKER`, `IMPORTANT`, `NOTE` ou `SPECULATIVE`.
+6. `BLOCKER` exige reachability, likelihood, impact, supporting evidence e base
+   material. `SPECULATIVE` nunca bloqueia.
+7. Em `critical`, confira reviews separados, waivers, commit/contexto e autorize
+   `verifying → ready_to_ship` somente com guards completos.
+8. Em `fast`/`standard`, conclua quando criterios importantes e verificacao
+   proporcional estiverem atendidos.
 
 ## Saida obrigatoria
-Preencha `../../templates/goal-coverage-report.md` com matriz must-have -> evidencia, gaps, testes, riscos aceitos e decisao.
+- `fast`: conclusao direta baseada em diff/teste.
+- `standard`: review integrado.
+- `critical`: preencha `../../templates/goal-coverage-report.md` e ledger.
 
 ## Criterios de aceite
 - Separar evidencia real de inferencia.
 - Nao declarar cobertura por teste que nao foi executado.
 - Todo gap tem proximo passo ou aceite de risco explicito.
 - A decisao final e operacional: `pass`, `pass com ressalvas` ou `bloqueado`.
-- Somente o verifier promove `ready_to_ship`; teste ou review isolado nao basta.
+- Somente no lifecycle `critical` o verifier promove `ready_to_ship`.
+- O overhead respeita o verification budget do modo.
 
 ## Arquivos de apoio
 - Template: ../../templates/goal-coverage-report.md

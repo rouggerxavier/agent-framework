@@ -1,6 +1,10 @@
 # Handoff Summary
 
+Required in `critical`, optional when `standard` must resume, and normally absent
+in `fast`.
+
 ## Current State
+- Execution mode:
 
 ## Active Task
 
@@ -41,7 +45,9 @@
 
 ## Resume Prompt
 ```text
-Read .agent/STATE.md, run framework-next, and continue only the returned operation:
+If persistent state exists, read .agent/STATE.md, run framework-next, and
+continue the returned operation. Otherwise use agent-framework-router:
 ```
 
-This handoff complements `.agent/STATE.md`; the state file remains authoritative.
+When `.agent/STATE.md` exists, this handoff complements it and the state remains
+authoritative.

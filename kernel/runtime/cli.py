@@ -23,6 +23,7 @@ from .contracts import (
     validate_task_contract,
 )
 from .evidence import append_evidence_event
+from .execution_modes import state_execution_mode, validate_lightweight_state
 from .next_operation import determine_next_operation
 from .project import initialize_phase, initialize_project
 from .reviews import validate_quality_review, validate_spec_review
@@ -32,6 +33,7 @@ from .state_machine import (
     validate_state,
     validate_transition,
 )
+from .worktree import normalize_worktree
 
 
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[2]
@@ -46,6 +48,7 @@ def _print_decision(decision: Dict[str, Any], as_json: bool) -> None:
         print(json.dumps(decision, ensure_ascii=False, indent=2))
         return
     print("Current state: {}".format(decision["current_state"]))
+    print("Execution mode: {}".format(decision.get("execution_mode") or "not selected"))
     print("Detected evidence:")
     for item in decision["detected_evidence"] or ["none"]:
         print("- {}".format(item))
@@ -74,7 +77,12 @@ def build_parser() -> argparse.ArgumentParser:
     init = subparsers.add_parser("init", help="initialize .agent safely")
     init.add_argument("--project", dest="init_project")
     init.add_argument("--name", required=True)
-    init.add_argument("--mode", default="full", choices=("fast", "quick", "full", "audit"))
+    init.add_argument(
+        "--mode",
+        default="critical",
+        choices=("fast", "standard", "critical", "quick", "full", "audit"),
+        help="execution mode; quick/full/audit remain accepted as legacy aliases",
+    )
 
     phase = subparsers.add_parser("init-phase", help="create phase artifacts")
     phase.add_argument("--project", dest="phase_project")
@@ -94,6 +102,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     validate = subparsers.add_parser("validate", help="validate STATE.md and references")
     validate.add_argument("--project", dest="validate_project")
+
+    normalize = subparsers.add_parser(
+        "normalize-worktree",
+        help=(
+            "rewrite a legacy absolute git.worktree as '.'; validation never "
+            "edits STATE.md, this operation is the only one that does"
+        ),
+    )
+    normalize.add_argument("--project", dest="normalize_project")
+    normalize.add_argument(
+        "--check",
+        action="store_true",
+        help="report what would change without writing",
+    )
 
     transition = subparsers.add_parser("transition", help="apply a guarded state transition")
     transition.add_argument("--project", dest="transition_project")
@@ -217,11 +239,37 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.command == "validate":
             root = _project(args.validate_project or args.project)
             state, _ = load_frontmatter(root / ".agent" / "STATE.md")
-            issues = validate_state(state, root)
+            try:
+                execution_mode = state_execution_mode(state)
+            except ValueError:
+                execution_mode = "invalid"
+            issues = (
+                validate_lightweight_state(state, root)
+                if execution_mode == "standard"
+                else validate_state(state, root)
+            )
             if issues:
                 print(json.dumps(issues, ensure_ascii=False, indent=2))
+            if any(issue["severity"] == "error" for issue in issues):
                 return 2
             print("state: valid")
+            return 0
+        if args.command == "normalize-worktree":
+            root = _project(args.normalize_project or args.project)
+            outcome = normalize_worktree(
+                root / ".agent" / "STATE.md", root, apply=not args.check
+            )
+            if args.json:
+                print(json.dumps(outcome, ensure_ascii=False, indent=2))
+            else:
+                print(
+                    "worktree: {}{}".format(
+                        outcome["message"],
+                        " (not written; --check)"
+                        if args.check and outcome["changed"]
+                        else "",
+                    )
+                )
             return 0
         if args.command == "transition":
             root = _project(args.transition_project or args.project)

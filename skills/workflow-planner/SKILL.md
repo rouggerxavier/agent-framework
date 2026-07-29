@@ -1,61 +1,59 @@
 ---
 name: workflow-planner
-description: Use para especificar e planejar trabalho persistente, selecionar workflow, risco, dependencias, skills, gates, paralelismo e contratos sem implementar tarefas.
+description: Use para plano curto em standard ou planejamento persistente completo em critical; nao e obrigatorio em fast.
 ---
 
 # Workflow Planner
 
 ## Objetivo
 
-Transformar grounding e especificacao em um plano auditado, um grafo de tarefas
-com contratos integrais e o estado `planned`.
+Produzir planejamento proporcional ao modo: curto e executavel em `standard`, ou
+auditado/persistente com contratos integrais em `critical`.
 
 ## Quando usar
 
-- Nos estados `discussing`, `specified` ou em revisao explicita de plano.
-- Para features, bugfixes amplos, backend ou mudancas de alto risco.
-- Quando a execucao precisa sobreviver a outra sessao ou agente.
+- Em `standard`, para duas a cinco etapas dependentes ou risco moderado.
+- Em `critical`, nos estados `discussing`, `specified` ou revisao de plano.
+- Quando ha valor concreto em planejar; nunca apenas por quantidade de arquivos.
 
 ## Quando nao usar
 
 - Para implementar uma tarefa.
+- Em `fast`; inspecione e implemente diretamente.
 - Para redesenhar silenciosamente um plano em execucao.
-- Para promover um plano sem `plan-quality-checker`.
+- Para exigir plan gate em `standard`.
 
 ## Entradas esperadas
 
-- `STATE.md`, roadmap, contexto, decisoes e requisitos.
-- Spec da fase ou incertezas ainda abertas.
+- Objetivo, modo selecionado e contexto focado.
+- Em `critical`: `STATE.md`, roadmap, spec, decisoes e requisitos.
 - Workflows, rubrics e skills existentes relevantes.
 
 ## Workflow
 
-1. Use `project-context-loader` e persista grounding em `CONTEXT.md`.
-2. Resolva ou registre incertezas; congele spec e criterios de aceite.
-3. Selecione o workflow existente mais proximo e classifique o risco.
-4. Use `execution-plan-builder` ou planner especializado para decompor tarefas.
-5. Gere dependencias, gates, estrategia de paralelismo e politica de worktree.
-6. Escreva o contrato integral de cada tarefa em `TASKS.md`.
-7. Use `test-strategy-builder` para definir comandos e modo por tarefa.
-8. Rode `plan-quality-checker`; corrija blockers e registre a evidencia.
-9. Rode `framework-next seal-plan` com versao, decision ID e referencia da
-   evidencia; isso sela `PLAN.md` + `TASKS.md`.
-10. Solicite `specified → planned` somente depois do gate passar.
+1. Confirme `mode`.
+2. Em `standard`, use contexto ja lido, escreva um plano curto com objetivo,
+   2-5 passos, arquivos/areas, verificacao e riscos conhecidos.
+3. Em `standard`, crie `.agent/STATE.md` e `.agent/PLAN.md` somente se atravessar
+   sessoes, houver tarefas dependentes ou o usuario pedir persistencia. Nao crie
+   roadmap, contratos, seal ou ledger automaticamente.
+4. Em `critical`, execute o workflow P0/P1 completo: grounding persistente,
+   spec, workflow, grafo, contratos, testes, isolamento e rollback.
+5. Somente em `critical`, rode `plan-quality-checker`, registre evidencia, use
+   `framework-next seal-plan` e solicite `specified → planned`.
 
 ## Saida obrigatoria
 
-- Spec e plano persistentes.
-- Grafo de tarefas com contratos completos.
-- Risco, skills, gates, testes, isolamento e rollback.
-- Evidencia do plan gate.
-- `STATE.md` pronto para `planned`, sem implementar tarefas.
+- `standard`: plano curto, verificacao proporcional e persistencia justificada ou
+  explicitamente dispensada.
+- `critical`: spec/plano persistentes, contratos completos, gates, evidencia e
+  `STATE.md` pronto para `planned`.
 
 ## Criterios de aceite
 
-- Cada tarefa e atomica, verificavel e possui contrato completo.
-- Dependencias e arquivos paralelos nao conflitam.
-- Plano alterado possui decisao e nova revisao.
-- `planned` exige gate aprovado e risco classificado.
+- `standard` nao recebe plan seal, ledger completo ou contrato formal por default.
+- `critical` preserva atomicidade, contratos, dependencias, plan gate e seal.
+- `fast` nao depende desta skill.
 
 ## Arquivos de apoio
 

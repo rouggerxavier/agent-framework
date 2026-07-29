@@ -27,6 +27,8 @@
 
 # Code Quality Review
 
+Second independent review artifact for `critical`; use the integrated review in
+`fast`/`standard`.
+
 Allowed classifications: `APPROVED`, `APPROVED_WITH_NOTES`, and
 `CHANGES_REQUIRED`. This review runs only after spec compliance passes.
-

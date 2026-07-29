@@ -39,7 +39,8 @@ Escolher a proxima acao de git sem automatismo perigoso: commit direto, esperar 
 6. Use worktree proporcional quando houver subagente, paralelo, arvore principal
    suja, alto risco, isolamento exigido ou conflito possivel.
 7. Registre base/branch/worktree/starting commit em `STATE.md`; valide antes de
-   reutilizar e finalize/limpe explicitamente.
+   reutilizar e finalize/limpe explicitamente. Grave `worktree` como `.`; nunca
+   versione o caminho absoluto do clone local.
 8. Registre decisao, bloqueios e comando sugerido sem executar Git destrutivo.
 
 ## Saida obrigatoria

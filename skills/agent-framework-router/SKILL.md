@@ -1,30 +1,52 @@
 ---
 name: agent-framework-router
-description: Use primeiro para escolher quais skills, workflows, rubrics e templates do agent-framework aplicar a uma tarefa, sem planejar fases nem modelo.
+description: Use primeiro para selecionar fast, standard ou critical e escolher poucos assets proporcionais, sem ativar o kernel persistente por padrão.
 ---
 
 # Agent Framework Router
 
 ## Objetivo
-Dado um pedido, apontar rapidamente os assets certos do `~/agent-framework`. Dispatcher leve, nao executor.
+Dado um pedido, selecionar explicitamente `fast`, `standard` ou `critical` e
+apontar rapidamente os assets certos. Dispatcher leve, nao executor.
 
 ## Quando usar
-- No inicio, quando nao esta claro quais skills/rubrics/workflows usar.
-- Para combinar poucos assets em tarefa pequena ou media.
+- No inicio de uma nova tarefa.
+- Para respeitar `--fast`, `--standard`, `--critical` ou `--auto`.
+- Para combinar poucos assets sem transformar trabalho comum em governanca.
 
 ## Quando nao usar
-- Meta grande multi-fase: use `workflow-orchestrator`.
 - Escolha de modelo/agente: use `model-routing`.
 - Skill alvo ja obvia: chame-a direto.
+- Retomada explicitamente persistente: use `framework-next`.
 
 ## Workflow
-1. Se `.agent/STATE.md` existir ou o pedido for de retomada, encaminhe primeiro
-   para `framework-next`.
-2. Classifique a tarefa por intencao (tabela abaixo).
-3. Liste 1-4 assets relevantes; corte o resto.
-4. Se >1 fase ou >4 assets, encaminhe para `workflow-planner`; mantenha
-   `workflow-orchestrator` apenas como alias legado.
-5. Indique o primeiro asset a invocar.
+1. Leia a escolha explicita: `--fast`, `--standard`, `--critical` ou `--auto`;
+   sem flag, use `auto`.
+2. Em `auto`, escolha `fast` na ausencia de evidencia concreta. Muitos arquivos,
+   edge cases possiveis ou "mais qualidade" nao justificam escalada.
+3. Escolha `standard` somente por complexidade observada: etapas dependentes,
+   risco moderado, mudanca distribuida ou necessidade real de retomada.
+4. Escolha `critical` somente por risco concreto: auth, migration, pagamentos,
+   seguranca, perda/corrupcao de dados, integracao critica, multiplos agentes,
+   rollback complexo ou alto impacto operacional.
+5. Respeite a flag do usuario. Escale `--fast`/`--standard` apenas diante de risco
+   grave de seguranca ou perda de dados e explique a evidencia.
+6. Se for retomada ou `critical`, e `.agent/STATE.md` existir, encaminhe para
+   `framework-next`. A mera existencia de `.agent/` nao obriga uma nova tarefa a
+   usar o kernel.
+7. Classifique a intencao, liste 1-4 assets relevantes e corte o resto.
+8. Indique o primeiro asset a invocar.
+
+## Modos
+
+| Modo | Caminho | Defaults |
+|---|---|---|
+| `fast` | route → inspect → implement → targeted verification → diff review | sem `.agent/`, spec, contrato, seal, ledger, reviewers separados ou worktree |
+| `standard` | route → focused grounding → short plan → implement → tests → integrated review | estado opcional, spec/contrato leves, sem seal ou reviews separados |
+| `critical` | lifecycle persistente completo P0/P1 | estado, spec, contratos, seal, ledger e reviews separados obrigatorios |
+
+Regra de desempate: duvida → `fast`; complexidade comprovada → `standard`; risco
+critico comprovado → `critical`.
 
 ## Prioridade alta
 - Se o pedido mencionar brief, documentacao de feature/refatoracao, plano de execucao, organizar tarefa, quebrar em etapas ou preparar trabalho para outro agente, priorize `execution-plan-builder`.
@@ -99,15 +121,28 @@ Dado um pedido, apontar rapidamente os assets certos do `~/agent-framework`. Dis
 | Auditar qualidade de skill | skill-quality-auditor | docs/skill-standards, installers/verify-framework |
 
 ## Saida obrigatoria
-- Intencao detectada.
-- Assets selecionados (skill + apoio).
-- Primeiro asset a invocar, ou encaminhamento para `workflow-planner`.
+```yaml
+selected_mode: fast | standard | critical
+reason:
+risk_factors: []
+complexity_factors: []
+assets_selected: []
+assets_skipped: []
+```
+
+Toda selecao `standard` ou `critical` inclui uma justificativa concreta. A saida
+pode ainda indicar intencao e primeiro asset.
 
 ## Criterios de aceite
+- `fast` e o default quando nao ha evidencia concreta de escalada.
 - No maximo 4 assets; sem listar tudo.
 - Nao duplicar checklist de rubric/workflow aqui; so referenciar.
-- Encaminhar metas grandes em vez de planejar fases.
+- Backend simples nao e automaticamente `critical`.
+- Roteamento nao cria `.agent/` nem instancia templates.
 
 ## Exemplos de uso
 - Codex: `$agent-framework-router Qual skill para auditar este PR de API?`
+- Codex: `$agent-framework-router --fast Corrija o bug no filtro.`
+- Codex: `$agent-framework-router --standard Implemente o endpoint e os testes.`
+- Codex: `$agent-framework-router --critical Altere auth e faça a migration.`
 - Claude Code: `/agent-framework-router Por onde começo neste repo desconhecido?`

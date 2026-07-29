@@ -31,8 +31,9 @@ Validar se um commit pode ser feito com seguranca, garantindo escopo coeso, evid
 3. Verifique evidencias: teste, lint, build, QA, review ou justificativa proporcional ao risco.
 4. Verifique docs: README, env example, changelog ou runbook quando comportamento/config mudou.
 5. Verifique mensagem: tipo/escopo, resumo claro, sem prometer mais do que o diff faz.
-6. No kernel, confira commit inicial, contrato, self-review, dois reviews,
-   evidence ledger e ausencia de blockers.
+6. Confira o modo: em `fast`/`standard`, exija self-review/diff review integrado
+   e testes proporcionais; em `critical`, confira commit inicial, contrato,
+   self-review, dois reviews, evidence ledger e ausencia de blockers.
 7. Garanta que o commit inclua somente uma tarefa aprovada; registre limitacao se
    o ambiente nao permitir commit.
 8. Classifique: `ready`, `ready with notes` ou `blocked`.
@@ -45,7 +46,7 @@ Preencha `../../templates/commit-readiness-report.md` com veredito, arquivos, ch
 - Secrets ou artefatos locais bloqueiam commit.
 - Testes ausentes precisam ser justificados para mudanca de baixo risco; alto risco bloqueia.
 - Mensagem de commit deve ser curta, concreta e alinhada ao diff.
-- Tarefa nao revisada, arquivo fora do contrato ou blocker impede commit atomico.
+- Review exigido pelo modo, escopo violado ou blocker impede commit atomico.
 
 ## Arquivos de apoio
 - Template: ../../templates/commit-readiness-report.md

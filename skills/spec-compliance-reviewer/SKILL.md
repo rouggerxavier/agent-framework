@@ -1,56 +1,58 @@
 ---
 name: spec-compliance-reviewer
-description: Use para revisar independentemente uma tarefa contra spec, requisitos, decisoes, contrato, escopo e evidencias antes da revisao de qualidade.
+description: Use como reviewer independente em critical; em fast/standard a conformidade faz parte do review integrado.
 ---
 
 # Spec Compliance Reviewer
 
 ## Objetivo
 
-Provar se a implementacao cumpre cada criterio e permanece dentro do contrato,
-inspecionando codigo e evidencia diretamente.
+Verificar conformidade de modo proporcional, com review independente formal
+somente em `critical`.
 
 ## Quando usar
 
-- Depois de resultado valido `implementation_complete` e self-review.
-- Como primeira etapa obrigatoria do review de tarefa.
+- Em `critical`, depois de resultado valido `implementation_complete`.
+- Em `fast`/`standard`, como dimensao da revisao integrada, sem novo reviewer.
 - Novamente depois de qualquer correcao que invalide a aprovacao anterior.
 
 ## Quando nao usar
 
-- Quando o reviewer foi o implementador.
+- Como reviewer separado em `fast`/`standard` por default.
+- Em `critical`, quando o reviewer foi o implementador.
 - Com base apenas no resumo ou afirmacoes do executor.
 - Para revisar qualidade geral antes de conformidade passar.
 
 ## Entradas esperadas
 
-- Contrato, spec, requisitos e decisoes aplicaveis.
+- Goal, mode e comportamento esperado.
+- Em `critical`: contrato, spec, requisitos e decisoes.
 - Diff e arquivos implementados.
-- Resultado, comandos, evidence ledger e waivers.
+- Testes/resultados, riscos e, em `critical`, ledger/waivers.
 
 ## Workflow
 
-1. Confirme independencia e inspecione diff/arquivos diretamente.
-2. Mapeie cada criterio para codigo e evidencia valida.
-3. Verifique requisitos ausentes, escopo extra e arquivos fora do contrato.
-4. Verifique comandos/resultados e qualquer waiver.
-5. Classifique `PASS`, `PASS_WITH_NOTES` ou `BLOCKED`.
-6. Preencha `templates/spec-compliance-review.md`.
-7. Valide com `scripts/framework-next validate-spec-review`.
-8. Em blocker, registre evidencia e devolva ao runner para `reviewing → executing`.
+1. Receba o pacote minimo: goal, mode, diff, files_changed, tests_run,
+   acceptance/expected behavior e known_risks.
+2. Em `fast`/`standard`, avalie criterios, escopo e testes dentro do review
+   integrado; nao exija contrato, ledger, template ou independencia.
+3. Em `critical`, confirme independencia, mapeie cada criterio para codigo e
+   evidencia, verifique contrato/waivers, preencha template e valide pelo CLI.
+4. Classifique findings em `BLOCKER`, `IMPORTANT`, `NOTE`, `SPECULATIVE`;
+   `SPECULATIVE` nunca bloqueia.
+5. Depois de correcao localizada, reavalie apenas diff/criterios afetados.
 
 ## Saida obrigatoria
 
-- Status de cada criterio e evidencia direta.
-- Requisitos ausentes, escopo extra e evidencia invalida.
-- Waiver revisado, blockers e classificacao.
+- `fast`/`standard`: conclusao integrada concisa.
+- `critical`: status por criterio, evidencia, escopo, waivers e classificacao.
 
 ## Criterios de aceite
 
 - Todo criterio possui status e evidencia.
 - Review lista diff, arquivos e evidencia inspecionados.
-- Qualquer gap material produz `BLOCKED`.
-- Implementador nao revisa o proprio trabalho.
+- Somente gap material e provado produz `BLOCKED`.
+- Independencia e obrigatoria apenas no review formal `critical`.
 
 ## Arquivos de apoio
 
@@ -63,4 +65,3 @@ inspecionando codigo e evidencia diretamente.
 
 - Codex: `$spec-compliance-reviewer Compare esta implementacao diretamente com o contrato.`
 - Claude Code: `/spec-compliance-reviewer Revise criterios, escopo e evidencias.`
-

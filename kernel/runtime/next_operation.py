@@ -7,12 +7,16 @@ from typing import Any, Dict, List
 
 from .contracts import eligible_tasks, load_task_index, task_by_id
 from .documents import DocumentError, git_snapshot, load_frontmatter, safe_project_path
+from .execution_modes import state_execution_mode, validate_lightweight_state
 from .state_machine import validate_state
 
 
 ASSET_BY_OPERATION = {
-    "initialize-project": "skills/framework-next/SKILL.md",
+    "route-task": "skills/agent-framework-router/SKILL.md",
     "repair-state": "skills/framework-next/SKILL.md",
+    "build-short-plan": "skills/workflow-planner/SKILL.md",
+    "execute-standard-plan": "skills/workflow-runner/SKILL.md",
+    "run-integrated-review": "skills/goal-coverage-verifier/SKILL.md",
     "discuss-requirements": "skills/workflow-planner/SKILL.md",
     "continue-discussion": "skills/workflow-planner/SKILL.md",
     "build-plan": "skills/workflow-planner/SKILL.md",
@@ -35,9 +39,11 @@ def _decision(
     operation: str,
     target: Any,
     blockers: List[str],
+    execution_mode: Any = None,
 ) -> Dict[str, Any]:
     return {
         "current_state": state,
+        "execution_mode": execution_mode,
         "detected_evidence": evidence,
         "inconsistencies": inconsistencies,
         "next_operation": {"operation": operation, "target": target},
@@ -77,9 +83,10 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
             state="uninitialized",
             evidence=evidence + ["missing .agent/STATE.md"],
             inconsistencies=[],
-            operation="initialize-project",
+            operation="route-task",
             target=str(project_root),
             blockers=[],
+            execution_mode="auto",
         )
 
     try:
@@ -95,7 +102,83 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
         )
 
     status = str(state.get("status", "invalid"))
+    try:
+        execution_mode = state_execution_mode(state)
+    except ValueError as exc:
+        return _decision(
+            state=status,
+            evidence=evidence + ["found invalid execution_mode"],
+            inconsistencies=[str(exc)],
+            operation="repair-state",
+            target=".agent/STATE.md",
+            blockers=[str(exc)],
+        )
     evidence.append("loaded state: {}".format(status))
+    evidence.append("execution mode: {}".format(execution_mode))
+
+    if execution_mode == "fast":
+        return _decision(
+            state=status,
+            evidence=evidence
+            + [".agent/ preserved but persistent kernel skipped for fast"],
+            inconsistencies=[],
+            operation="route-task",
+            target=str(project_root),
+            blockers=[],
+            execution_mode=execution_mode,
+        )
+
+    if execution_mode == "standard":
+        lightweight_issues = validate_lightweight_state(state, project_root)
+        if lightweight_issues:
+            errors = [item["message"] for item in lightweight_issues]
+            return _decision(
+                state=status,
+                evidence=evidence,
+                inconsistencies=errors,
+                operation="repair-state",
+                target=".agent/STATE.md",
+                blockers=errors,
+                execution_mode=execution_mode,
+            )
+        if status in {"proposed", "discussing", "specified"}:
+            operation, target = "build-short-plan", state.get("artifacts", {}).get(
+                "plan"
+            )
+        elif status in {"planned", "executing"}:
+            operation, target = "execute-standard-plan", state.get(
+                "current_task", {}
+            ).get("id")
+        elif status in {"reviewing", "verifying"}:
+            operation, target = "run-integrated-review", state.get(
+                "current_task", {}
+            ).get("id")
+        elif status == "blocked":
+            operation, target = "resolve-blocker", state.get("blockers", [])
+        elif status == "ready_to_ship":
+            operation, target = "ship", state.get("phase", {}).get("id")
+        elif status in {"shipped", "cancelled", "superseded"}:
+            operation, target = "none", None
+        else:
+            return _decision(
+                state=status,
+                evidence=evidence,
+                inconsistencies=["unknown standard lifecycle status: {}".format(status)],
+                operation="repair-state",
+                target=".agent/STATE.md",
+                blockers=["state status must be repaired before resuming"],
+                execution_mode=execution_mode,
+            )
+        return _decision(
+            state=status,
+            evidence=evidence + ["standard mode uses a lightweight lifecycle"],
+            inconsistencies=[],
+            operation=operation,
+            target=target,
+            blockers=[],
+            execution_mode=execution_mode,
+        )
+
     issues = validate_state(state, project_root)
     errors = [item["message"] for item in issues if item["severity"] == "error"]
     if errors:
@@ -106,6 +189,7 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
             operation="repair-state",
             target=".agent/STATE.md",
             blockers=errors,
+            execution_mode=execution_mode,
         )
 
     mapping = {
@@ -207,4 +291,5 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
         operation=operation,
         target=target,
         blockers=[],
+        execution_mode=execution_mode,
     )

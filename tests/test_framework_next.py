@@ -3,9 +3,12 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from kernel.runtime.next_operation import determine_next_operation
+from kernel.runtime.project import initialize_project
 from tests.helpers import (
+    FRAMEWORK_ROOT,
     initialized_project,
     minimal_task,
+    read_state,
     set_lifecycle,
     write_state,
     write_tasks,
@@ -13,6 +16,33 @@ from tests.helpers import (
 
 
 class FrameworkNextTests(unittest.TestCase):
+    def test_recorded_fast_mode_preserves_agent_but_skips_kernel(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialize_project(root, FRAMEWORK_ROOT, project_name="legacy-fast")
+            state, body = read_state(root)
+            state["execution_mode"] = "fast"
+            write_state(root, state, body)
+            decision = determine_next_operation(root)
+            self.assertEqual("fast", decision["execution_mode"])
+            self.assertEqual("route-task", decision["next_operation"]["operation"])
+            self.assertTrue((root / ".agent" / "STATE.md").is_file())
+
+    def test_recorded_standard_mode_routes_to_short_plan(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialize_project(
+                root, FRAMEWORK_ROOT, project_name="standard", mode="standard"
+            )
+            decision = determine_next_operation(root)
+            self.assertEqual("standard", decision["execution_mode"])
+            self.assertEqual(
+                "build-short-plan", decision["next_operation"]["operation"]
+            )
+            self.assertEqual(
+                "skills/workflow-planner/SKILL.md", decision["required_asset"]
+            )
+
     def test_planned_selects_first_eligible_task(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

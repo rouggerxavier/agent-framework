@@ -77,3 +77,6 @@
 
 The frontmatter is the complete executable contract. Record discoveries here,
 then revise the plan and contract before expanding scope.
+
+Required in `critical`, optional/lightweight in `standard`, and not instantiated
+in `fast`.

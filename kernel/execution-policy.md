@@ -1,5 +1,9 @@
 # Kernel Execution Policy
 
+This complete policy governs `critical`. For `fast` and `standard`, use
+`adaptive-execution-policy.md` and apply only the proportional scope, test, diff
+review, and risk controls selected there.
+
 ## Scope and concurrency
 
 - One active task per executor.
@@ -51,6 +55,10 @@ working tree contains unrelated changes, risk is high, or the selected workflow
 requires isolation. Record base branch, branch, worktree, and starting commit in
 `STATE.md`. Reuse only after validating ownership and repository state. Cleanup is
 explicit after integration; the kernel never removes an ambiguous worktree.
+
+Record `git.worktree` as the portable `"."`, never as a local absolute path: the
+same `STATE.md` is used from every clone of the branch. Ownership is validated
+through Git and the location of `.agent/`, not through a persisted path.
 
 After the plan gate, the runner seals `PLAN.md` and `TASKS.md` with a SHA-256
 fingerprint, revision, decision ID, and evidence reference in `STATE.md`.

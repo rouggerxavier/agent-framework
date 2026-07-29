@@ -1,5 +1,13 @@
 # Kernel Evidence Policy
 
+The append-only ledger is required in `critical`, optional/lightweight in
+`standard`, and not instantiated in `fast`. Every mode still requires observable
+verification before success; evidence need not become a persistent document.
+
+Review findings use `BLOCKER`, `IMPORTANT`, `NOTE`, or `SPECULATIVE`. A blocker
+requires a real execution path, plausible likelihood, material impact, and
+supporting evidence. `SPECULATIVE` never blocks.
+
 ## Evidence types
 
 Valid evidence includes executed commands with results, test output, direct diff
@@ -39,4 +47,3 @@ reviewing only the implementer summary.
 
 Evidence is fresh only for the inspected content/commit. Material repository
 changes invalidate affected context, tests, and reviews until revalidation.
-

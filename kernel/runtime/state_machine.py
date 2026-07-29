@@ -18,6 +18,8 @@ from .contracts import (
     validate_task_contract,
 )
 from .documents import DocumentError, git_snapshot, safe_project_path, utc_now
+from .execution_modes import state_execution_mode
+from .worktree import resolve_worktree
 
 
 STATES = {
@@ -104,6 +106,10 @@ def validate_state(
     issues: List[Dict[str, str]] = []
     if state.get("schema_version") != 1:
         issues.append(_issue("schema-version", "schema_version must equal 1"))
+    try:
+        state_execution_mode(state)
+    except ValueError as exc:
+        issues.append(_issue("execution-mode", str(exc)))
 
     status = state.get("status")
     if status not in STATES:
@@ -265,15 +271,11 @@ def validate_state(
                     ),
                 )
             )
-        registered_worktree = git_state.get("worktree")
-        if registered_worktree:
-            if Path(str(registered_worktree)).expanduser().resolve() != root.resolve():
-                issues.append(
-                    _issue(
-                        "git-worktree-mismatch",
-                        "registered worktree is not the current project root",
-                    )
-                )
+        resolution = resolve_worktree(git_state.get("worktree"), root)
+        if resolution.code:
+            issues.append(
+                _issue(resolution.code, resolution.message, resolution.severity)
+            )
     return issues
 
 
