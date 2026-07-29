@@ -29,6 +29,30 @@ VERIFICATION_BUDGETS: Dict[str, Dict[str, Any]] = {
     "critical": {"target_ratio": None, "max_full_review_passes": "proportional"},
 }
 
+REVIEW_ROUNDS: Dict[str, Dict[str, int]] = {
+    "fast": {"max_review_rounds": 1, "max_correction_rounds": 1, "reviewers_per_diff": 1},
+    "standard": {"max_review_rounds": 1, "max_correction_rounds": 1, "reviewers_per_diff": 1},
+    "critical": {"max_review_rounds": 1, "max_correction_rounds": 1, "reviewers_per_diff": 2},
+}
+
+SESSION_SCOPE: Dict[str, Any] = {
+    "soft_checkpoint_minutes": 30,
+    "hard_checkpoint_minutes": 45,
+    "grace_minutes": 10,
+    "max_units_per_session": 1,
+}
+
+CHANGE_SIZES = ("small", "moderate", "broad")
+
+ENVIRONMENT_REBUILD_FAILURES = (
+    "build",
+    "dependency",
+    "image",
+    "migration",
+    "schema",
+    "server",
+)
+
 MODE_POLICIES: Dict[str, Dict[str, Any]] = {
     "fast": {
         "persistent_state": False,
@@ -228,6 +252,9 @@ def route_execution(
 
     policy = deepcopy(MODE_POLICIES[selected])
     policy["verification_budget"] = deepcopy(VERIFICATION_BUDGETS[selected])
+    policy["review_rounds"] = deepcopy(REVIEW_ROUNDS[selected])
+    policy["session_scope"] = deepcopy(SESSION_SCOPE)
+    policy["auto_advance_to_next_phase"] = False
     policy["create_persistent_state"] = should_create_persistent_state(
         selected,
         crosses_sessions="cross_session_work" in complexity_factors,
@@ -248,16 +275,163 @@ def route_execution(
     }
 
 
-def review_policy(mode: str, *, localized_correction: bool = False) -> Dict[str, Any]:
+def review_policy(
+    mode: str,
+    *,
+    localized_correction: bool = False,
+    completed_review_rounds: int = 0,
+    completed_correction_rounds: int = 0,
+    unresolved_blockers: bool = False,
+) -> Dict[str, Any]:
     selected = normalize_mode(mode, default="fast")
     if selected == "auto":
         raise ValueError("review policy requires a selected execution mode")
+    rounds = REVIEW_ROUNDS[selected]
+    another_review = completed_review_rounds < rounds["max_review_rounds"] or (
+        unresolved_blockers
+        and completed_correction_rounds < rounds["max_correction_rounds"]
+        and completed_review_rounds <= rounds["max_review_rounds"]
+    )
     return {
         "review_mode": "split" if selected == "critical" else "integrated",
         "depth": {"fast": "light", "standard": "normal", "critical": "deep"}[selected],
         "blocking_threshold": "BLOCKER",
         "scope": "affected-diff-and-criteria" if localized_correction else "full-current-diff",
         "independent_reviews": selected == "critical",
+        "max_review_rounds": rounds["max_review_rounds"],
+        "max_correction_rounds": rounds["max_correction_rounds"],
+        "reviewers_per_diff": rounds["reviewers_per_diff"],
+        "additional_reviewer_requires_evidence": True,
+        "another_review_round_allowed": another_review,
+        "another_correction_round_allowed": (
+            unresolved_blockers
+            and completed_correction_rounds < rounds["max_correction_rounds"]
+        ),
+        "escalate_instead_of_looping": not another_review and unresolved_blockers,
+    }
+
+
+def plan_session_scope(
+    units: Sequence[str],
+    *,
+    elapsed_minutes: float = 0.0,
+    minutes_to_finish_current_unit: float = 0.0,
+    full_run_requested: bool = False,
+    continuation_requested: bool = False,
+) -> Dict[str, Any]:
+    """Split work into session-sized units and decide when to stop at a checkpoint.
+
+    Volume is never a blocker: extra units are deferred to further sessions the
+    user may resume explicitly. A unit that is a few minutes from done is
+    finished before the checkpoint instead of being cut in half.
+    """
+
+    pending = [unit for unit in units if str(unit).strip()]
+    soft = float(SESSION_SCOPE["soft_checkpoint_minutes"])
+    hard = float(SESSION_SCOPE["hard_checkpoint_minutes"])
+    grace = float(SESSION_SCOPE["grace_minutes"])
+    per_session = int(SESSION_SCOPE["max_units_per_session"])
+
+    if full_run_requested:
+        planned, deferred = list(pending), []
+    else:
+        planned, deferred = pending[:per_session], pending[per_session:]
+
+    if full_run_requested:
+        action = "continue"
+        reason = "The user asked for a complete run, so the session is not cut at a checkpoint."
+    elif elapsed_minutes + minutes_to_finish_current_unit <= hard:
+        if elapsed_minutes < soft:
+            action = "continue"
+            reason = "Inside the session budget; keep working on the current unit."
+        else:
+            action = "finish-current-unit"
+            reason = (
+                "Past the soft checkpoint but the current unit still lands inside the budget; "
+                "finish it, then stop."
+            )
+    elif minutes_to_finish_current_unit <= grace:
+        action = "finish-current-unit"
+        reason = (
+            "Over the budget, but the current unit is minutes from done; finish it rather than "
+            "leaving it half-applied."
+        )
+    else:
+        action = "checkpoint-now"
+        reason = (
+            "Over the session budget with substantial work remaining; close the atomic unit "
+            "reached so far and hand off."
+        )
+
+    stopping = action != "continue"
+    return {
+        "planned_units": planned,
+        "deferred_units": deferred,
+        "checkpoint": {
+            "action": action,
+            "reason": reason,
+            "commit_required": stopping,
+            "handoff_required": stopping,
+            "soft_checkpoint_minutes": soft,
+            "hard_checkpoint_minutes": hard,
+        },
+        "auto_advance_to_next_phase": False,
+        "volume_is_blocker": False,
+        "requires_explicit_continuation": bool(deferred) and not continuation_requested,
+        "continuation_requested": continuation_requested,
+        "full_run_requested": full_run_requested,
+    }
+
+
+def verification_scope_for_change(
+    mode: str,
+    *,
+    change_size: str = "small",
+    phase_closure: bool = False,
+    pull_request: bool = False,
+    full_suite_already_green: bool = False,
+    failure_kind: str = "",
+    environment_running: bool = True,
+) -> Dict[str, Any]:
+    """Pick verification proportional to the diff instead of replaying everything."""
+
+    selected = normalize_mode(mode, default="fast")
+    if selected == "auto":
+        raise ValueError("test scope requires a selected execution mode")
+    size = str(change_size).strip().lower() or "small"
+    if size not in CHANGE_SIZES:
+        raise ValueError("unknown change size: {}".format(change_size))
+
+    closing = bool(phase_closure or pull_request)
+    if closing:
+        scope, run_full_suite = "full-suite", True
+        reason = "Real phase closure or pull request: run the complete suite once."
+    elif size == "small" and full_suite_already_green:
+        scope, run_full_suite = "targeted", False
+        reason = (
+            "Small local change over an already green suite: rerun only the affected tests."
+        )
+    elif size == "small":
+        scope, run_full_suite = "targeted", False
+        reason = "Small local change: targeted tests covering the diff."
+    else:
+        scope, run_full_suite = "proportional", False
+        reason = "Broader diff: run the affected areas and their integration points."
+
+    kind = str(failure_kind).strip().lower()
+    rebuild = not environment_running or kind in ENVIRONMENT_REBUILD_FAILURES
+    return {
+        "scope": scope,
+        "run_full_suite": run_full_suite,
+        "reason": reason,
+        "rebuild_environment": rebuild,
+        "rebuild_reason": (
+            "Environment is not running or the failure comes from the build itself."
+            if rebuild
+            else "Failure is inside the test itself; reuse the running environment and rerun "
+            "the affected spec."
+        ),
+        "rerun_failing_spec_only": bool(kind) and not rebuild,
     }
 
 

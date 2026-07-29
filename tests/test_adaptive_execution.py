@@ -8,11 +8,13 @@ from kernel.runtime.execution_modes import (
     classify_review_finding,
     finding_blocks_delivery,
     migrate_state_execution_mode,
+    plan_session_scope,
     review_policy,
     route_execution,
     should_create_persistent_state,
     should_reground,
     state_execution_mode,
+    verification_scope_for_change,
     verification_budget_exceeded,
 )
 from tests.helpers import FRAMEWORK_ROOT
@@ -228,6 +230,142 @@ class AdaptivePolicyTests(unittest.TestCase):
             state_execution_mode({"execution_mode": "auto"})
         with self.assertRaises(ValueError):
             state_execution_mode({"execution_mode": 3})
+
+
+class SessionScopeTests(unittest.TestCase):
+    def test_large_work_is_split_and_only_one_unit_runs_per_session(self) -> None:
+        plan = plan_session_scope(["Fase C", "Fase D", "Fase E"])
+        self.assertEqual(["Fase C"], plan["planned_units"])
+        self.assertEqual(["Fase D", "Fase E"], plan["deferred_units"])
+        self.assertFalse(plan["auto_advance_to_next_phase"])
+        self.assertFalse(plan["volume_is_blocker"])
+        self.assertTrue(plan["requires_explicit_continuation"])
+
+    def test_work_inside_the_budget_keeps_going(self) -> None:
+        plan = plan_session_scope(
+            ["fatia única"], elapsed_minutes=12.0, minutes_to_finish_current_unit=8.0
+        )
+        self.assertEqual("continue", plan["checkpoint"]["action"])
+        self.assertFalse(plan["checkpoint"]["commit_required"])
+
+    def test_correction_minutes_from_done_finishes_before_the_checkpoint(self) -> None:
+        plan = plan_session_scope(
+            ["correção pendente"],
+            elapsed_minutes=52.0,
+            minutes_to_finish_current_unit=4.0,
+        )
+        self.assertEqual("finish-current-unit", plan["checkpoint"]["action"])
+        self.assertTrue(plan["checkpoint"]["commit_required"])
+        self.assertTrue(plan["checkpoint"]["handoff_required"])
+
+    def test_long_remaining_work_stops_at_the_checkpoint(self) -> None:
+        plan = plan_session_scope(
+            ["fase inteira"],
+            elapsed_minutes=48.0,
+            minutes_to_finish_current_unit=40.0,
+        )
+        self.assertEqual("checkpoint-now", plan["checkpoint"]["action"])
+        self.assertTrue(plan["checkpoint"]["commit_required"])
+
+    def test_explicit_full_run_keeps_every_unit_in_one_session(self) -> None:
+        plan = plan_session_scope(
+            ["Fase C", "Fase D"],
+            elapsed_minutes=90.0,
+            minutes_to_finish_current_unit=30.0,
+            full_run_requested=True,
+        )
+        self.assertEqual(["Fase C", "Fase D"], plan["planned_units"])
+        self.assertEqual([], plan["deferred_units"])
+        self.assertEqual("continue", plan["checkpoint"]["action"])
+
+    def test_explicit_continuation_does_not_require_more_ceremony(self) -> None:
+        plan = plan_session_scope(
+            ["Fase D", "Fase E"], continuation_requested=True
+        )
+        self.assertEqual(["Fase D"], plan["planned_units"])
+        self.assertFalse(plan["requires_explicit_continuation"])
+
+    def test_routing_exposes_session_limits_without_auto_advance(self) -> None:
+        policy = route_execution("Implemente um endpoint novo com testes.")["policy"]
+        self.assertEqual(1, policy["session_scope"]["max_units_per_session"])
+        self.assertEqual(30, policy["session_scope"]["soft_checkpoint_minutes"])
+        self.assertEqual(45, policy["session_scope"]["hard_checkpoint_minutes"])
+        self.assertFalse(policy["auto_advance_to_next_phase"])
+
+
+class ReviewRoundTests(unittest.TestCase):
+    def test_one_review_round_and_one_correction_round(self) -> None:
+        policy = review_policy("standard")
+        self.assertEqual(1, policy["max_review_rounds"])
+        self.assertEqual(1, policy["max_correction_rounds"])
+        self.assertTrue(policy["another_review_round_allowed"])
+
+        after_correction = review_policy(
+            "standard",
+            localized_correction=True,
+            completed_review_rounds=1,
+            completed_correction_rounds=1,
+        )
+        self.assertFalse(after_correction["another_review_round_allowed"])
+        self.assertFalse(after_correction["another_correction_round_allowed"])
+        self.assertEqual("affected-diff-and-criteria", after_correction["scope"])
+
+    def test_single_reviewer_per_diff_outside_critical(self) -> None:
+        self.assertEqual(1, review_policy("fast")["reviewers_per_diff"])
+        self.assertEqual(1, review_policy("standard")["reviewers_per_diff"])
+        self.assertEqual(2, review_policy("critical")["reviewers_per_diff"])
+        self.assertTrue(review_policy("fast")["additional_reviewer_requires_evidence"])
+
+    def test_surviving_blockers_escalate_instead_of_looping(self) -> None:
+        policy = review_policy(
+            "standard",
+            completed_review_rounds=1,
+            completed_correction_rounds=1,
+            unresolved_blockers=True,
+        )
+        self.assertFalse(policy["another_review_round_allowed"])
+        self.assertTrue(policy["escalate_instead_of_looping"])
+
+
+class TestScopeTests(unittest.TestCase):
+    def test_small_local_change_does_not_replay_the_full_suite(self) -> None:
+        scope = verification_scope_for_change(
+            "standard", change_size="small", full_suite_already_green=True
+        )
+        self.assertEqual("targeted", scope["scope"])
+        self.assertFalse(scope["run_full_suite"])
+
+    def test_broader_diff_gets_proportional_verification(self) -> None:
+        scope = verification_scope_for_change("standard", change_size="broad")
+        self.assertEqual("proportional", scope["scope"])
+        self.assertFalse(scope["run_full_suite"])
+
+    def test_full_suite_runs_at_phase_closure_and_pull_request(self) -> None:
+        self.assertTrue(
+            verification_scope_for_change("standard", phase_closure=True)["run_full_suite"]
+        )
+        self.assertTrue(
+            verification_scope_for_change("fast", pull_request=True)["run_full_suite"]
+        )
+
+    def test_selector_failure_reuses_the_running_environment(self) -> None:
+        scope = verification_scope_for_change("standard", failure_kind="selector")
+        self.assertFalse(scope["rebuild_environment"])
+        self.assertTrue(scope["rerun_failing_spec_only"])
+
+    def test_build_failure_or_stopped_environment_rebuilds(self) -> None:
+        self.assertTrue(
+            verification_scope_for_change("standard", failure_kind="build")["rebuild_environment"]
+        )
+        self.assertTrue(
+            verification_scope_for_change("standard", environment_running=False)[
+                "rebuild_environment"
+            ]
+        )
+
+    def test_unknown_change_size_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            verification_scope_for_change("standard", change_size="enormous")
 
 
 if __name__ == "__main__":
