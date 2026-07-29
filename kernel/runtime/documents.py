@@ -112,7 +112,7 @@ def safe_project_path(root: Path, relative: str) -> Path:
 def git_snapshot(root: Path) -> Dict[str, Any]:
     """Return observable Git state without failing outside a repository."""
 
-    def run(*args: str) -> Optional[str]:
+    def run(*args: str, raw: bool = False) -> Optional[str]:
         completed = subprocess.run(
             ["git", "-C", str(root)] + list(args),
             stdout=subprocess.PIPE,
@@ -121,7 +121,9 @@ def git_snapshot(root: Path) -> Dict[str, Any]:
         )
         if completed.returncode != 0:
             return None
-        return completed.stdout.strip()
+        # Porcelain status is column-oriented: its leading space carries meaning,
+        # so it must survive. Everything else is a single token.
+        return completed.stdout if raw else completed.stdout.strip()
 
     inside = run("rev-parse", "--is-inside-work-tree")
     if inside != "true":
@@ -135,13 +137,13 @@ def git_snapshot(root: Path) -> Dict[str, Any]:
 
     branch = run("symbolic-ref", "--short", "-q", "HEAD")
     commit = run("rev-parse", "HEAD")
-    porcelain = run("status", "--porcelain=v1") or ""
+    porcelain = run("status", "--porcelain=v1", raw=True) or ""
     changed = [line[3:] for line in porcelain.splitlines() if len(line) > 3]
     return {
         "is_repository": True,
         "branch": branch,
         "commit": commit,
-        "dirty": bool(porcelain),
+        "dirty": bool(porcelain.strip()),
         "changed_files": changed,
     }
 

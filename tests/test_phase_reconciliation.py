@@ -3,7 +3,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 
-from kernel.runtime.documents import load_frontmatter
+from kernel.runtime.documents import git_snapshot, load_frontmatter
 from kernel.runtime.reconcile import reconcile_phase
 from kernel.runtime.state_machine import validate_state, validate_transition
 from tests.helpers import (
@@ -213,6 +213,23 @@ class PhaseReconciliationTests(unittest.TestCase):
             self.assertIn("unfinished", completed.stdout)
             persisted, _ = load_frontmatter(root / ".agent" / "STATE.md")
             self.assertEqual("executing", persisted["status"])
+
+
+class GitSnapshotTests(unittest.TestCase):
+    def test_first_changed_path_keeps_its_leading_dot(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _repository(root)
+            hidden = root / ".agent"
+            hidden.mkdir()
+            (hidden / "STATE.md").write_text("state\n", encoding="utf-8")
+            _git(root, "add", "-A")
+            _git(root, "commit", "-m", "state")
+            (hidden / "STATE.md").write_text("changed\n", encoding="utf-8")
+
+            snapshot = git_snapshot(root)
+            self.assertTrue(snapshot["dirty"])
+            self.assertEqual([".agent/STATE.md"], snapshot["changed_files"])
 
 
 if __name__ == "__main__":
