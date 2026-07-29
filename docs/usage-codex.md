@@ -68,7 +68,9 @@ $performance-budget-auditor Audite latencia, custo, queries, memoria, batch e ti
 ```
 
 ```text
-$workflow-orchestrator Planeje esta feature com skills, modelo, effort e riscos.
+$workflow-orchestrator Planeje esta feature.  # alias compativel
+$workflow-planner Planeje esta fase sem implementar.
+$workflow-runner Retome o plano pelo STATE.md.
 ```
 
 ```text
@@ -108,6 +110,24 @@ $diff-reviewer Revise o diff antes do merge.
 $context-compressor Comprima esta conversa com estado atual, riscos e prompt de retomada.
 ```
 
+## Kernel persistente
+
+```text
+$framework-next Retome este projeto sem depender da conversa.
+$task-runner Execute o contrato integral da tarefa ativa.
+$spec-compliance-reviewer Revise criterios, escopo e evidencias.
+$code-quality-reviewer Revise qualidade depois do PASS de spec.
+```
+
+Inicializacao e validacao executavel:
+
+```bash
+~/agent-framework/scripts/framework-next init --project . --name meu-projeto --mode full
+~/agent-framework/scripts/framework-next --project .
+```
+
 ## Dica
 
-Use uma skill por etapa. Para backend, comece com `$task-mode-router`; para tarefas grandes ja confirmadas, use `$workflow-orchestrator`.
+Use uma skill por etapa. Em projeto inicializado, comece por `$framework-next`.
+Para backend sem kernel, use `$task-mode-router`. Novos planos grandes usam
+`$workflow-planner`; `$workflow-orchestrator` permanece como alias.

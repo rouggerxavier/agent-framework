@@ -1,6 +1,7 @@
 # agent-framework
 
-Framework pessoal e versionavel de skills, rubrics, workflows, templates e docs para Codex e Claude Code.
+Framework pessoal e versionavel de skills, rubrics, workflows, templates e docs
+para Codex e Claude Code.
 
 ## Objetivo
 
@@ -17,13 +18,254 @@ O framework e seguro para Git privado quando usado sem secrets, tokens, senhas, 
 agent-framework/
   README.md
   .gitignore
+  kernel/
   skills/
   rubrics/
   workflows/
   templates/
   installers/
   docs/
+  scripts/
+  tests/
 ```
+
+## Kernel persistente (P0 + P1)
+
+O kernel coordena os assets existentes sem substitui-los. Ele mantém um protocolo
+persistente de desenvolvimento orientado por especificação:
+
+```text
+Route
+→ Ground
+→ Discuss
+→ Specify
+→ Plan
+→ Execute
+→ Review
+→ Verify
+→ Ship
+→ Learn
+```
+
+As regras centrais ficam separadas em:
+
+- `kernel/protocol.md`: ciclo, papeis, retomada, blockers e conclusao;
+- `kernel/state-machine.md`: estados, transicoes e guards;
+- `kernel/execution-policy.md`: escopo, concorrencia, retries e Git;
+- `kernel/delegation-policy.md`: contexto limpo e retorno de subagente;
+- `kernel/evidence-policy.md`: evidencia, inferencia, waiver e ledger;
+- `kernel/test-policy.yaml`: politica executavel por tipo de mudanca.
+
+O runtime usa apenas Python 3 e biblioteca padrao. `STATE.md` usa frontmatter JSON,
+que tambem e YAML 1.2 valido: e legivel, deterministico e nao exige PyYAML.
+
+### Inicializar `.agent/`
+
+Na raiz deste framework, rode:
+
+```bash
+./scripts/framework-next init \
+  --project /caminho/do/projeto \
+  --name example-project \
+  --mode full
+```
+
+A inicializacao e atomica e nunca sobrescreve uma pasta `.agent/` existente. Ela
+cria:
+
+```text
+.agent/
+├── PROJECT.md
+├── ROADMAP.md
+├── STATE.md
+├── CONTEXT.md
+├── DECISIONS.md
+├── REQUIREMENTS.md
+└── phases/
+```
+
+Crie os artefatos da primeira fase com:
+
+```bash
+./scripts/framework-next init-phase \
+  --project /caminho/do/projeto \
+  --id P1 \
+  --name "Example phase" \
+  --slug 01-example
+```
+
+Cada fase possui `SPEC.md`, `PLAN.md`, `TASKS.md`, `EVIDENCE.md`, `REVIEW.md` e
+`HANDOFF.md`. `TASKS.md` contém os contratos completos, não apenas links ou
+resumos.
+
+### Retomar com `framework-next`
+
+```bash
+./scripts/framework-next --project /caminho/do/projeto
+```
+
+A saída contém `Current state`, `Detected evidence`, `Inconsistencies`,
+`Next operation`, `Required asset` e `Blocking conditions`. O comando observa
+estado, artefatos e Git e retorna exatamente uma operação. Referência ausente,
+contexto stale, tarefa sem contrato ou blocker impede avanço.
+
+Para validar o estado:
+
+```bash
+./scripts/framework-next validate --project /caminho/do/projeto
+```
+
+Para aplicar uma transição já suportada por evidência persistida:
+
+```bash
+./scripts/framework-next transition \
+  --project /caminho/do/projeto \
+  --to executing \
+  --actor workflow-runner \
+  --reason "Plan gate passed and P1-T01 is eligible"
+```
+
+Depois do plan gate e antes de `specified → planned`, sele o plano:
+
+```bash
+./scripts/framework-next seal-plan \
+  --project /caminho/do/projeto \
+  --version 1 \
+  --decision DEC-001 \
+  --evidence ".agent/phases/01-example/EVIDENCE.md#plan-gate" \
+  --actor workflow-planner
+```
+
+Mudança posterior em `PLAN.md` ou `TASKS.md` invalida o fingerprint e bloqueia
+execução até revisão explícita e novo seal.
+
+Os estados formais são:
+
+```text
+proposed
+discussing
+specified
+planned
+executing
+reviewing
+verifying
+ready_to_ship
+shipped
+blocked
+cancelled
+superseded
+```
+
+Consulte `kernel/state-machine.md` para a tabela completa. Em especial,
+`planned → executing` exige plano aprovado, risco classificado, contrato integral
+e dependências satisfeitas; `verifying → ready_to_ship` exige aceite, checks,
+blockers e waivers válidos.
+
+### Planejamento e execução
+
+- `workflow-planner` escolhe workflow, risco, dependências, skills, gates,
+  paralelismo e contratos. Ele termina em `planned` e não implementa.
+- `workflow-runner` consome `STATE.md`, escolhe uma tarefa elegível, monta contexto,
+  aciona executor/reviewers/verifier e controla transições.
+- `workflow-orchestrator` continua disponível como alias de compatibilidade e
+  encaminha para os dois papeis separados.
+
+Uma tarefa é executada por `task-runner` com o contrato integral. O validador
+aplica `kernel/test-policy.yaml`, limita os arquivos, exige evidência por critério
+e aceita no máximo o resultado `implementation_complete`:
+
+```bash
+./scripts/framework-next validate-task \
+  --project /caminho/do/projeto \
+  --contract .agent/phases/01-example/TASKS.md \
+  --task-id P1-T01
+
+./scripts/framework-next validate-result \
+  --project /caminho/do/projeto \
+  --contract .agent/phases/01-example/TASKS.md \
+  --task-id P1-T01 \
+  --result /caminho/task-result.md
+```
+
+Regras de negócio usam RED → GREEN → refactor; bugfix começa pela regressão;
+legado usa caracterização; API, migration, integração, UI e configuração possuem
+gates próprios. Waiver precisa motivo específico, aprovação e evidência
+alternativa.
+
+### Reviews e evidências
+
+O executor faz self-review, mas não aprova o próprio trabalho. Os reviews
+independentes são ordenados:
+
+1. `spec-compliance-reviewer`: critérios, requisitos, decisões, escopo e waivers;
+2. `code-quality-reviewer`: bugs, padrões, segurança, performance, erros, testes,
+   manutenção e compatibilidade.
+
+`BLOCKED` ou `CHANGES_REQUIRED` retorna a tarefa a `executing`, preserva a falha
+em `EVIDENCE.md` e invalida aprovações afetadas. O review que bloqueou é repetido
+depois da correção.
+
+O ledger aceita comandos/testes, diff, screenshots, queries, APIs, logs, reviews,
+validação manual, waivers, blockers, correções e commits. Uma afirmação do
+implementador não conta como evidência por si só.
+
+### Fluxos de feature e bugfix
+
+Feature:
+
+```text
+Route → Ground → Discuss → Spec → Plan → Plan gate
+→ Task contract → Execute → Self-review
+→ Spec compliance → Code quality → Atomic commit
+→ Next task → Goal coverage → Runtime verification
+→ Release gate → PR/handoff
+```
+
+Bugfix:
+
+```text
+Route → Reproduce → Record evidence → Regression test RED
+→ Minimal fix → GREEN → Refactor
+→ Self-review → Spec compliance → Code quality
+→ Atomic commit → No-regression verification
+```
+
+Investigações bloqueadas usam `workflows/blocked-investigation.md` e
+`persistent-debug-session`; retomam somente o estado salvo em `blocked_from`.
+
+### Exemplo mínimo completo
+
+Uma solicitação “normalizar tipos externos sem perder valores desconhecidos”
+vira:
+
+```text
+REQ-004/REQ-007 em REQUIREMENTS.md
+→ AC-01..AC-03 em SPEC.md
+→ P1-T03 no grafo de PLAN.md
+→ contrato integral em TASKS.md
+→ task-runner registra RED/GREEN/refactor e implementation_complete
+→ spec reviewer prova cada AC
+→ quality reviewer aprova o diff
+→ EVIDENCE.md associa testes/codigo/reviews a cada AC
+→ runner registra commit atomico e tarefa verified
+→ framework-next seleciona a proxima tarefa elegivel
+```
+
+Em outra sessão, não recupere o estado pela conversa: rode `framework-next`.
+`context-compressor` gera um handoff complementar, mas `STATE.md` continua sendo
+a fonte do lifecycle.
+
+### Compatibilidade e migração
+
+Skills e workflows antigos continuam com os mesmos nomes. `workflow-orchestrator`
+é um alias documentado; novos consumidores devem usar `workflow-planner` e
+`workflow-runner`. Projetos sem `.agent/` continuam utilizáveis e só são
+inicializados por comando explícito.
+
+Os installers agora sincronizam, arquivo a arquivo, skills e assets compartilhados
+(`kernel`, workflows, rubrics, templates, docs, scripts e installers), preservando
+arquivos externos e criando backup antes de substituir nomes existentes. Veja
+`docs/kernel-migration.md`.
 
 ## Instalar no Codex
 
@@ -51,18 +293,27 @@ Use skills com `/skill-name`:
 /bug-repro-lab Investigue este stack trace.
 ```
 
-## Instalar em ambos
+## Instalar em todos
 
 ```bash
 bash ~/agent-framework/installers/install-all.sh
 ```
 
-Os installers copiam apenas diretorios em `skills/` que possuem `SKILL.md`. Skills externas que nao existem no framework nao sao removidas. Skills de mesmo nome sao movidas para backup oculto antes de copiar a versao do framework.
+Os installers copiam diretorios em `skills/` que possuem `SKILL.md` e sincronizam
+os assets compartilhados necessários às referências relativas. Skills e arquivos
+externos que não existem no framework não são removidos. Itens de mesmo nome são
+salvos em backup oculto antes da substituição.
 
 ## Verificar
 
 ```bash
 bash ~/agent-framework/installers/verify-framework.sh
+```
+
+Testes do kernel:
+
+```bash
+python3 -m unittest discover -s tests -v
 ```
 
 ## Checagem de seguranca
