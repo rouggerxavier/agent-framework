@@ -53,7 +53,7 @@
   "git": {
     "base_branch": "main",
     "working_branch": null,
-    "worktree": null,
+    "worktree": ".",
     "starting_commit": null
   },
   "context": {
@@ -94,3 +94,22 @@ artifacts.
 
 Required in `critical`; optional in `standard`; do not instantiate in `fast`.
 States created before `execution_mode` default safely to `critical`.
+
+## `git.worktree` is portable
+
+`STATE.md` is shared, versioned state, so it never stores a path that only
+exists on one computer. `git.worktree` accepts:
+
+| Value | Meaning |
+| --- | --- |
+| `"."` | The Git repository that contains `.agent/`. Preferred. |
+| `null` | No worktree registered. |
+| `/abs/path`, `C:\abs\path` | Legacy format written by older kernels. Still loads; reported for normalization. |
+
+Any other relative path is refused, including `..` traversal.
+
+The absolute root is discovered at runtime with `git rev-parse --show-toplevel`
+and kept in memory only, so the same file validates unchanged on macOS
+(`/Users/you/dev/project`), Linux (`/home/you/project`) and Windows
+(`C:\Users\you\dev\project`). Validation never rewrites the file; converting a
+legacy value is the explicit `framework-next normalize-worktree` operation.

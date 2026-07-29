@@ -47,6 +47,13 @@ Retomar trabalho persistente sem depender da conversa e respeitar o
 6. Em `critical`, leia todos os artefatos ativos, valide referencias/contexto/Git
    e siga exatamente a operacao retornada.
 7. Use transicoes formais somente no lifecycle `critical`, depois da evidencia.
+8. O comando funciona da raiz, de subdiretorio, de CI e de linked worktree; a
+   raiz e resolvida por `git rev-parse --show-toplevel`, nunca pelo caminho
+   gravado em `STATE.md`.
+9. Diante do aviso `git-worktree-legacy`, nao edite `STATE.md` manualmente nem
+   trate o projeto como invalido: rode
+   `scripts/framework-next normalize-worktree --project <caminho>` uma vez e
+   commite o resultado.
 
 ## Saida obrigatoria
 
@@ -66,6 +73,8 @@ Retomar trabalho persistente sem depender da conversa e respeitar o
 - Nenhuma transicao proibida ou artefato ausente e inferido.
 - Ausencia de `.agent/` roteia para `auto`/`fast`, sem criar arquivos.
 - Estado P0/P1 antigo continua como `critical`.
+- Nenhum caminho absoluto local e gravado em `STATE.md`; `git.worktree` usa `.`.
+- Trocar de computador nao produz diff em `STATE.md`.
 
 ## Arquivos de apoio
 

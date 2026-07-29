@@ -173,6 +173,37 @@ Para validar o estado:
 ./scripts/framework-next validate --project /caminho/do/projeto
 ```
 
+`validate` nunca modifica arquivos. Ele sai com `0` quando existem apenas avisos
+e com `2` quando existe erro.
+
+### Estado portátil entre computadores
+
+`.agent/STATE.md` é estado compartilhado e versionado, então nunca guarda um
+caminho que só existe em uma máquina. O campo `git.worktree` aceita `"."` — a
+raiz do repositório Git que contém `.agent/` — ou `null`. A raiz absoluta é
+descoberta em runtime com `git rev-parse --show-toplevel` e vive apenas em
+memória. O mesmo branch pode ser usado em clones de máquinas diferentes:
+
+```text
+macOS    /Users/voce/dev/projeto
+Linux    /home/voce/projeto
+Windows  C:\Users\voce\dev\projeto
+```
+
+Os três validam o mesmo `STATE.md` sem edição e sem gerar diff.
+
+Caminhos absolutos escritos por kernels antigos continuam carregando; eles são
+relatados como aviso `git-worktree-legacy`, não como projeto inválido. Para
+converter o campo, use a operação explícita:
+
+```bash
+./scripts/framework-next normalize-worktree --project /caminho/do/projeto
+./scripts/framework-next normalize-worktree --project /caminho/do/projeto --check
+```
+
+Ela altera somente a linha `worktree`, é idempotente, nunca grava outro caminho
+absoluto e recusa executar quando não puder provar qual é o repositório.
+
 Para aplicar uma transição já suportada por evidência persistida:
 
 ```bash

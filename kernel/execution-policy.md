@@ -56,6 +56,10 @@ requires isolation. Record base branch, branch, worktree, and starting commit in
 `STATE.md`. Reuse only after validating ownership and repository state. Cleanup is
 explicit after integration; the kernel never removes an ambiguous worktree.
 
+Record `git.worktree` as the portable `"."`, never as a local absolute path: the
+same `STATE.md` is used from every clone of the branch. Ownership is validated
+through Git and the location of `.agent/`, not through a persisted path.
+
 After the plan gate, the runner seals `PLAN.md` and `TASKS.md` with a SHA-256
 fingerprint, revision, decision ID, and evidence reference in `STATE.md`.
 Any later content change blocks execution until the planner records a revision,

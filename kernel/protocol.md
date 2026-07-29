@@ -75,10 +75,29 @@ full documents and must not duplicate their prose.
 - Plan changes are recorded as decisions and revisions to `PLAN.md`/`TASKS.md`.
 - Handoffs complement `STATE.md`; they never override it.
 
+`STATE.md` is shared state and must stay portable. Branch, commit, milestone,
+phase, tasks, decisions, evidence, gates, and repository-relative references
+belong there. Machine-specific facts — absolute paths, caches, sockets, local
+executables — must not be persisted. The local clone path is never shared state:
+Git already knows it, so it is discovered at runtime instead.
+
+## Repository root resolution
+
+`git.worktree` is portable. `"."` means "the Git repository that contains
+`.agent/`"; `null` means no worktree is registered. Absolute paths are a legacy
+format that still loads and is reported for explicit normalization.
+
+The runtime authority is `git rev-parse --show-toplevel`, evaluated from the
+project root, never the persisted string. Resolution proves that the repository
+owns the state before using it: the real location of `.agent/` must lie inside
+the repository Git reports, so a `.agent/` symlinked in from another project is
+refused, as is any value that escapes the clone with `..`. Nothing resolved this
+way is ever written back to the versioned file.
+
 ## Start and resume
 
-1. Resolve the nearest initialized project root, falling back to the nearest Git
-   root.
+1. Resolve the nearest initialized project root, falling back to
+   `git rev-parse --show-toplevel`.
 2. If `.agent/STATE.md` is absent, return to `agent-framework-router`; initialize
    only after a concrete persistence need or explicit `critical` selection.
 3. Load `STATE.md` and every referenced artifact needed by the current phase.
