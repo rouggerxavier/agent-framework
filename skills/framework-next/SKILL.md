@@ -1,18 +1,19 @@
 ---
 name: framework-next
-description: Use para inicializar ou retomar um projeto com estado persistente, validar .agent/STATE.md e escolher uma unica proxima operacao permitida.
+description: Use para retomar estado persistente ou inicializa-lo explicitamente; nao e porta de entrada obrigatoria para tarefas comuns.
 ---
 
 # Framework Next
 
 ## Objetivo
 
-Retomar trabalho sem depender da conversa anterior, usando estado, artefatos,
-evidencias e Git observados diretamente.
+Retomar trabalho persistente sem depender da conversa e respeitar o
+`execution_mode` registrado.
 
 ## Quando usar
 
-- Ao iniciar trabalho em um projeto que pode ou nao possuir `.agent/`.
+- Quando o usuario pedir retomada ou persistencia.
+- Quando `.agent/STATE.md` pertencer a tarefa/fase ativa.
 - Depois de troca de sessao, agente, compactacao, falha ou interrupcao.
 - Antes de qualquer transicao quando o estado ou a proxima operacao nao estao claros.
 
@@ -21,6 +22,7 @@ evidencias e Git observados diretamente.
 - Para inventar spec, plano, contrato ou evidencia ausente.
 - Para implementar a tarefa retornada; encaminhe ao asset indicado.
 - Para contornar uma transicao bloqueada.
+- Como porta de entrada obrigatoria de uma tarefa nova `fast`.
 
 ## Entradas esperadas
 
@@ -30,19 +32,26 @@ evidencias e Git observados diretamente.
 
 ## Workflow
 
-1. Rode `scripts/framework-next --project <caminho>` a partir do framework.
-2. Se o projeto estiver sem `.agent/`, inicialize somente com autorizacao:
-   `scripts/framework-next init --project <caminho> --name <nome> --mode full`.
-3. Leia estado, roadmap, contexto, decisoes e artefatos ativos indicados.
-4. Trate referencias ausentes, contexto stale, tarefa sem contrato ou Git
-   conflitante como inconsistencia; nao fabrique reparos.
-5. Siga exatamente a operacao e o asset retornados.
-6. Use `transition` somente depois de persistir as evidencias exigidas pela
-   maquina de estados.
+1. Rode `scripts/framework-next --project <caminho>`.
+2. Sem `.agent/`, encaminhe para `agent-framework-router`; nao inicialize
+   automaticamente.
+3. Inicialize somente com pedido/necessidade confirmada. Para o kernel completo:
+   `scripts/framework-next init --project <caminho> --name <nome> --mode critical`.
+   Para retomada leve justificada:
+   `scripts/framework-next init --project <caminho> --name <nome> --mode standard`,
+   que cria somente `STATE.md` e `PLAN.md`.
+4. Leia `execution_mode`; estado antigo sem o campo usa `critical` por
+   compatibilidade segura.
+5. Em `standard`, leia apenas `STATE.md`/`PLAN.md` existentes e coordene o plano
+   leve sem exigir seal, contratos, ledger ou reviewers separados.
+6. Em `critical`, leia todos os artefatos ativos, valide referencias/contexto/Git
+   e siga exatamente a operacao retornada.
+7. Use transicoes formais somente no lifecycle `critical`, depois da evidencia.
 
 ## Saida obrigatoria
 
 - Current state.
+- Execution mode.
 - Detected evidence.
 - Inconsistencies.
 - Next operation.
@@ -55,6 +64,8 @@ evidencias e Git observados diretamente.
 - Decisao explicada por evidencia observada.
 - Estado inconsistente bloqueia execucao.
 - Nenhuma transicao proibida ou artefato ausente e inferido.
+- Ausencia de `.agent/` roteia para `auto`/`fast`, sem criar arquivos.
+- Estado P0/P1 antigo continua como `critical`.
 
 ## Arquivos de apoio
 
@@ -67,4 +78,3 @@ evidencias e Git observados diretamente.
 
 - Codex: `$framework-next Retome este projeto pelo estado persistente.`
 - Claude Code: `/framework-next Determine a proxima operacao sem usar a conversa anterior.`
-

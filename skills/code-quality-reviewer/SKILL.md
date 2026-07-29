@@ -1,59 +1,59 @@
 ---
 name: code-quality-reviewer
-description: Use depois da conformidade para revisar independentemente bugs, padroes, seguranca, performance, erros, testes, manutencao e compatibilidade.
+description: Use como segundo reviewer independente em critical; em fast/standard qualidade entra na revisao integrada.
 ---
 
 # Code Quality Reviewer
 
 ## Objetivo
 
-Executar a segunda etapa de review, reutilizando `diff-reviewer` e rubrics
-especializadas para decidir se a tarefa possui qualidade suficiente.
+Avaliar qualidade proporcionalmente, com segunda etapa independente apenas em
+`critical`.
 
 ## Quando usar
 
-- Somente depois de spec compliance `PASS` ou `PASS_WITH_NOTES`.
-- Quando `code-review-gate` exigir review simple, deep ou cross-area.
+- Em `critical`, depois de spec compliance `PASS` ou `PASS_WITH_NOTES`.
+- Em `fast`/`standard`, como parte do review integrado.
 - Novamente depois de correcao que invalide a aprovacao anterior.
 
 ## Quando nao usar
 
-- Quando o reviewer implementou a tarefa.
-- Antes do review de conformidade.
+- Como reviewer separado em `fast`/`standard` por default.
+- Em `critical`, quando o reviewer implementou a tarefa ou antes da conformidade.
 - Para aprovar sem inspecionar diff, arquivos, testes e evidencia.
 
 ## Entradas esperadas
 
-- Resultado e spec review aprovados.
+- Goal, mode, diff, arquivos, testes e riscos.
+- Em `critical`, resultado e spec review aprovados.
 - Diff, arquivos, testes e evidence ledger.
 - Rubrics/reviewers especializados selecionados pelo `code-review-gate`.
 
 ## Workflow
 
-1. Confirme a aprovacao de spec e independencia do reviewer.
-2. Use `diff-reviewer` para bugs, legibilidade, padroes, duplicacao, erros,
-   testes, manutencao e compatibilidade.
-3. Acione rubrics especializadas para seguranca, performance, dados, API,
-   observabilidade ou agente conforme o gate.
-4. Inspecione diretamente diff, arquivos e evidencia.
-5. Classifique `APPROVED`, `APPROVED_WITH_NOTES` ou `CHANGES_REQUIRED`.
-6. Preencha `templates/code-quality-review.md` e valide com
-   `scripts/framework-next validate-quality-review`.
-7. `CHANGES_REQUIRED` registra findings com evidencia e retorna a `executing`;
-   aprovacoes devolvem controle ao runner para verificacao.
+1. Em todos os modos, inspecione diff, arquivos e testes diretamente.
+2. Em `fast`/`standard`, avalie goal + bugs + padroes + testes + escopo em uma
+   unica revisao integrada, sem exigir spec review previa ou template.
+3. Em `critical`, confirme spec approval e independencia, use rubrics
+   especializadas, preencha template e valide pelo CLI.
+4. Para cada finding, demonstre reachability, likelihood, impact e supporting
+   evidence antes de marcar `BLOCKER`; caso contrario use `IMPORTANT`, `NOTE` ou
+   `SPECULATIVE`.
+5. Em correcao localizada, revise somente novo diff e areas afetadas, salvo
+   descoberta de risco material.
 
 ## Saida obrigatoria
 
-- Classificacao, areas verificadas e arquivos/evidencias inspecionados.
-- Findings com severidade, evidencia e correcao exigida.
-- Skills/rubrics especializadas usadas.
+- Classificacao, areas verificadas, diff/testes inspecionados e findings.
+- Em `critical`, relatorio formal e skills/rubrics especializadas usadas.
 
 ## Criterios de aceite
 
-- Ordem spec → qualidade preservada.
-- Review independente e baseado em inspecao direta.
+- Ordem spec → qualidade preservada em `critical`.
+- `fast`/`standard` usam uma revisao integrada.
 - Mudanca exigida invalida aprovacoes afetadas e volta ao implementador.
 - Aprovacao nao afirma que testes rodaram sem evidencia propria.
+- `SPECULATIVE` nunca bloqueia.
 
 ## Arquivos de apoio
 
@@ -66,4 +66,3 @@ especializadas para decidir se a tarefa possui qualidade suficiente.
 
 - Codex: `$code-quality-reviewer Revise esta tarefa depois do PASS de spec.`
 - Claude Code: `/code-quality-reviewer Faça a segunda etapa do review independente.`
-

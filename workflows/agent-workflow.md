@@ -2,6 +2,10 @@
 
 Use para criar, refatorar, validar e entregar agentes com prompt, tools, memoria, runtime, guardrails e revisao obrigatoria.
 
+Modo suportado: `critical`, porque este workflow combina multiplas ferramentas,
+permissoes, runtime e papeis de review. Ajustes agenticos localizados devem voltar
+ao `agent-framework-router` e podem usar `fast`/`standard`.
+
 ## Sequencia
 1. Use `framework-next` para inicializar/retomar e aplique
    `workflows/high-risk-change.md`.

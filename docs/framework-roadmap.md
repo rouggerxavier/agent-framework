@@ -24,7 +24,7 @@ Criar um framework que ajude o agente a fazer quatro coisas bem:
 | Skill | Motivo | Status |
 | --- | --- | --- |
 | skill-quality-auditor | Revisa gatilho, escopo, duplicacao, saida, criterios e referencias de uma skill. | criada |
-| task-mode-router | Escolhe fast, quick, full ou audit para evitar processo pesado quando uma rota leve basta. | criada |
+| task-mode-router | Escolhe fast, standard ou critical para evitar processo pesado quando uma rota leve basta. | criada |
 | backend-slice-planner | Traz plano executavel para backend com read_first, contratos, testes, rollback e aceite verificavel. | criada |
 | plan-quality-checker | Audita plano antes da execucao, pegando tarefas vagas, dependencia errada e aceite nao verificavel. | criada |
 | goal-coverage-verifier | Verifica objetivo, decisoes, contratos e gaps depois da implementacao. | criada |

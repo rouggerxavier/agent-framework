@@ -1,6 +1,7 @@
 ---
 {
   "schema_version": 1,
+  "execution_mode": "critical",
   "status": "executing",
   "project": {
     "name": "example-project",
@@ -90,3 +91,6 @@
 The frontmatter is the compact source of lifecycle state. Keep detailed
 requirements, plans, decisions, evidence, and handoff prose in their referenced
 artifacts.
+
+Required in `critical`; optional in `standard`; do not instantiate in `fast`.
+States created before `execution_mode` default safely to `critical`.

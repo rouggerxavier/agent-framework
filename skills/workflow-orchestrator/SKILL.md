@@ -27,11 +27,13 @@ devem invocar `workflow-planner` e `workflow-runner` diretamente.
 
 ## Workflow
 1. Emita aviso curto: este nome e um alias de compatibilidade.
-2. Rode `framework-next` quando `.agent/` existir ou a continuidade for relevante.
-3. Para discutir, especificar ou planejar, encaminhe a `workflow-planner`.
-4. Para consumir um plano aprovado, encaminhe a `workflow-runner`.
-5. Preserve entradas antigas como contexto opcional; o estado persistente prevalece.
-6. Nunca permita que o alias implemente uma tarefa ou ignore uma transicao.
+2. Use `agent-framework-router`; tarefas `fast` nao entram neste alias.
+3. Rode `framework-next` somente para retomada persistente ou modo `critical`.
+4. Em `standard`, encaminhe plano curto a `workflow-planner`/`workflow-runner`.
+5. Em `critical`, preserve os papeis separados e a maquina de estados.
+6. Preserve entradas antigas como contexto opcional; estado persistente prevalece
+   quando pertence a tarefa ativa.
+7. Nunca permita que o alias implemente uma tarefa ou ignore transicao `critical`.
 
 ## Saida obrigatoria
 - Aviso de compatibilidade.

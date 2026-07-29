@@ -29,10 +29,67 @@ agent-framework/
   tests/
 ```
 
-## Kernel persistente (P0 + P1)
+## Execucao adaptativa
 
-O kernel coordena os assets existentes sem substitui-los. Ele mantém um protocolo
-persistente de desenvolvimento orientado por especificação:
+O framework e rapido por padrao e seleciona uma de tres rotas:
+
+```text
+Duvida → fast
+Complexidade comprovada → standard
+Risco critico comprovado → critical
+```
+
+| Modo | Fluxo | Governanca |
+| --- | --- | --- |
+| `fast` | inspect → implement → targeted verification → diff review | sem `.agent/`, spec, contrato, seal, ledger, reviewers separados ou worktree |
+| `standard` | focused grounding → short plan → implement → tests → integrated review | estado opcional, sem seal ou reviews separados |
+| `critical` | lifecycle persistente completo | P0/P1 integral |
+
+Use o router como entrada de uma tarefa nova:
+
+```text
+$agent-framework-router --fast
+Corrija o bug no filtro de imoveis.
+```
+
+```text
+$agent-framework-router --standard
+Implemente o novo endpoint e os testes.
+```
+
+```text
+$agent-framework-router --critical
+Altere o modelo de autenticacao e faca a migration.
+```
+
+`--auto` (ou nenhuma flag) deixa o router decidir com preferencia por `fast`.
+Toda selecao `standard`/`critical` deve citar fatores concretos. Muitos arquivos,
+edge cases teoricos ou a possibilidade abstrata de mais qualidade nao justificam
+escalada. O script `scripts/agent-framework-route` expoe a mesma politica de
+forma executavel e sem efeitos colaterais.
+
+> O kernel completo e uma capacidade disponivel, nao o fluxo obrigatorio.
+
+Veja `kernel/adaptive-execution-policy.md` para matriz de templates, budget de
+verificacao, severidades de review e reuso de contexto.
+
+Quando `standard` realmente precisar sobreviver a outra sessao, a inicializacao
+leve cria somente `.agent/STATE.md` e `.agent/PLAN.md`:
+
+```bash
+./scripts/framework-next init \
+  --project /caminho/do/projeto \
+  --name example-project \
+  --mode standard
+```
+
+`fast` recusa inicializacao persistente. Roadmap, phase spec, contratos, ledger,
+reviews separados e plan seal continuam exclusivos do fluxo `critical`.
+
+## Kernel persistente `critical` (P0 + P1)
+
+Em `critical`, o kernel coordena os assets existentes sem substitui-los e mantém
+o protocolo persistente completo:
 
 ```text
 Route
@@ -50,6 +107,7 @@ Route
 As regras centrais ficam separadas em:
 
 - `kernel/protocol.md`: ciclo, papeis, retomada, blockers e conclusao;
+- `kernel/adaptive-execution-policy.md`: selecao de modo e proporcionalidade;
 - `kernel/state-machine.md`: estados, transicoes e guards;
 - `kernel/execution-policy.md`: escopo, concorrencia, retries e Git;
 - `kernel/delegation-policy.md`: contexto limpo e retorno de subagente;
@@ -59,7 +117,7 @@ As regras centrais ficam separadas em:
 O runtime usa apenas Python 3 e biblioteca padrao. `STATE.md` usa frontmatter JSON,
 que tambem e YAML 1.2 valido: e legivel, deterministico e nao exige PyYAML.
 
-### Inicializar `.agent/`
+### Inicializar `.agent/` explicitamente
 
 Na raiz deste framework, rode:
 
@@ -67,11 +125,11 @@ Na raiz deste framework, rode:
 ./scripts/framework-next init \
   --project /caminho/do/projeto \
   --name example-project \
-  --mode full
+  --mode critical
 ```
 
 A inicializacao e atomica e nunca sobrescreve uma pasta `.agent/` existente. Ela
-cria:
+nao ocorre durante roteamento `fast`. No caminho `critical`, cria:
 
 ```text
 .agent/
@@ -104,7 +162,7 @@ resumos.
 ./scripts/framework-next --project /caminho/do/projeto
 ```
 
-A saída contém `Current state`, `Detected evidence`, `Inconsistencies`,
+A saída contém `Current state`, `Execution mode`, `Detected evidence`, `Inconsistencies`,
 `Next operation`, `Required asset` e `Blocking conditions`. O comando observa
 estado, artefatos e Git e retorna exatamente uma operação. Referência ausente,
 contexto stale, tarefa sem contrato ou blocker impede avanço.
@@ -161,7 +219,7 @@ Consulte `kernel/state-machine.md` para a tabela completa. Em especial,
 e dependências satisfeitas; `verifying → ready_to_ship` exige aceite, checks,
 blockers e waivers válidos.
 
-### Planejamento e execução
+### Planejamento e execução `critical`
 
 - `workflow-planner` escolhe workflow, risco, dependências, skills, gates,
   paralelismo e contratos. Ele termina em `planned` e não implementa.
@@ -192,7 +250,7 @@ legado usa caracterização; API, migration, integração, UI e configuração p
 gates próprios. Waiver precisa motivo específico, aprovação e evidência
 alternativa.
 
-### Reviews e evidências
+### Reviews e evidências `critical`
 
 O executor faz self-review, mas não aprova o próprio trabalho. Os reviews
 independentes são ordenados:
@@ -202,32 +260,29 @@ independentes são ordenados:
    manutenção e compatibilidade.
 
 `BLOCKED` ou `CHANGES_REQUIRED` retorna a tarefa a `executing`, preserva a falha
-em `EVIDENCE.md` e invalida aprovações afetadas. O review que bloqueou é repetido
-depois da correção.
+em `EVIDENCE.md` e invalida aprovações afetadas. Depois de correcao localizada,
+repita somente o review, criterios e regressoes afetados.
 
 O ledger aceita comandos/testes, diff, screenshots, queries, APIs, logs, reviews,
 validação manual, waivers, blockers, correções e commits. Uma afirmação do
 implementador não conta como evidência por si só.
 
-### Fluxos de feature e bugfix
+### Fluxos de feature e bugfix por modo
 
 Feature:
 
 ```text
-Route → Ground → Discuss → Spec → Plan → Plan gate
-→ Task contract → Execute → Self-review
-→ Spec compliance → Code quality → Atomic commit
-→ Next task → Goal coverage → Runtime verification
-→ Release gate → PR/handoff
+fast: inspect → implement → targeted tests → diff review
+standard: focused grounding → short plan → implement → tests → integrated review
+critical: full persistent lifecycle
 ```
 
 Bugfix:
 
 ```text
-Route → Reproduce → Record evidence → Regression test RED
-→ Minimal fix → GREEN → Refactor
-→ Self-review → Spec compliance → Code quality
-→ Atomic commit → No-regression verification
+fast: reproduce → fix → targeted regression test → review
+standard: investigate → short plan → regression test → fix → integrated review
+critical: persistent debug → evidence → contracts → split reviews
 ```
 
 Investigações bloqueadas usam `workflows/blocked-investigation.md` e
@@ -251,7 +306,7 @@ REQ-004/REQ-007 em REQUIREMENTS.md
 → framework-next seleciona a proxima tarefa elegivel
 ```
 
-Em outra sessão, não recupere o estado pela conversa: rode `framework-next`.
+Em outra sessão de um fluxo persistente, rode `framework-next`.
 `context-compressor` gera um handoff complementar, mas `STATE.md` continua sendo
 a fonte do lifecycle.
 
@@ -260,7 +315,10 @@ a fonte do lifecycle.
 Skills e workflows antigos continuam com os mesmos nomes. `workflow-orchestrator`
 é um alias documentado; novos consumidores devem usar `workflow-planner` e
 `workflow-runner`. Projetos sem `.agent/` continuam utilizáveis e só são
-inicializados por comando explícito.
+inicializados por comando explícito. Estados P0/P1 sem `execution_mode` sao
+interpretados como `critical`; novas inicializacoes registram o campo. Aliases
+legados `quick`, `full` e `audit` continuam aceitos como `standard`, `critical`
+e `critical`.
 
 Os installers agora sincronizam, arquivo a arquivo, skills e assets compartilhados
 (`kernel`, workflows, rubrics, templates, docs, scripts e installers), preservando
@@ -459,7 +517,9 @@ $performance-budget-auditor Audite latencia, custo, queries, memoria, batch e ti
 
 ## GSD-lite para backend
 
-Use `$task-mode-router` antes de tarefas de backend quando quiser escolher entre `fast`, `quick`, `full` ou `audit`. Ele evita puxar orquestracao completa quando uma rota leve preserva o risco principal.
+Use `$task-mode-router` antes de tarefas de backend quando quiser escolher entre
+`fast`, `standard` ou `critical`. Backend simples nao e automaticamente
+`critical`.
 
 Fluxo completo quando o risco justificar:
 

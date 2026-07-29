@@ -1,5 +1,8 @@
 # {{PHASE_ID}} — {{PHASE_NAME}} Specification
 
+Required in `critical`, lightweight/optional in `standard`, and not instantiated
+in `fast`.
+
 ## Goal
 
 -
@@ -26,4 +29,3 @@
 ## Open questions
 
 -
-

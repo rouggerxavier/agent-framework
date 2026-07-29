@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from .documents import DocumentError, git_snapshot, load_frontmatter, utc_now, write_frontmatter
+from .execution_modes import normalize_mode, state_execution_mode
 
 
 PHASE_SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -26,8 +27,12 @@ def _render_template(path: Path, values: Dict[str, Any]) -> str:
 def _initial_state(
     project_name: str, mode: str, snapshot: Dict[str, Any], timestamp: str
 ) -> Dict[str, Any]:
+    execution_mode = normalize_mode(mode, default="critical")
+    if execution_mode == "auto":
+        execution_mode = "critical"
     return {
         "schema_version": 1,
+        "execution_mode": execution_mode,
         "status": "proposed",
         "project": {"name": project_name, "mode": mode},
         "milestone": {"id": None, "name": None, "status": "proposed"},
@@ -92,6 +97,35 @@ def _initial_state(
     }
 
 
+def _initial_standard_state(
+    project_name: str, mode: str, snapshot: Dict[str, Any], timestamp: str
+) -> Dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "execution_mode": "standard",
+        "status": "proposed",
+        "project": {"name": project_name, "mode": mode},
+        "current_task": {"id": None, "status": None},
+        "next_action": {"operation": "build-short-plan", "target": ".agent/PLAN.md"},
+        "artifacts": {"plan": ".agent/PLAN.md"},
+        "blockers": [],
+        "git": {
+            "base_branch": snapshot["branch"],
+            "working_branch": snapshot["branch"],
+            "starting_commit": snapshot["commit"],
+        },
+        "context": {
+            "source_commit": snapshot["commit"],
+            "status": "fresh",
+            "generated_at": timestamp,
+            "stale_after": "material-repository-change",
+        },
+        "verification": {"required": [], "results": {}},
+        "updated_at": timestamp,
+        "updated_by": "framework-next:init",
+    }
+
+
 def initialize_project(
     project_root: Path,
     framework_root: Path,
@@ -107,10 +141,47 @@ def initialize_project(
         raise DocumentError(
             "{} already exists; initialization never overwrites it".format(agent_dir)
         )
-    if mode not in {"fast", "quick", "full", "audit"}:
+    if mode not in {
+        "fast",
+        "standard",
+        "critical",
+        "quick",
+        "full",
+        "audit",
+    }:
         raise DocumentError("invalid project mode: {}".format(mode))
+    execution_mode = normalize_mode(mode, default="critical")
+    if execution_mode == "fast":
+        raise DocumentError(
+            "fast mode does not initialize .agent; use agent-framework-router"
+        )
 
     templates = framework_root / "templates"
+    timestamp = utc_now()
+    snapshot = git_snapshot(project_root)
+    if execution_mode == "standard":
+        short_plan = templates / "short-plan.md"
+        if not short_plan.is_file():
+            raise DocumentError("missing initialization template: short-plan.md")
+        temporary = Path(
+            tempfile.mkdtemp(prefix=".agent-init-", dir=str(project_root))
+        )
+        try:
+            (temporary / "PLAN.md").write_text(
+                short_plan.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            write_frontmatter(
+                temporary / "STATE.md",
+                _initial_standard_state(project_name, mode, snapshot, timestamp),
+                "# Standard Execution State\n\n"
+                "Lightweight resume state; no formal kernel lifecycle.\n",
+            )
+            os.replace(str(temporary), str(agent_dir))
+        except Exception:
+            shutil.rmtree(str(temporary), ignore_errors=True)
+            raise
+        return agent_dir
+
     required_templates = {
         "PROJECT.md": "project.md",
         "ROADMAP.md": "project-roadmap.md",
@@ -122,15 +193,13 @@ def initialize_project(
         if not (templates / template).is_file():
             raise DocumentError("missing initialization template: {}".format(template))
 
-    timestamp = utc_now()
-    snapshot = git_snapshot(project_root)
+    temporary = Path(tempfile.mkdtemp(prefix=".agent-init-", dir=str(project_root)))
     values = {
         "PROJECT_NAME": project_name,
         "GENERATED_AT": timestamp,
         "SOURCE_COMMIT": snapshot["commit"] or "null",
         "BRANCH": snapshot["branch"] or "null",
     }
-    temporary = Path(tempfile.mkdtemp(prefix=".agent-init-", dir=str(project_root)))
     try:
         (temporary / "phases").mkdir()
         for destination, template in required_templates.items():
@@ -160,6 +229,12 @@ def initialize_phase(
     project_root = project_root.expanduser().resolve()
     state_path = project_root / ".agent" / "STATE.md"
     state, body = load_frontmatter(state_path)
+    try:
+        execution_mode = state_execution_mode(state)
+    except ValueError as exc:
+        raise DocumentError(str(exc)) from exc
+    if execution_mode != "critical":
+        raise DocumentError("phase artifacts are available only in critical mode")
     if state.get("status") not in {"proposed", "discussing", "specified"}:
         raise DocumentError("cannot initialize a phase from {}".format(state.get("status")))
     if not PHASE_SLUG.match(slug):

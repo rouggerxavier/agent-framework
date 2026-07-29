@@ -1,11 +1,12 @@
-# High-Risk Change Workflow
+# Critical Change Workflow
 
 Use para auth, dados persistidos, migrations, secrets, tools, agentes, model
 routing, billing, permissao ou mudanca dificil de reverter.
 
 ## Sequencia
 
-1. Inicialize/retome com `framework-next` e classifique risco `high` ou `critical`.
+1. Confirme evidencia concreta e selecione `critical`; entao inicialize/retome
+   com `framework-next`.
 2. Ground e registre commit, branch, contexto, unknowns e assumptions.
 3. Congele spec e decisoes; inclua invariantes, rollback e stop conditions.
 4. `workflow-planner` seleciona auditors e contratos pequenos.
@@ -28,4 +29,3 @@ routing, billing, permissao ou mudanca dificil de reverter.
 - Decisoes e rollback auditaveis.
 - Ledger completo, reviews especializados e blockers resolvidos.
 - PR/release com risco residual explicito.
-

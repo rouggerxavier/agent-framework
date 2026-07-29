@@ -12,7 +12,7 @@ Limite padrao: 6000 caracteres. Atualize com `$skill-evolution-loop`.
 | Chave | Contagem | Ultima vez | Evidencia curta | Decisao | Asset |
 | --- | ---: | --- | --- | --- | --- |
 | evolve-agent-framework | 1 | 2026-06-07 | Usuario pediu analise do repo, padroes, novas skills e mecanismo de criacao automatica por recorrencia. | observar | skills/skill-evolution-loop |
-| route-task-mode | 1 | 2026-06-07 | Analise inspirada em GSD indicou necessidade de escolher fast, quick, full ou audit para reduzir overhead e token. | criar skill | skills/task-mode-router |
+| route-task-mode | 2 | 2026-07-29 | Taxonomia consolidada em fast, standard e critical; fast virou default e o kernel completo passou a exigir risco concreto. | atualizar skill | skills/task-mode-router, skills/agent-framework-router |
 | backend-gsd-lite-core | 1 | 2026-06-07 | Usuario pediu prioridade 1 inteira: plano backend em fatias, auditoria de plano e verificacao de cobertura. | criar skills | skills/backend-slice-planner, skills/plan-quality-checker, skills/goal-coverage-verifier |
 | backend-gsd-lite-confidence | 1 | 2026-06-07 | Usuario pediu prioridade 2: confianca de testes, auditoria de dependencias e debug persistente para backend. | criar skills | skills/test-confidence-mapper, skills/dependency-risk-auditor, skills/persistent-debug-session |
 | backend-gsd-lite-release | 1 | 2026-06-07 | Usuario pediu prioridade 3: pacote de release backend, docs sync e auditoria de data migration. | criar skills | skills/backend-release-packager, skills/docs-sync-auditor, skills/data-migration-auditor |

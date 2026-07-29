@@ -1,6 +1,9 @@
 # Goal Coverage Report
 
+Required as a persistent artifact only in `critical`.
+
 ## Decision
+- Execution mode: fast | standard | critical
 - Status: pass | pass with caveats | blocked
 - Summary:
 - Kernel transition: verifying → ready_to_ship | executing | reviewing | blocked
@@ -23,14 +26,15 @@
 - Not run:
 
 ## Gaps
-| Severity | Gap | Impact | Next Step |
-| --- | --- | --- | --- |
-|  |  |  |  |
+| Classification | Gap | Reachability | Likelihood | Impact | Supporting Evidence | Next Step |
+| --- | --- | --- | --- | --- | --- | --- |
+| BLOCKER/IMPORTANT/NOTE/SPECULATIVE |  |  |  |  |  |  |
 
 ## Risks Accepted
 -
 
 ## Kernel Guards
+- Applicable: yes | no (`critical` only)
 - Acceptance evidence:
 - Required verification:
 - Reviews:

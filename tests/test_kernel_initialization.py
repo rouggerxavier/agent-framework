@@ -11,13 +11,18 @@ from tests.helpers import FRAMEWORK_ROOT
 
 
 class InitializationTests(unittest.TestCase):
-    def test_uninitialized_project_routes_to_initialization(self) -> None:
+    def test_uninitialized_project_routes_to_fast_preferred_router(self) -> None:
         with TemporaryDirectory() as temporary:
             decision = determine_next_operation(Path(temporary))
             self.assertEqual("uninitialized", decision["current_state"])
             self.assertEqual(
-                "initialize-project", decision["next_operation"]["operation"]
+                "route-task", decision["next_operation"]["operation"]
             )
+            self.assertEqual(
+                "skills/agent-framework-router/SKILL.md",
+                decision["required_asset"],
+            )
+            self.assertFalse((Path(temporary) / ".agent").exists())
 
     def test_partial_agent_directory_is_blocked_not_overwritten(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -45,6 +50,7 @@ class InitializationTests(unittest.TestCase):
             self.assertEqual(expected, {path.name for path in (root / ".agent").iterdir()})
             state, _ = load_frontmatter(root / ".agent" / "STATE.md")
             self.assertEqual("proposed", state["status"])
+            self.assertEqual("critical", state["execution_mode"])
             self.assertEqual([], validate_state(state, root))
 
     def test_initialization_never_overwrites_existing_agent_directory(self) -> None:
@@ -53,6 +59,52 @@ class InitializationTests(unittest.TestCase):
             initialize_project(root, FRAMEWORK_ROOT, project_name="example")
             with self.assertRaises(DocumentError):
                 initialize_project(root, FRAMEWORK_ROOT, project_name="other")
+
+    def test_fast_mode_refuses_persistent_initialization(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with self.assertRaises(DocumentError):
+                initialize_project(
+                    root, FRAMEWORK_ROOT, project_name="fast", mode="fast"
+                )
+            self.assertFalse((root / ".agent").exists())
+
+    def test_standard_initialization_creates_only_state_and_short_plan(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialize_project(
+                root, FRAMEWORK_ROOT, project_name="standard", mode="standard"
+            )
+            self.assertEqual(
+                {"STATE.md", "PLAN.md"},
+                {path.name for path in (root / ".agent").iterdir()},
+            )
+            state, _ = load_frontmatter(root / ".agent" / "STATE.md")
+            self.assertEqual("standard", state["execution_mode"])
+            script = FRAMEWORK_ROOT / "scripts" / "framework-next"
+            validated = subprocess.run(
+                [str(script), "validate", "--project", str(root)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+            self.assertEqual(0, validated.returncode, validated.stdout)
+
+    def test_standard_mode_cannot_create_critical_phase_artifacts(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialize_project(
+                root, FRAMEWORK_ROOT, project_name="standard", mode="standard"
+            )
+            with self.assertRaises(DocumentError):
+                initialize_phase(
+                    root,
+                    FRAMEWORK_ROOT,
+                    phase_id="P1",
+                    phase_name="Should not exist",
+                    slug="01-no",
+                    actor="test",
+                )
 
     def test_phase_initialization_creates_all_phase_artifacts(self) -> None:
         with TemporaryDirectory() as temporary:

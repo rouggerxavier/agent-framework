@@ -1,5 +1,12 @@
 # Agent Framework Kernel Protocol
 
+## Adaptive entry
+
+Apply `adaptive-execution-policy.md` before this lifecycle. `fast` is the default
+for ordinary work, `standard` uses a short proportional flow, and the lifecycle
+below is mandatory only for `critical`. The complete kernel is a capability, not
+the default entry path.
+
 ## Purpose
 
 The kernel coordinates existing skills, workflows, rubrics, and templates through
@@ -72,7 +79,8 @@ full documents and must not duplicate their prose.
 
 1. Resolve the nearest initialized project root, falling back to the nearest Git
    root.
-2. If `.agent/STATE.md` is absent, offer safe initialization; never invent it.
+2. If `.agent/STATE.md` is absent, return to `agent-framework-router`; initialize
+   only after a concrete persistence need or explicit `critical` selection.
 3. Load `STATE.md` and every referenced artifact needed by the current phase.
 4. Observe Git branch, commit, and working-tree changes.
 5. Reject missing, escaping, malformed, or stale references.

@@ -2,6 +2,17 @@
 
 No Claude Code, chame skills com `/skill-name`.
 
+## Entrada adaptativa
+
+```text
+/agent-framework-router --fast Corrija o bug no filtro.
+/agent-framework-router --standard Implemente o endpoint e os testes.
+/agent-framework-router --critical Altere autenticacao e faca a migration.
+```
+
+Sem flag, `--auto` prefere `fast`. Use `framework-next` para retomar trabalho
+persistente, nao como entrada obrigatoria de tarefa comum.
+
 ## Exemplos
 
 ```text
@@ -72,7 +83,7 @@ No Claude Code, chame skills com `/skill-name`.
 ```
 
 ```text
-/task-mode-router Classifique esta tarefa de backend como fast, quick, full ou audit.
+/task-mode-router Classifique esta tarefa como fast, standard ou critical.
 ```
 
 ```text
@@ -107,7 +118,7 @@ No Claude Code, chame skills com `/skill-name`.
 /handoff-builder Gere um handoff para Codex continuar.
 ```
 
-## Kernel persistente
+## Kernel persistente (`critical`)
 
 ```text
 /framework-next Retome este projeto sem depender da conversa.
@@ -121,11 +132,13 @@ No Claude Code, chame skills com `/skill-name`.
 Inicializacao e validacao executavel:
 
 ```bash
-~/agent-framework/scripts/framework-next init --project . --name meu-projeto --mode full
+~/agent-framework/scripts/framework-next init --project . --name meu-projeto --mode standard  # STATE + PLAN
+~/agent-framework/scripts/framework-next init --project . --name meu-projeto --mode critical
 ~/agent-framework/scripts/framework-next --project .
 ```
 
 ## Dica
 
-Em projeto inicializado, comece por `/framework-next`. Use `/task-mode-router`
-antes de backend sem kernel e `/context-compressor` antes de trocar de chat.
+Nova tarefa comum começa pelo `/agent-framework-router` e normalmente usa
+`fast`. Use `/framework-next` somente para retomar ou inicializar persistencia
+intencional.

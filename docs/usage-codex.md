@@ -2,6 +2,17 @@
 
 No Codex, chame skills com `$skill-name`.
 
+## Entrada adaptativa
+
+```text
+$agent-framework-router --fast Corrija o bug no filtro.
+$agent-framework-router --standard Implemente o endpoint e os testes.
+$agent-framework-router --critical Altere autenticacao e faca a migration.
+```
+
+Sem flag, `--auto` prefere `fast`. Use `framework-next` para retomar trabalho
+persistente, nao como entrada obrigatoria de tarefa comum.
+
 ## Exemplos
 
 ```text
@@ -74,7 +85,7 @@ $workflow-runner Retome o plano pelo STATE.md.
 ```
 
 ```text
-$task-mode-router Classifique esta tarefa de backend como fast, quick, full ou audit.
+$task-mode-router Classifique esta tarefa como fast, standard ou critical.
 ```
 
 ```text
@@ -110,7 +121,7 @@ $diff-reviewer Revise o diff antes do merge.
 $context-compressor Comprima esta conversa com estado atual, riscos e prompt de retomada.
 ```
 
-## Kernel persistente
+## Kernel persistente (`critical`)
 
 ```text
 $framework-next Retome este projeto sem depender da conversa.
@@ -122,12 +133,13 @@ $code-quality-reviewer Revise qualidade depois do PASS de spec.
 Inicializacao e validacao executavel:
 
 ```bash
-~/agent-framework/scripts/framework-next init --project . --name meu-projeto --mode full
+~/agent-framework/scripts/framework-next init --project . --name meu-projeto --mode standard  # STATE + PLAN
+~/agent-framework/scripts/framework-next init --project . --name meu-projeto --mode critical
 ~/agent-framework/scripts/framework-next --project .
 ```
 
 ## Dica
 
-Use uma skill por etapa. Em projeto inicializado, comece por `$framework-next`.
-Para backend sem kernel, use `$task-mode-router`. Novos planos grandes usam
-`$workflow-planner`; `$workflow-orchestrator` permanece como alias.
+Nova tarefa comum começa pelo `$agent-framework-router` e normalmente usa
+`fast`. Use `$workflow-planner` em `standard`/`critical` e `$framework-next`
+somente para retomar ou inicializar persistencia intencional.

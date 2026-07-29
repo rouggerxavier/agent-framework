@@ -1,5 +1,9 @@
 # Kernel Execution Policy
 
+This complete policy governs `critical`. For `fast` and `standard`, use
+`adaptive-execution-policy.md` and apply only the proportional scope, test, diff
+review, and risk controls selected there.
+
 ## Scope and concurrency
 
 - One active task per executor.

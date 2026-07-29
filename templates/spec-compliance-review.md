@@ -32,6 +32,8 @@
 
 # Spec Compliance Review
 
+Independent artifact for `critical`; use the integrated review in
+`fast`/`standard`.
+
 Allowed classifications: `PASS`, `PASS_WITH_NOTES`, and `BLOCKED`. Review the
 code, diff, contract, spec, decisions, and evidence directly.
-

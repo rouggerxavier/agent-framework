@@ -1,6 +1,6 @@
 ---
 name: project-context-loader
-description: Use para carregar contexto essencial de um projeto antes de trabalhar, resumindo stack, comandos, padroes, arquitetura e restricoes locais.
+description: Use para grounding focado e reutilizavel; persistencia e varredura ampla dependem do modo e de invalidacao concreta.
 ---
 
 # Project Context Loader
@@ -24,13 +24,19 @@ Criar um resumo curto e reutilizavel do projeto para reduzir repeticao de contex
 - Areas de interesse, se houver.
 
 ## Workflow
-1. Localize manifestos, configs, docs e scripts.
-2. Identifique stack, runtime, comandos e entrypoints.
-3. Resuma padroes de arquitetura, estilo e testes.
-4. Separe fatos observados, inferencias, assumptions e unknowns.
-5. Registre commit, branch, arquivos inspecionados e comandos verificados.
-6. Defina `stale_after`; mudanca material de commit/contrato invalida o contexto.
-7. Persista em `.agent/CONTEXT.md` quando o kernel estiver inicializado.
+1. Receba goal, mode e contexto ja disponivel.
+2. Em `fast`, leia somente arquivos relevantes e padroes locais necessarios.
+3. Em `standard`, faca grounding focado de modulos/contratos envolvidos.
+4. Em `critical`, localize manifestos, configs, docs, scripts e artefatos
+   persistentes necessarios.
+5. Identifique stack, comandos, entrypoints e padroes apenas na profundidade
+   proporcional ao modo.
+6. Separe fatos, inferencias, assumptions e unknowns; registre arquivos lidos.
+7. Reutilize o contexto. Regrounding completo so ocorre se commit mudou
+   materialmente, escopo mudou, arquivos centrais surgiram, contexto ficou stale
+   ou houve contradicao.
+8. Persista em `.agent/CONTEXT.md` somente quando o kernel `critical` estiver
+   ativo; `standard` pode persistir resumo leve quando houver necessidade real.
 
 ## Saida obrigatoria
 - Stack e runtime.
@@ -48,6 +54,7 @@ Criar um resumo curto e reutilizavel do projeto para reduzir repeticao de contex
 - O resumo deve caber em prompt de retomada.
 - Informacao nao verificada nunca aparece como fato.
 - O contexto nao substitui `STATE.md` e deve ser revalidado quando stale.
+- Skills/reviewers recebem o pacote minimo e nao repetem grounding completo.
 
 ## Arquivos de apoio
 Etapa inicial dos workflows abaixo; nao duplicar os passos deles aqui.

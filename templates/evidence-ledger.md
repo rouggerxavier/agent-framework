@@ -1,5 +1,8 @@
 # Evidence Ledger — {{PHASE_ID}} {{PHASE_NAME}}
 
+Required in `critical`, optional and summarized in `standard`, and not
+instantiated in `fast`.
+
 Evidence is append-only. Keep failures and correction history.
 
 ## Task ID
@@ -38,4 +41,3 @@ Evidence is append-only. Keep failures and correction history.
 ### Open risks and blockers
 
 - None.
-
