@@ -8,12 +8,19 @@ from typing import Any, Dict, List
 from .contracts import eligible_tasks, load_task_index, task_by_id
 from .documents import DocumentError, git_snapshot, load_frontmatter, safe_project_path
 from .execution_modes import state_execution_mode, validate_lightweight_state
-from .state_machine import validate_state
+from .state_machine import execution_binding, validate_state
 
+
+#: Validation codes that mean "the checkout moved", not "the state is wrong".
+BINDING_CODES = {
+    "git-branch-mismatch",
+    "git-detached-head",
+}
 
 ASSET_BY_OPERATION = {
     "route-task": "skills/agent-framework-router/SKILL.md",
     "repair-state": "skills/framework-next/SKILL.md",
+    "restore-execution-branch": "skills/framework-next/SKILL.md",
     "build-short-plan": "skills/workflow-planner/SKILL.md",
     "execute-standard-plan": "skills/workflow-runner/SKILL.md",
     "run-integrated-review": "skills/goal-coverage-verifier/SKILL.md",
@@ -182,6 +189,24 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
     issues = validate_state(state, project_root)
     errors = [item["message"] for item in issues if item["severity"] == "error"]
     if errors:
+        # A binding mismatch is not a broken state — the state is right and the
+        # checkout is wrong. Recommending `repair-state` here would point at
+        # STATE.md and invite an edit that hides the divergence instead of
+        # resolving it, which is the opposite of what the binding is for.
+        failing = {
+            item["code"] for item in issues if item["severity"] == "error"
+        }
+        if failing and failing <= BINDING_CODES:
+            binding = execution_binding(state)
+            return _decision(
+                state=status,
+                evidence=evidence,
+                inconsistencies=errors,
+                operation="restore-execution-branch",
+                target=binding.get("branch"),
+                blockers=errors,
+                execution_mode=execution_mode,
+            )
         return _decision(
             state=status,
             evidence=evidence,
