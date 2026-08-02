@@ -336,6 +336,11 @@ def set_gate_status(
         "note": note,
         "at": recorded_at,
         "by": actor,
+        # The revision this judgement was made against. A gate approves a
+        # contract, and contracts are versioned: without this stamp an approval
+        # granted before an amendment is indistinguishable from one granted
+        # after it, and `amend-plan` would have nothing to move into history.
+        "plan_revision": _mapping(state.get("plan_revision")).get("version"),
         "history": history,
     }
     updated["updated_at"] = recorded_at
