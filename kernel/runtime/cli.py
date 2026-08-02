@@ -30,6 +30,7 @@ from .project import initialize_phase, initialize_project
 from .reconcile import reconcile_phase
 from .rotation import activate_phase
 from .reviews import validate_quality_review, validate_spec_review
+from .task_start import start_task
 from .state_machine import (
     compute_plan_fingerprint,
     transition_state,
@@ -170,6 +171,21 @@ def build_parser() -> argparse.ArgumentParser:
     transition.add_argument("--to", required=True)
     transition.add_argument("--actor", required=True)
     transition.add_argument("--reason", required=True)
+
+    start = subparsers.add_parser(
+        "start-task",
+        help=(
+            "start the task the kernel selected: selects it, moves task and "
+            "phase to executing, and binds the checkout, in one operation"
+        ),
+    )
+    start.add_argument("--project", dest="start_project")
+    start.add_argument(
+        "--task-id",
+        help="optional confirmation; must equal the task the kernel selected",
+    )
+    start.add_argument("--actor", required=True)
+    start.add_argument("--reason", required=True)
 
     task_status = subparsers.add_parser(
         "task-status", help="apply a guarded task status transition"
@@ -416,6 +432,41 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     restore_task_status(task_path, task_id, previous_task_status)
                 raise
             print("transition: {} -> {}".format(state["status"], args.to))
+            return 0
+        if args.command == "start-task":
+            root = _project(args.start_project or args.project)
+            state, issues, changed = start_task(
+                root,
+                actor=args.actor,
+                reason=args.reason,
+                task_id=args.task_id,
+            )
+            if issues:
+                return _emit_issues(
+                    [{"code": "task-start", "message": message} for message in issues],
+                    "start-task",
+                )
+            task = state["current_task"]
+            binding = state["current_task"].get("execution", {})
+            action = state["next_action"]
+            if not changed:
+                print(
+                    "task {}: already executing on {} (unchanged)".format(
+                        task["id"], binding.get("branch")
+                    )
+                )
+                return 0
+            print(
+                "task started: {} pending -> executing; phase {} -> executing; "
+                "branch {}; worktree {}; next {}{}".format(
+                    task["id"],
+                    state["phase"].get("id"),
+                    binding.get("branch"),
+                    binding.get("worktree"),
+                    action["operation"],
+                    " {}".format(action["target"]) if action.get("target") else "",
+                )
+            )
             return 0
         if args.command == "task-status":
             root = _project(args.status_project or args.project)

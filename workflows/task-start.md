@@ -24,22 +24,35 @@ planejada e selada.
 git switch -c feat/<slug-da-tarefa>
 ```
 
-3. Inicie a tarefa. A branch e capturada automaticamente:
+3. Inicie a tarefa:
 
 ```bash
-framework-next transition --to executing \
+framework-next start-task \
   --actor workflow-runner \
   --reason "Plan gate passed and <ID> is eligible"
 ```
 
+`--task-id <ID>` e opcional e serve so como confirmacao: se nao for igual a
+tarefa que o kernel selecionou, o comando recusa. **O alvo vem do kernel, nao
+do operador** — nao existe `select-task`.
+
 4. Rode `validate` e confirme `state: valid`.
 
-## O que o inicio grava
+## O que o inicio faz
 
-`current_task.execution`, com a branch lida do Git, o id da tarefa, o valor
+Numa unica operacao: seleciona a tarefa elegivel em `current_task`, move a
+tarefa e a fase para `executing`, grava o binding e registra o evento no ledger
+da fase.
+
+`current_task.execution` recebe a branch lida do Git, o id da tarefa, o valor
 portatil de worktree, timestamp e actor. **Nao existe argumento de branch em
 nenhum comando** — o binding e capturado, nunca declarado, entao ele nao pode
 nomear uma branch que nao esta em uso.
+
+`task-status` **nao** seleciona tarefa e `transition` **nao** inventa
+`current_task`; ambos continuam operando sobre uma tarefa ja selecionada.
+`reconcile-phase` e reconciliacao retrospectiva e nao deve ser usada para
+iniciar trabalho. Nenhum hand-edit de `STATE.md` e necessario.
 
 ## Pre-condicoes que recusam
 
@@ -48,9 +61,17 @@ nomear uma branch que nao esta em uso.
   trabalho chega, nao onde e escrito;
 - nenhuma tarefa selecionada em `current_task.id`;
 - contrato invalido, dependencia insatisfeita, plano nao selado, risco nao
-  classificado ou worktree suja sem worktree isolada.
+  classificado ou worktree suja sem worktree isolada;
+- fase fora de `planned`;
+- outra tarefa ja em `executing`, `reviewing` ou `verifying`;
+- `--task-id` diferente da tarefa selecionada pelo kernel.
 
-Recusa nao escreve nada: estado e indice ficam intactos.
+Recusa nao escreve nada: estado, indice e ledger ficam intactos. Os tres
+documentos se movem juntos — falha em qualquer etapa, inclusive no ledger,
+restaura `STATE.md` e `TASKS.md` como estavam.
+
+Repetir o mesmo `start-task` e no-op. Repetir para outra tarefa, outra branch ou
+outro worktree e recusado.
 
 ## Durante a execucao
 

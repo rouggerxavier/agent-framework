@@ -297,6 +297,25 @@ a fase ativada, ainda confere; caso contrário o estado aterrissa em `specified`
 e o gate de plano é pago de novo. Ativar uma fase **nunca** produz `execute-task`
 prematuro. Ver `workflows/phase-rotation.md`.
 
+`execute-task -> <id>` é operação executável, não apenas recomendação:
+
+```bash
+./scripts/framework-next start-task \
+  --project /caminho/do/projeto \
+  --actor workflow-runner \
+  --reason "Plan gate passed and U3A is eligible"
+```
+
+Ela seleciona a tarefa elegível, move tarefa e fase para `executing`, captura o
+binding de branch e registra o evento — **numa operação só**. O alvo vem do
+kernel: `--task-id` é aceito apenas como confirmação e recusa se divergir. Não
+existe `select-task`, e `current_task.id` não tem outro escritor prospectivo.
+
+`task-status` não seleciona tarefa; `transition` não inventa `current_task`;
+`reconcile-phase` é retrospectiva e não serve para iniciar trabalho. Nenhum
+hand-edit de `STATE.md` é necessário. Os três documentos — `TASKS.md`,
+`STATE.md` e o ledger — se movem juntos, com rollback se qualquer etapa falhar.
+
 A afinidade de branch começa com a **execução**, não com o planejamento.
 `executing`, `reviewing` e `verifying` exigem que o checkout seja a branch
 vinculada; todos os demais estados — incluindo `planned` — não têm afinidade.

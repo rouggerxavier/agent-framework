@@ -27,6 +27,7 @@ VALID_EVIDENCE_KINDS = {
     "blocker",
     "correction",
     "commit",
+    "task-start",
     "gate",
 }
 
