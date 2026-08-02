@@ -22,6 +22,7 @@ from .contracts import (
     validate_execution_result,
     validate_task_contract,
 )
+from .amendment import amend_plan
 from .evidence import append_evidence_event
 from .execution_modes import state_execution_mode, validate_lightweight_state
 from .gates import set_gate_status
@@ -32,6 +33,7 @@ from .rotation import activate_phase
 from .reviews import validate_quality_review, validate_spec_review
 from .task_start import start_task
 from .state_machine import (
+    REVIEW_GATES,
     compute_plan_fingerprint,
     transition_state,
     validate_state,
@@ -103,6 +105,23 @@ def build_parser() -> argparse.ArgumentParser:
     seal.add_argument("--decision", required=True)
     seal.add_argument("--evidence", required=True)
     seal.add_argument("--actor", required=True)
+
+    amend = subparsers.add_parser(
+        "amend-plan",
+        help=(
+            "re-seal PLAN.md and TASKS.md for the task already under way, and "
+            "reopen the review gates the change invalidates"
+        ),
+    )
+    amend.add_argument("--project", dest="amend_project")
+    amend.add_argument("--decision", required=True)
+    amend.add_argument("--evidence", required=True)
+    amend.add_argument("--actor", required=True)
+    amend.add_argument("--reason", required=True)
+    # Optional, and never a choice: the kernel computes the next revision and
+    # refuses anything else. It exists so a caller can state the revision it
+    # believes it is producing and be told when it is wrong.
+    amend.add_argument("--version", type=int)
 
     reconcile = subparsers.add_parser(
         "reconcile-phase",
@@ -245,6 +264,10 @@ def _contract(root: Path, value: str, task_id: Optional[str]) -> Dict[str, Any]:
     if not path.is_absolute():
         path = root / path
     return load_contract(path.resolve(), task_id)
+
+
+def _mapping_or_empty(value: Any) -> Dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
 
 def _emit_issues(issues: Sequence[Dict[str, str]], label: str) -> int:
@@ -467,6 +490,72 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     " {}".format(action["target"]) if action.get("target") else "",
                 )
             )
+            return 0
+        if args.command == "amend-plan":
+            root = _project(args.amend_project or args.project)
+            state, issues, changed = amend_plan(
+                root,
+                decision_id=args.decision,
+                evidence=args.evidence,
+                actor=args.actor,
+                reason=args.reason,
+                version=args.version,
+            )
+            if issues:
+                return _emit_issues(
+                    [{"code": "amend-plan", "message": message} for message in issues],
+                    "amend-plan",
+                )
+            revision = state["plan_revision"]
+            task = _mapping_or_empty(state.get("current_task"))
+            binding = _mapping_or_empty(task.get("execution"))
+            action = _mapping_or_empty(state.get("next_action"))
+            gates_now = _mapping_or_empty(state.get("gates"))
+            reopened = [
+                gate
+                for gate in REVIEW_GATES
+                if gates_now.get(gate) == "pending"
+            ]
+            payload = {
+                "task_id": task.get("id"),
+                "revision_from": _mapping_or_empty(revision.get("supersedes")).get(
+                    "version"
+                ),
+                "revision_to": revision.get("version"),
+                "fingerprint_from": _mapping_or_empty(revision.get("supersedes")).get(
+                    "fingerprint"
+                ),
+                "fingerprint_to": revision.get("fingerprint"),
+                "gates_reopened": sorted(reopened),
+                "branch": binding.get("branch"),
+                "worktree": binding.get("worktree"),
+                "next_action": action,
+                "changed": changed,
+            }
+            if args.json:
+                print(json.dumps(payload, ensure_ascii=False, indent=2))
+                return 0
+            if not changed:
+                print(
+                    "plan already at revision {} for {} (unchanged)".format(
+                        revision.get("version"), task.get("id")
+                    )
+                )
+                return 0
+            print(
+                "plan amended: revision {} -> {}; task {} stays current on branch "
+                "{}; worktree {}; gates reopened {}; next {}{}".format(
+                    payload["revision_from"],
+                    payload["revision_to"],
+                    payload["task_id"],
+                    payload["branch"],
+                    payload["worktree"],
+                    ", ".join(payload["gates_reopened"]) or "none",
+                    action.get("operation"),
+                    " {}".format(action.get("target")) if action.get("target") else "",
+                )
+            )
+            print("fingerprint: {}".format(payload["fingerprint_to"]))
             return 0
         if args.command == "task-status":
             root = _project(args.status_project or args.project)

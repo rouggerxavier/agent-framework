@@ -29,6 +29,7 @@ VALID_EVIDENCE_KINDS = {
     "commit",
     "task-start",
     "gate",
+    "plan-amendment",
 }
 
 

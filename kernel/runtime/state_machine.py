@@ -349,6 +349,8 @@ def validate_state(
     ):
         issues.extend(_plan_seal_issues(state, root))
 
+    issues.extend(_gate_record_issues(state))
+
     risk_level = _mapping(state.get("risk")).get("level")
     if risk_level not in {"unclassified", "low", "medium", "high", "critical"}:
         issues.append(_issue("invalid-risk", "risk.level is invalid"))
@@ -378,6 +380,127 @@ def validate_state(
         if resolution.code:
             issues.append(
                 _issue(resolution.code, resolution.message, resolution.severity)
+            )
+    return issues
+
+
+#: The gates a new round of work invalidates. They judge a contract and a diff,
+#: so re-entering execution — whether because a review sent the task back or
+#: because the contract itself was amended — retires all five together.
+REVIEW_GATES = (
+    "self_review",
+    "spec_compliance",
+    "code_quality",
+    "acceptance",
+    "verification",
+)
+
+
+def reopen_review_gates(
+    state: Dict[str, Any], *, revision: Optional[int], at: str, actor: str
+) -> List[str]:
+    """Reset the review gates in place, keeping their approvals as history.
+
+    Mutates ``state`` and returns the gates that actually moved.
+
+    Resetting the map alone is what let ``gates`` and ``gate_records`` drift
+    apart: the map said ``pending`` and the record still said ``passed``. Both
+    move here, and the record that replaces an approval is a *pending* record
+    stamped with the revision it is pending against — so the two can be read
+    interchangeably, which is the only way a reader has no wrong choice.
+
+    An approval is never dropped. It is appended to the record's ``history``
+    with the revision it was granted under.
+
+    A gate with no record keeps none. Creating one here would be the wrong kind
+    of thorough: ``spec_compliance`` and ``code_quality`` are written by the
+    review appliers, which move the map and keep no record, and inventing a
+    record for them would make the very next review look like a divergence. What
+    those gates leave behind instead is the ledger event the caller writes,
+    which carries their previous values.
+    """
+
+    gates = dict(_mapping(state.get("gates")))
+    records = deepcopy(_mapping(state.get("gate_records")))
+    moved: List[str] = []
+
+    for gate in REVIEW_GATES:
+        if gate not in gates:
+            continue
+        previous_status = gates[gate]
+        if previous_status != "pending":
+            moved.append(gate)
+        gates[gate] = "pending"
+
+        if gate not in records:
+            continue
+        record = _mapping(records.get(gate))
+        history = list(record.get("history", []))
+        if record.get("status") and record.get("status") != "pending":
+            history.append(
+                {
+                    "status": record.get("status"),
+                    "decision": record.get("decision"),
+                    "evidence": record.get("evidence"),
+                    "at": record.get("at"),
+                    "by": record.get("by"),
+                    # A record written before revisions were stamped belongs to
+                    # whatever revision was current when it was written, which
+                    # is the one being left behind now.
+                    "plan_revision": record.get(
+                        "plan_revision",
+                        revision - 1 if isinstance(revision, int) else None,
+                    ),
+                }
+            )
+        records[gate] = {
+            "status": "pending",
+            "decision": None,
+            "evidence": None,
+            "at": at,
+            "by": actor,
+            "plan_revision": revision,
+            "history": history,
+        }
+
+    state["gates"] = gates
+    state["gate_records"] = records
+    return moved
+
+
+def _gate_record_issues(state: Dict[str, Any]) -> List[Dict[str, str]]:
+    """The gates map and its ledger index must tell the same story.
+
+    They can drift: ``transition --to executing`` resets the five review gates in
+    ``gates`` and leaves ``gate_records`` untouched, so a state can hold
+    ``acceptance: pending`` beside a record that still says ``passed``. Reading
+    one or the other then answers the same question differently, and which one
+    is authoritative is decided by whichever code path happens to look.
+
+    The check applies only to records carrying a ``plan_revision`` stamp. That
+    stamp is written by the operations that know about revisions, so its absence
+    identifies a record written before they existed — those are reported by
+    nothing and migrated by nobody, which is the compatible default. New records
+    are held to the rule from the moment they are written.
+    """
+
+    issues: List[Dict[str, str]] = []
+    gates = _mapping(state.get("gates"))
+    records = _mapping(state.get("gate_records"))
+    for name, record in records.items():
+        record = _mapping(record)
+        if record.get("plan_revision") is None:
+            continue
+        if name not in gates:
+            continue
+        if record.get("status") != gates.get(name):
+            issues.append(
+                _issue(
+                    "gate-record-divergence",
+                    "gate {} holds {!r} but its record says {!r}".format(
+                        name, gates.get(name), record.get("status")
+                    ),
+                )
             )
     return issues
 
@@ -818,14 +941,11 @@ def transition_state(
     if target == "executing" and _mapping(updated.get("current_task")).get("id"):
         updated["current_task"]["status"] = "executing"
         _bind_execution(updated, root, actor=actor)
-        updated["gates"].update(
-            {
-                "self_review": "pending",
-                "spec_compliance": "pending",
-                "code_quality": "pending",
-                "acceptance": "pending",
-                "verification": "pending",
-            }
+        reopen_review_gates(
+            updated,
+            revision=_mapping(updated.get("plan_revision")).get("version"),
+            at=utc_now(),
+            actor=actor,
         )
     elif target == "reviewing" and _mapping(updated.get("current_task")).get("id"):
         updated["current_task"]["status"] = "reviewing"

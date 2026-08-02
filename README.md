@@ -250,6 +250,32 @@ Depois do plan gate e antes de `specified → planned`, sele o plano:
 Mudança posterior em `PLAN.md` ou `TASKS.md` invalida o fingerprint e bloqueia
 execução até revisão explícita e novo seal.
 
+Quando a revisão explícita acontece **com a tarefa já em andamento** — o caso de
+uma CI que reprova e prova que o contrato, não o código, estava errado —
+`seal-plan` não serve: ele só aceita `specified`. Use a emenda:
+
+```bash
+./scripts/framework-next amend-plan \
+  --project /caminho/do/projeto \
+  --decision D-047 \
+  --evidence ".agent/phases/01-example/EVIDENCE.md#event-2026-08-02T17:09:38+00:00" \
+  --actor planner \
+  --reason "CI expôs contrato defeituoso da tarefa ativa"
+```
+
+Ela vale de `executing`, `reviewing` ou `verifying`, com `current_task` não
+integrada, plano já selado e artefatos realmente alterados. A revisão avança em
+um, **o fingerprint é calculado pelo kernel** (não existe argumento para
+informá-lo; `--version` é confirmação, não escolha), os cinco gates de revisão
+reabrem, fase e tarefa voltam a `executing` e o binding de execução atravessa
+byte a byte — sem liberar e recapturar, porque o trabalho não recomeçou.
+
+Aprovações antigas viram histórico carimbado com a revisão em que foram dadas;
+nada é apagado. Nenhum blocker é exigido ou inventado: decisão e evidência já
+explicam a emenda. **Nunca** edite o fingerprint à mão, e **nunca** use uma spec
+review `BLOCKED` como mecanismo de replanejamento — ver
+`workflows/ci-contract-correction.md`.
+
 `ready_to_ship → shipped` lê `gates.release`. O gate só chega a `passed` com
 decisão registrada em `DECISIONS.md` e evidência que resolva para um arquivo
 real da fase ativa:
