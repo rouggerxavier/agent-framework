@@ -70,6 +70,14 @@ ALLOWED_TRANSITIONS = {
 }
 
 ACTIVE_TASK_STATES = {"executing", "reviewing", "verifying"}
+
+#: States where a task is genuinely being worked on, and the branch and worktree
+#: it was bound to must still be the ones under the operator's feet. Everything
+#: outside this set — including ``planned`` — has no branch affinity: a sealed
+#: plan is not an execution, and the implementation branch may not exist yet.
+#: Applying affinity there made a merged working branch outlive its own work and
+#: leave the integration branch permanently invalid.
+EXECUTION_BOUND_STATES = {"executing", "reviewing", "verifying"}
 PHASE_ARTIFACTS = ("spec", "plan", "tasks", "evidence", "review", "handoff")
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[2]
 
@@ -94,6 +102,114 @@ def _artifact_path(
     if not relative:
         return None
     return safe_project_path(root, relative)
+
+
+def _bind_execution(state: Dict[str, Any], root: Path, *, actor: str) -> None:
+    """Record the branch the active task is being worked on, read from Git.
+
+    The binding is captured rather than declared: it comes from the checkout in
+    the same write that moves the task, so there is no window where a task is
+    bound to a branch nobody is standing on, and no argument through which a
+    different branch could be named.
+    """
+
+    task = _mapping(state.get("current_task"))
+    if not task.get("id"):
+        return
+    snapshot = git_snapshot(root)
+    if not snapshot["is_repository"] or not snapshot["branch"]:
+        return
+    state["current_task"]["execution"] = {
+        "task_id": task["id"],
+        "branch": snapshot["branch"],
+        "worktree": _mapping(state.get("git")).get("worktree"),
+        "bound_at": utc_now(),
+        "bound_by": actor,
+    }
+
+
+def execution_binding(state: Dict[str, Any]) -> Dict[str, Any]:
+    """The branch and worktree the active task was bound to when it started.
+
+    Executions started by this kernel record the binding on ``current_task``,
+    where it belongs: a binding describes one task's work, not the project. A
+    state written before the binding existed falls back to
+    ``git.working_branch``, so a project already mid-execution keeps its
+    protection without being migrated.
+    """
+
+    task = _mapping(state.get("current_task"))
+    binding = _mapping(task.get("execution"))
+    if binding.get("branch"):
+        return binding
+    git_state = _mapping(state.get("git"))
+    legacy = git_state.get("working_branch")
+    if legacy:
+        return {
+            "branch": legacy,
+            "worktree": git_state.get("worktree"),
+            "legacy": True,
+        }
+    return {}
+
+
+def _binding_issues(
+    state: Dict[str, Any], snapshot: Dict[str, Any]
+) -> List[Dict[str, str]]:
+    """Affinity checks that only apply while a task is genuinely being executed."""
+
+    issues: List[Dict[str, str]] = []
+    if not snapshot["is_repository"]:
+        return issues
+
+    binding = execution_binding(state)
+    expected = binding.get("branch")
+    if not expected:
+        return issues
+
+    current = snapshot["branch"]
+    if current is None:
+        issues.append(
+            _issue(
+                "git-detached-head",
+                "execution is bound to branch {} but HEAD is detached".format(expected),
+            )
+        )
+    elif current != expected:
+        issues.append(
+            _issue(
+                "git-branch-mismatch",
+                "execution is bound to branch {} but the current branch is {}".format(
+                    expected, current
+                ),
+            )
+        )
+
+    bound_task = binding.get("task_id")
+    task_id = _mapping(state.get("current_task")).get("id")
+    if bound_task and task_id and bound_task != task_id:
+        issues.append(
+            _issue(
+                "execution-binding-mismatch",
+                "execution binding names task {} but current_task is {}".format(
+                    bound_task, task_id
+                ),
+            )
+        )
+
+    if not binding.get("legacy"):
+        declared = _mapping(state.get("git")).get("worktree")
+        if binding.get("worktree") != declared:
+            issues.append(
+                _issue(
+                    "worktree-binding-mismatch",
+                    "execution was bound to worktree {!r} but git.worktree is {!r}".format(
+                        binding.get("worktree"), declared
+                    ),
+                )
+            )
+
+    return issues
 
 
 def validate_state(
@@ -256,21 +372,8 @@ def validate_state(
                     ),
                 )
             )
-        expected_branch = git_state.get("working_branch")
-        if (
-            snapshot["is_repository"]
-            and expected_branch
-            and snapshot["branch"] != expected_branch
-            and status in {"planned", "executing", "reviewing", "verifying"}
-        ):
-            issues.append(
-                _issue(
-                    "git-branch-mismatch",
-                    "STATE.md branch {} differs from current {}".format(
-                        expected_branch, snapshot["branch"]
-                    ),
-                )
-            )
+        if status in EXECUTION_BOUND_STATES:
+            issues.extend(_binding_issues(state, snapshot))
         resolution = resolve_worktree(git_state.get("worktree"), root)
         if resolution.code:
             issues.append(
@@ -495,6 +598,29 @@ def validate_transition(
                     "unrelated working-tree changes require isolated worktree",
                 )
             )
+        # Starting execution is the moment the work is bound to a branch, so the
+        # branch has to be one that can carry it. A detached HEAD has nothing to
+        # bind to, and the integration branch is where the work is meant to
+        # arrive — not where it is written.
+        if snapshot["is_repository"]:
+            branch = snapshot["branch"]
+            if branch is None:
+                issues.append(
+                    _issue(
+                        "git-detached-head",
+                        "execution cannot start on a detached HEAD",
+                    )
+                )
+            else:
+                base_branch = _mapping(state.get("git")).get("base_branch")
+                if base_branch and branch == base_branch:
+                    issues.append(
+                        _issue(
+                            "execution-on-base-branch",
+                            "execution cannot start on the integration branch {}; "
+                            "create a working branch first".format(base_branch),
+                        )
+                    )
         if not task.get("id"):
             issues.append(_issue("task-not-selected", "current_task.id must select a task"))
         task_path = _artifact_path(state, root, "tasks")
@@ -691,6 +817,7 @@ def transition_state(
         updated["phase"]["status"] = target
     if target == "executing" and _mapping(updated.get("current_task")).get("id"):
         updated["current_task"]["status"] = "executing"
+        _bind_execution(updated, root, actor=actor)
         updated["gates"].update(
             {
                 "self_review": "pending",
@@ -706,6 +833,28 @@ def transition_state(
         updated["current_task"]["status"] = "verifying"
     elif target == "ready_to_ship" and _mapping(updated.get("current_task")).get("id"):
         updated["current_task"]["status"] = "verified"
+
+    # Leaving execution releases the binding. Keeping it would let a merged
+    # branch keep speaking for work that is over — which is exactly how the
+    # integration branch became permanently invalid. The released binding is
+    # preserved as history in a field that is never used for validation, so
+    # "the branch this ran on" and "the branch this must run on" stop being the
+    # same value.
+    if target not in EXECUTION_BOUND_STATES:
+        current_task = _mapping(updated.get("current_task"))
+        released = current_task.pop("execution", None)
+        if released:
+            updated["git"] = dict(_mapping(updated.get("git")))
+            updated["git"]["last_execution"] = dict(released, released_at=utc_now())
+    elif not _mapping(_mapping(updated.get("current_task")).get("execution")).get(
+        "branch"
+    ):
+        # Re-entering execution — reworking from ready_to_ship, for instance —
+        # arrives with the binding already released. Without capturing it again
+        # the legacy fallback would speak for the work and report a branch the
+        # rework was never on.
+        _bind_execution(updated, root, actor=actor)
+
     action_by_state = {
         "proposed": ("discuss-requirements", ".agent/PROJECT.md"),
         "discussing": ("continue-discussion", updated.get("phase", {}).get("id")),
