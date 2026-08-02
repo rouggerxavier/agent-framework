@@ -108,6 +108,20 @@ active one. Repeating a change that already holds is a no-op; repeating it with 
 different decision or evidence is refused rather than silently rewritten. Every
 accepted change is appended to the phase's existing evidence ledger.
 
+### Gates and their records
+
+`gates` is the map a guard reads; `gate_records` is the ledger index behind it.
+They used to drift: re-entering `executing` reset the map and left the records
+alone, so a state could hold `acceptance: pending` beside a record still saying
+`passed`, and which one answered the question depended on which code path
+looked. Both now move together, in the transition and in `amend-plan` alike.
+
+Every record written since carries a `plan_revision` stamp — the revision the
+judgement was made against, because a gate approves a contract and contracts are
+versioned. `validate` reports `gate-record-divergence` when a **stamped** record
+disagrees with the map. Records written before the stamp existed are left alone:
+their absence identifies them, and no project needs migrating.
+
 ### What `shipped` means
 
 `shipped` means the phase is integrated and closed in the controlled development
@@ -146,6 +160,7 @@ contract and dependencies — and captures the execution binding.
 | `start-task` | selects the eligible task and starts it, with binding |
 | `task-status` | changes `.status` of the task already current |
 | `transition` | changes `.status` as the phase moves |
+| `amend-plan` | returns the task under way to `executing`, binding intact |
 | `reconcile-phase` | back-fills from work already `verified` |
 | `activate-phase`, `init` | clear it |
 
@@ -228,6 +243,74 @@ approved one.
 
 The phase left behind keeps every document and is appended to
 `completed_phases`. Rotation moves the pointer; it never rewrites history.
+
+## Amending the plan of a task under way
+
+A contract can be wrong, and the fact that proves it is often produced by the
+work itself — a CI run reaching paths no local verification reaches is the
+ordinary case. `framework-next amend-plan` re-seals `PLAN.md` and `TASKS.md`
+**in place**, without pretending the work has not started.
+
+Before it existed, the only routes were both dishonest. `seal-plan` refuses
+outside `specified`, and `reconcile-phase` describes work already integrated, so
+reaching a second seal meant manufacturing a `BLOCKED` review to obtain the
+blocker that `blocked` requires, then returning to `specified` — which claims
+nobody had begun and releases the execution binding — or editing the fingerprint
+by hand, which forges the one thing the seal exists to prove. **Neither is a
+replanning mechanism, and a `BLOCKED` review must never be used as one.**
+
+A second dead end sat underneath: `TASK_STATUS_TRANSITIONS` gives `verified` no
+outgoing edge, so a task whose local verification passed and whose CI then
+failed had no way back into execution at all. `amend-plan` owns that move, and
+the shared table stays closed so nothing else can un-verify a task.
+
+It applies only from `executing`, `reviewing` or `verifying`, with a
+`current_task` that is not integrated, over a plan that was already sealed and
+whose artifacts have actually changed, against a decision recorded in
+`DECISIONS.md` and an evidence file belonging to the active phase, from the
+checkout the execution is bound to. Every other state error refuses the
+amendment rather than being sealed over — the stale fingerprint is the one
+condition it is allowed to find, because repairing it is the point.
+
+**The fingerprint is computed, never supplied.** It comes from
+`compute_plan_fingerprint`, the same function `seal-plan` and `validate` use,
+over the artifacts as they are on disk. There is no argument through which one
+could be named. `--version` is optional and is a confirmation, not a choice: the
+kernel advances the revision by one and refuses anything else.
+
+What it moves and what it keeps:
+
+| Kept | Moved |
+| --- | --- |
+| `current_task.id` | `plan_revision` advances one revision |
+| `current_task.execution`, byte for byte | phase and task return to `executing` |
+| `specification`, `plan_quality` | the five review gates reopen to `pending` |
+| every ledger event already written | `next_action` becomes `resume-task` |
+
+The binding is carried across, not released and recaptured: the work did not
+restart, so `bound_at` and `bound_by` still describe when and by whom it began,
+and nothing is archived into `git.last_execution`.
+
+`specification` and `plan_quality` are deliberately preserved. An amendment made
+under a recorded decision is the plan process working, not evidence against it —
+and reopening `plan_quality` would strand the phase, since that gate is what
+`specified → planned` and `planned → executing` require.
+
+**An old approval belongs to the old revision.** Gate records carry a
+`plan_revision` stamp, and reopening pushes the previous status onto the
+record's `history` with the revision it was granted under. Gates written by the
+review appliers keep no record of their own, so their previous values are
+recorded in the amendment's ledger event instead. Nothing is deleted.
+
+No blocker is required or invented. A recorded decision and real evidence
+already explain the amendment, and existing blockers are left untouched — they
+stay open until whatever closes them formally does.
+
+Three documents move together, and the write order is ledger, index, state, with
+all three restored from bytes if any step fails. A process that dies mid-write
+leaves at most a ledger event without the re-seal: `validate` still reports the
+stale fingerprint, the operator sees both, and repeating the command is a no-op
+when the amendment landed and a completion when it did not.
 
 ## Failure behavior
 
