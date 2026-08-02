@@ -117,6 +117,48 @@ blockers against production readiness without reopening a phase that is
 genuinely finished, and `verifying → ready_to_ship` already refuses to move
 while lifecycle blockers are open.
 
+## Starting a task
+
+`execute-task -> <id>` is an operation, not only a recommendation.
+`framework-next start-task` performs it.
+
+`current_task.id` has no other prospective writer, and that is deliberate.
+`initialize_project` and `activate-phase` clear it; `reconcile-phase` fills it
+from work already `verified`; everything else touches only `.status`. Without
+`start-task`, a phase that reached `planned` honestly had no legal move —
+`task-status` refuses a task that is not yet current, and `transition --to
+executing` refuses because none is selected.
+
+**The target comes from the kernel, not the operator.** `start-task` reads it
+from `determine_next_operation`; a `--task-id` may be passed, but only as a
+confirmation that must match. There is no `select-task`, and no way to name a
+different task.
+
+Selection and start are one operation because the state between them is not a
+state the lifecycle can read: a selected task that is not executing and not
+bound to a branch. The selection is made in memory and spent immediately on the
+guarded `planned → executing` transition, which owns the hard checks — plan
+seal, plan gate, risk, dirty worktree, detached HEAD, integration branch,
+contract and dependencies — and captures the execution binding.
+
+| Writer | Effect on `current_task` |
+| --- | --- |
+| `start-task` | selects the eligible task and starts it, with binding |
+| `task-status` | changes `.status` of the task already current |
+| `transition` | changes `.status` as the phase moves |
+| `reconcile-phase` | back-fills from work already `verified` |
+| `activate-phase`, `init` | clear it |
+
+Three documents move together: `TASKS.md`, `STATE.md` and the phase ledger. The
+first two are read as bytes before the first write and restored if any later
+step fails, the ledger append included — so a failure cannot leave a phase
+executing a task the index still calls pending, nor an execution with no trail.
+Repeating a start that already holds is a no-op; repeating it for another task,
+branch or worktree is refused.
+
+After starting, the next operation is `resume-task`, and no other task becomes
+eligible while one is under way.
+
 ## Branch and worktree affinity
 
 Affinity begins with execution, not with planning. `git.working_branch` records
