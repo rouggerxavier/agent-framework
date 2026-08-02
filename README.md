@@ -297,6 +297,28 @@ a fase ativada, ainda confere; caso contrário o estado aterrissa em `specified`
 e o gate de plano é pago de novo. Ativar uma fase **nunca** produz `execute-task`
 prematuro. Ver `workflows/phase-rotation.md`.
 
+A afinidade de branch começa com a **execução**, não com o planejamento.
+`executing`, `reviewing` e `verifying` exigem que o checkout seja a branch
+vinculada; todos os demais estados — incluindo `planned` — não têm afinidade.
+Um plano selado é um plano aprovado, não um plano em execução, e a branch de
+implementação pode ainda não existir.
+
+O vínculo nasce ao iniciar a tarefa: `transition --to executing` lê a branch do
+Git e grava `current_task.execution`. Ele é **capturado, nunca declarado** —
+nenhum comando aceita argumento de branch, então o vínculo não pode nomear uma
+branch que não está em uso. Iniciar é recusado em `HEAD` destacado e na própria
+`base_branch`.
+
+Sair da execução libera o vínculo para `git.last_execution`, que é histórico e
+nunca é validado. Assim os dois sentidos param de disputar o mesmo campo: a
+branch onde o trabalho **deve** estar, e a branch onde ele **esteve**. Uma branch
+mergeada pode ser apagada e a branch de integração continua válida, sem
+hand-edit. Ver `workflows/task-start.md`.
+
+Se o checkout sair da branch vinculada durante a execução, a próxima operação é
+`restore-execution-branch` — a correção é um `git switch`, não uma edição de
+`STATE.md`. `validate` nunca escreve, em nenhum estado.
+
 Os estados formais são:
 
 ```text

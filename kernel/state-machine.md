@@ -117,6 +117,51 @@ blockers against production readiness without reopening a phase that is
 genuinely finished, and `verifying → ready_to_ship` already refuses to move
 while lifecycle blockers are open.
 
+## Branch and worktree affinity
+
+Affinity begins with execution, not with planning. `git.working_branch` records
+the branch a project or phase was created on; it is not a claim about where the
+work must happen, and treating it as one made a merged planning branch outlive
+its own work — leaving the integration branch permanently invalid in the one
+state where nothing had started yet.
+
+| Class | States | Branch affinity |
+| --- | --- | --- |
+| Bound | `executing`, `reviewing`, `verifying` | strict — the checkout must be the bound branch |
+| Unbound | `proposed`, `discussing`, `specified`, `planned`, `ready_to_ship`, `shipped`, `cancelled`, `superseded` | none |
+
+`planned` is deliberately unbound: a sealed plan is an approved plan, not a
+running one, and the implementation branch may not exist yet. The rest of the
+`git` section is still validated in every state — repository presence and
+worktree resolution do not depend on affinity.
+
+Starting a task is what binds it. `transition --to executing` reads the branch
+from Git and records it on `current_task.execution` together with the task id,
+the portable worktree value, a timestamp and the actor. It is **captured, never
+declared**: no command accepts a branch argument, so the binding cannot name a
+branch that is not checked out. Starting is refused on a detached HEAD and on
+the project's own `base_branch` — the integration branch is where work arrives,
+not where it is written.
+
+While bound, a mismatch is an error: switching to the integration branch, to
+another feature branch, or detaching HEAD all fail, as does a binding that names
+a different task or a `git.worktree` that changed underneath it.
+
+Leaving the bound states releases the binding into `git.last_execution`, which
+is history and is never validated. That is what keeps the two meanings apart:
+`current_task.execution` is the branch work **must** be on, `git.last_execution`
+is the branch work **was** on. A merged branch may then be deleted and the
+integration branch still validates — no hand-edit, at any point.
+
+States written before the binding existed fall back to `git.working_branch`
+while in bound states, so a project already mid-execution keeps its protection
+and needs no migration.
+
+When a bound checkout has moved, the next operation is
+`restore-execution-branch` targeting the bound branch — not `repair-state`.
+The state is right and the checkout is wrong; pointing at `STATE.md` would
+invite an edit that hides the divergence. `validate` never writes, in any state.
+
 ## Phase rotation
 
 A milestone is often contracted before it is executed, so the next phase already
