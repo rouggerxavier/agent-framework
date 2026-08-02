@@ -250,6 +250,53 @@ Depois do plan gate e antes de `specified → planned`, sele o plano:
 Mudança posterior em `PLAN.md` ou `TASKS.md` invalida o fingerprint e bloqueia
 execução até revisão explícita e novo seal.
 
+`ready_to_ship → shipped` lê `gates.release`. O gate só chega a `passed` com
+decisão registrada em `DECISIONS.md` e evidência que resolva para um arquivo
+real da fase ativa:
+
+```bash
+./scripts/framework-next gate-status \
+  --project /caminho/do/projeto \
+  --gate release --to passed \
+  --decision D-043 \
+  --evidence ".agent/phases/01-example/EVIDENCE.md#release" \
+  --actor releaser \
+  --note "PR #25 mergeado, CI verde"
+```
+
+O comando registra a mudança no ledger da fase e **não** executa a transição:
+passar o gate e dar `shipped` continuam dois atos deliberados. `spec_compliance`
+e `code_quality` são recusados aqui — pertencem a `validate-spec-review` e
+`validate-quality-review`, que validam o próprio documento de revisão. Repetir a
+mesma mudança é no-op; repetir com outra justificativa é recusado.
+
+`shipped` significa fase integrada e encerrada no ciclo controlado de
+desenvolvimento, **não** liberação em produção. Blockers externos de produção
+continuam registrados e abertos sem reabrir a fase concluída.
+
+Quando a próxima fase já está contratada em disco — SPEC, PLAN e TASKS escritos
+enquanto a fase anterior ainda rodava — nenhuma operação ordinária a alcança:
+`init-phase` recusa diretório existente, `seal-plan` só sela a fase ativa e
+`reconcile-phase` exige trabalho concluído. Use a rotação:
+
+```bash
+./scripts/framework-next activate-phase \
+  --project /caminho/do/projeto \
+  --id U3 --name "Onboarding e setup" \
+  --slug u3-membership-onboarding \
+  --actor planner \
+  --reason "U2 encerrada; U3 já contratada"
+```
+
+Ela exige a fase atual em `shipped` ou `superseded`, a fase de destino presente
+no roadmap com os seis artefatos, nenhuma tarefa executada e grafo de tarefas
+válido. A fase anterior é preservada e registrada em `completed_phases`.
+
+O plano só conta como selado quando o fingerprint armazenado, recalculado contra
+a fase ativada, ainda confere; caso contrário o estado aterrissa em `specified`
+e o gate de plano é pago de novo. Ativar uma fase **nunca** produz `execute-task`
+prematuro. Ver `workflows/phase-rotation.md`.
+
 Os estados formais são:
 
 ```text

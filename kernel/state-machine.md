@@ -79,6 +79,69 @@ the decision is absent from `DECISIONS.md`, the evidence file is missing, the
 plan revision does not increase, or the working tree carries uncommitted product
 changes. Reconciliation records finished work; it never approves it.
 
+## Gates
+
+Gates are read by transition guards; `ready_to_ship → shipped` is the one that
+reads `release`. `framework-next gate-status` is the only formal writer for the
+gates that have no dedicated command, and it never performs the transition it
+unblocks — passing the release gate and shipping stay two deliberate acts.
+
+| Target | Cost | Meaning |
+| --- | --- | --- |
+| `passed` | decision + evidence | a guard may trust this gate |
+| `not_required` | decision + evidence | the gate does not apply to this phase |
+| `failed` | evidence | recorded observation, not an approval |
+| `blocked` | evidence | the gate cannot be evaluated yet |
+
+`pending` is not a valid target: it is the initial value, and accepting it would
+let a recorded gate be un-recorded through the same door that wrote it. The
+lifecycle already resets gates when a task starts executing.
+
+`spec_compliance` and `code_quality` are refused. They belong to
+`validate-spec-review` and `validate-quality-review`, which validate the review
+document itself; a second writer would let a review be recorded without one
+being written.
+
+The command refuses evidence that does not resolve to a file inside the project,
+and evidence under `.agent/phases/<slug>/` that belongs to a phase other than the
+active one. Repeating a change that already holds is a no-op; repeating it with a
+different decision or evidence is refused rather than silently rewritten. Every
+accepted change is appended to the phase's existing evidence ledger.
+
+### What `shipped` means
+
+`shipped` means the phase is integrated and closed in the controlled development
+cycle. It does **not** mean released to production. External blockers — secret
+managers, production benchmarks, TLS termination — stay recorded as open
+blockers against production readiness without reopening a phase that is
+genuinely finished, and `verifying → ready_to_ship` already refuses to move
+while lifecycle blockers are open.
+
+## Phase rotation
+
+A milestone is often contracted before it is executed, so the next phase already
+has SPEC, PLAN, TASKS and a ledger on disk. Nothing in the ordinary lifecycle
+reaches it: `init-phase` refuses an existing directory (running it would
+overwrite those documents), `seal-plan` only seals the active phase, and
+`reconcile-phase` requires finished work. `framework-next activate-phase` covers
+that case alone.
+
+It requires the current phase to be `shipped` or `superseded`. `ready_to_ship`
+is excluded deliberately: it means a ship decision is still pending, and
+rotating away would strand it. The target phase must exist with all six
+artifacts, appear in the roadmap, differ from the active phase, hold no task in
+an executed state, and carry a structurally valid task graph.
+
+Where it lands is what keeps it honest. The plan counts as sealed only when the
+stored fingerprint, recomputed against the phase being activated, still matches.
+Anything else is an unsealed plan: `plan_revision` is reset and the state lands
+on `specified`, so the plan gate is paid again through `seal-plan`. The next
+operation is `build-plan`, never `execute-task` — a contracted plan is not an
+approved one.
+
+The phase left behind keeps every document and is appended to
+`completed_phases`. Rotation moves the pointer; it never rewrites history.
+
 ## Failure behavior
 
 - A blocking spec review or required quality change returns the task to
