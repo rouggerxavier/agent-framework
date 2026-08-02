@@ -24,9 +24,11 @@ from .contracts import (
 )
 from .evidence import append_evidence_event
 from .execution_modes import state_execution_mode, validate_lightweight_state
+from .gates import set_gate_status
 from .next_operation import determine_next_operation
 from .project import initialize_phase, initialize_project
 from .reconcile import reconcile_phase
+from .rotation import activate_phase
 from .reviews import validate_quality_review, validate_spec_review
 from .state_machine import (
     compute_plan_fingerprint,
@@ -116,6 +118,35 @@ def build_parser() -> argparse.ArgumentParser:
     reconcile.add_argument("--evidence", required=True)
     reconcile.add_argument("--version", type=int, required=True)
     reconcile.add_argument("--actor", required=True)
+
+    activate = subparsers.add_parser(
+        "activate-phase",
+        help=(
+            "activate a phase that already exists and is planned, once the "
+            "current phase is closed; never overwrites either phase's documents"
+        ),
+    )
+    activate.add_argument("--project", dest="activate_project")
+    activate.add_argument("--id", required=True)
+    activate.add_argument("--name", required=True)
+    activate.add_argument("--slug", required=True)
+    activate.add_argument("--actor", required=True)
+    activate.add_argument("--reason")
+
+    gate = subparsers.add_parser(
+        "gate-status",
+        help=(
+            "move a lifecycle gate against a recorded decision and an evidence "
+            "reference, and append the change to the evidence ledger"
+        ),
+    )
+    gate.add_argument("--project", dest="gate_project")
+    gate.add_argument("--gate", required=True)
+    gate.add_argument("--to", required=True)
+    gate.add_argument("--decision")
+    gate.add_argument("--evidence", required=True)
+    gate.add_argument("--actor", required=True)
+    gate.add_argument("--note")
 
     validate = subparsers.add_parser("validate", help="validate STATE.md and references")
     validate.add_argument("--project", dest="validate_project")
@@ -273,6 +304,55 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             print(
                 "phase reconciled: {} -> verifying, plan revision {}".format(
                     args.id, args.version
+                )
+            )
+            return 0
+        if args.command == "activate-phase":
+            root = _project(args.activate_project or args.project)
+            state, issues = activate_phase(
+                root,
+                phase_id=args.id,
+                phase_name=args.name,
+                slug=args.slug,
+                actor=args.actor,
+                reason=args.reason,
+            )
+            if issues:
+                return _emit_issues(
+                    [{"code": "activation", "message": message} for message in issues],
+                    "activate-phase",
+                )
+            action = state["next_action"]
+            print(
+                "phase activated: {} -> {}, next {}{}".format(
+                    args.id,
+                    state["status"],
+                    action["operation"],
+                    " {}".format(action["target"]) if action.get("target") else "",
+                )
+            )
+            return 0
+        if args.command == "gate-status":
+            root = _project(args.gate_project or args.project)
+            state, issues, changed = set_gate_status(
+                root,
+                gate=args.gate,
+                target=args.to,
+                decision_id=args.decision,
+                evidence=args.evidence,
+                actor=args.actor,
+                note=args.note,
+            )
+            if issues:
+                return _emit_issues(
+                    [{"code": "gate", "message": message} for message in issues],
+                    "gate-status",
+                )
+            print(
+                "gate {}: {}{}".format(
+                    args.gate,
+                    state["gates"][args.gate],
+                    "" if changed else " (unchanged; already recorded)",
                 )
             )
             return 0
