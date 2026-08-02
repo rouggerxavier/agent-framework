@@ -272,6 +272,12 @@ def set_gate_status(
             False,
         )
 
+    # The ledger is written before the state, and the order is deliberate.
+    # Neither write can be made atomic with the other, so the question is which
+    # half-finished outcome is safer. A ledger event without the gate change
+    # describes something that did not happen, and the gate still blocks — the
+    # conservative failure. The reverse would leave a gate passed with no
+    # evidence trail, which is the exact outcome this command exists to prevent.
     ledger = _ledger_path(state, project_root)
     recorded_at = utc_now()
     phase_id = _mapping(state.get("phase")).get("id") or "phase"

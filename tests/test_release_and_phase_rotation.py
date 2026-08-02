@@ -434,6 +434,47 @@ class PhaseActivationTests(unittest.TestCase):
             self.assertEqual(decision["next_operation"]["operation"], "execute-task")
             self.assertEqual(decision["next_operation"]["target"], "P2-T01")
 
+    def test_activation_lands_on_planned_when_the_plan_is_genuinely_sealed(self) -> None:
+        """Rotating back to a phase whose stored seal still describes it."""
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._shipped(root)
+            _record_decision(root, "DEC-PLAN")
+
+            # Seal the stored revision against the phase about to be activated,
+            # which is what makes the fingerprint match on arrival.
+            state, body = load_frontmatter(root / ".agent" / "STATE.md")
+            target = dict(state)
+            target["artifacts"] = dict(state["artifacts"])
+            target["artifacts"].update(
+                {
+                    "plan": ".agent/phases/{}/PLAN.md".format(NEXT_SLUG),
+                    "tasks": ".agent/phases/{}/TASKS.md".format(NEXT_SLUG),
+                }
+            )
+            from kernel.runtime.state_machine import compute_plan_fingerprint
+
+            state["plan_revision"] = {
+                "version": 3,
+                "decision_id": "DEC-PLAN",
+                "fingerprint": compute_plan_fingerprint(target, root),
+                "evidence": ".agent/phases/{}/EVIDENCE.md#plan".format(NEXT_SLUG),
+            }
+            write_frontmatter(root / ".agent" / "STATE.md", state, body)
+
+            activated, issues = self._activate(root)
+
+            self.assertEqual(issues, [])
+            self.assertEqual(activated["status"], "planned")
+            self.assertEqual(activated["plan_revision"]["version"], 3)
+            self.assertEqual(validate_state(activated, root), [])
+
+            decision = determine_next_operation(root)
+            self.assertEqual(decision["next_operation"]["operation"], "execute-task")
+            self.assertEqual(decision["next_operation"]["target"], "P2-T01")
+            self.assertEqual(decision["inconsistencies"], [])
+
     def test_the_closed_phase_keeps_every_document_and_is_recorded(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
