@@ -79,6 +79,54 @@ the decision is absent from `DECISIONS.md`, the evidence file is missing, the
 plan revision does not increase, or the working tree carries uncommitted product
 changes. Reconciliation records finished work; it never approves it.
 
+## Execution mode per task
+
+`STATE.md.execution_mode` is the project's **default** mode, not a floor. What a
+task owes is resolved most-specific-first and never by taking a maximum:
+
+```text
+STATE.md task_modes[<id>].mode  →  the task's execution_mode in TASKS.md
+                                →  the phase's default_execution_mode
+                                →  STATE.md execution_mode
+                                →  standard
+```
+
+A phase may hold `fast`, `standard` and `critical` tasks at once; a critical task
+does not raise its neighbours. Two guards read the resolved mode:
+
+- **the plan seal** is owed by a phase containing at least one `critical` task.
+  A phase without one is planned unsealed; a phase that already carries a seal
+  stays validated against it, so lowering a classification never unlocks a plan.
+- **`reviewing → verifying`** requires both independent reviews under `critical`,
+  one recorded review under `standard`, and none beyond the self-review under
+  `fast`. A blocking verdict stops the transition in every mode.
+
+Contract obligations scale the same way — see `adaptive-execution-policy.md` for
+the table. `allowed_files` and acceptance criteria are required in every mode:
+they are the guardrails against drifting into the wrong files or forgetting half
+the goal, and they cost one line each.
+
+### Changing a classification
+
+`framework-next set-execution-mode` is the formal writer. It records the change
+with its justification in `STATE.md` and appends a `classification` event to the
+evidence ledger.
+
+| Scope | Target | Written to |
+| --- | --- | --- |
+| `--scope task --task-id <id>` | one task | `STATE.md.task_modes[<id>]` |
+| `--scope project` | the project default | `STATE.md.execution_mode` |
+
+The record lives in `STATE.md`, never in `TASKS.md`. A classification is not part
+of the contract the seal froze: rewriting the sealed index to correct a label
+would either break the fingerprint or demand a full re-seal, putting the heaviest
+operation in the kernel in front of the one that exists to remove weight.
+
+Escalating to `critical` requires `--risk` naming a recognized grave-damage path
+(`SEVERE_HARM_FACTORS`); reducing requires only `--reason`. The previous
+classification is pushed onto the record's `history` — nothing is deleted, no
+review or evidence entry is touched, and `--check` writes nothing.
+
 ## Gates
 
 Gates are read by transition guards; `ready_to_ship → shipped` is the one that
@@ -136,6 +184,16 @@ approval moves the task to `reviewed` — without it `reviewing → verifying` w
 be refused at the index, because `TASK_STATUS_TRANSITIONS` has no
 `reviewing → verifying` edge — and points at `verify-phase`. The transition
 itself keeps its own actor, reason and guards.
+
+**Below `critical`, one review closes the round.** The reviewer read the diff
+against the contract *and* judged its quality; splitting that into two passes
+over the same diff buys a second opinion, which is what `critical` is for. An
+approving spec review on a `fast` or `standard` task therefore also records
+`code_quality: not_required` against the same review document, moves the task to
+`reviewed`, and points at `verify-phase`. The second gate is recorded rather than
+left `pending` so the state says which judgement was made instead of leaving a
+gap a reader has to interpret. A blocking verdict behaves identically in every
+mode.
 
 An approving quality review cannot carry a finding that names a
 `required_change`: a change that has not been made is not an approval, and

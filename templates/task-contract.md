@@ -4,6 +4,7 @@
   "id": "P1-T03",
   "title": "Normalize property types",
   "status": "pending",
+  "execution_mode": "critical",
   "change_type": "business_logic",
   "goal": {
     "description": "Normalize external property types into canonical internal types."
@@ -78,5 +79,20 @@
 The frontmatter is the complete executable contract. Record discoveries here,
 then revise the plan and contract before expanding scope.
 
-Required in `critical`, optional/lightweight in `standard`, and not instantiated
-in `fast`.
+`execution_mode` classifies this task alone. Omit it to inherit the phase's
+`default_execution_mode` and then the project default; it is never raised by a
+critical neighbour. The example above shows the `critical` shape — every field is
+required there.
+
+A `standard` task needs `id`, `title`, `status`, `change_type`, `goal`,
+`depends_on`, `allowed_files`, `acceptance`, `test_policy`, `rollback`, `review`
+and `completion`, with `self_review: required` plus one of `spec_compliance` or
+`code_quality` marked `required` or `integrated`. A `fast` task needs `id`,
+`title`, `status`, `change_type`, `goal`, `allowed_files`, `acceptance`,
+`test_policy` and `completion`.
+
+`allowed_files` and `acceptance` are required in every mode: they are the scope
+boundary and the definition of done, and they cost one line each.
+
+To correct a classification after the plan is sealed, use
+`framework-next set-execution-mode` — never a hand edit of this file.

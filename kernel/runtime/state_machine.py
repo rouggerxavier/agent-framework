@@ -13,12 +13,18 @@ from .contracts import (
     dependency_issues,
     load_task_index,
     load_test_policy,
+    phase_default_execution_mode,
     task_by_id,
+    task_execution_mode,
     task_graph_issues,
     validate_task_contract,
 )
 from .documents import DocumentError, git_snapshot, safe_project_path, utc_now
-from .execution_modes import state_execution_mode
+from .execution_modes import (
+    mode_requirements,
+    resolve_execution_mode,
+    state_execution_mode,
+)
 from .worktree import resolve_worktree
 
 
@@ -126,6 +132,114 @@ def _bind_execution(state: Dict[str, Any], root: Path, *, actor: str) -> None:
         "bound_at": utc_now(),
         "bound_by": actor,
     }
+
+
+def _task_index(state: Dict[str, Any], root: Path) -> Optional[Dict[str, Any]]:
+    """The phase task index, or ``None`` when it cannot be read.
+
+    Callers treat ``None`` as "assume the heaviest obligations": an unreadable
+    index is never a reason to relax a guard.
+    """
+
+    relative = _mapping(state.get("artifacts")).get("tasks")
+    if not relative:
+        return None
+    try:
+        path = safe_project_path(root, relative)
+    except DocumentError:
+        return None
+    if not path.is_file():
+        return None
+    try:
+        index, _ = load_task_index(path)
+    except DocumentError:
+        return None
+    return index
+
+
+def task_mode_override(state: Dict[str, Any], task_id: Any) -> Optional[str]:
+    """A reclassification recorded against a task after its plan was sealed.
+
+    Overrides live in ``STATE.md`` rather than in the sealed contract on purpose.
+    Correcting an over-classification is not a change to the work, and making it
+    cost a re-seal would put the heaviest ceremony in the framework in front of
+    the operation that exists to remove ceremony.
+    """
+
+    if not task_id:
+        return None
+    record = _mapping(_mapping(state.get("task_modes")).get(str(task_id)))
+    mode = record.get("mode")
+    return mode if isinstance(mode, str) else None
+
+
+def effective_task_mode(
+    state: Dict[str, Any],
+    root: Path,
+    *,
+    task_id: Any = None,
+    index: Optional[Dict[str, Any]] = None,
+) -> str:
+    """The mode one task actually runs under: most specific declaration wins.
+
+    A phase holding one critical task does not make its other tasks critical, and
+    a project default is a default — not a floor.
+    """
+
+    identifier = task_id or _mapping(state.get("current_task")).get("id")
+    try:
+        project = state_execution_mode(state)
+    except ValueError:
+        project = None
+
+    phase_default: Optional[str] = None
+    declared: Optional[str] = None
+    if index is None:
+        index = _task_index(state, root)
+    if index is not None:
+        try:
+            phase_default = phase_default_execution_mode(index)
+        except (DocumentError, ValueError):
+            phase_default = None
+        if identifier:
+            contract = task_by_id(index.get("tasks", []), str(identifier))
+            if contract is not None:
+                try:
+                    declared = task_execution_mode(contract)
+                except (DocumentError, ValueError):
+                    declared = None
+
+    return resolve_execution_mode(
+        project=project,
+        phase=phase_default,
+        task=declared,
+        override=task_mode_override(state, identifier),
+    )["mode"]
+
+
+def phase_requires_seal(
+    state: Dict[str, Any], root: Path, index: Optional[Dict[str, Any]] = None
+) -> bool:
+    """Whether this phase's plan has to be fingerprinted before execution.
+
+    The seal freezes PLAN.md and TASKS.md so nothing can be quietly rewritten
+    under an approval. That is worth its cost when a defect is catastrophic, and
+    it is pure overhead on a phase of ordinary features — where the plan is meant
+    to be adjusted as the work teaches you something.
+    """
+
+    if index is None:
+        index = _task_index(state, root)
+    if index is None:
+        return True
+    tasks = [task for task in index.get("tasks", []) if isinstance(task, dict)]
+    if not tasks:
+        return True
+    return any(
+        effective_task_mode(state, root, task_id=task.get("id"), index=index)
+        == "critical"
+        for task in tasks
+    )
 
 
 def execution_binding(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -318,7 +432,11 @@ def validate_state(
                         )
                     )
                 for contract_issue in validate_task_contract(
-                    task, load_test_policy(FRAMEWORK_ROOT)
+                    task,
+                    load_test_policy(FRAMEWORK_ROOT),
+                    mode=effective_task_mode(
+                        state, root, task_id=current_task["id"], index=index
+                    ),
                 ):
                     issues.append(
                         _issue(
@@ -347,7 +465,9 @@ def validate_state(
         and state.get("blocked_from")
         in {"planned", "executing", "reviewing", "verifying", "ready_to_ship"}
     ):
-        issues.extend(_plan_seal_issues(state, root))
+        issues.extend(
+            _plan_seal_issues(state, root, required=phase_requires_seal(state, root))
+        )
 
     issues.extend(_gate_record_issues(state))
 
@@ -557,9 +677,16 @@ def compute_plan_fingerprint(state: Dict[str, Any], root: Path) -> str:
     return "sha256:{}".format(digest.hexdigest())
 
 
-def _plan_seal_issues(state: Dict[str, Any], root: Path) -> List[Dict[str, str]]:
+def _plan_seal_issues(
+    state: Dict[str, Any], root: Path, *, required: bool = True
+) -> List[Dict[str, str]]:
     revision = _mapping(state.get("plan_revision"))
     issues: List[Dict[str, str]] = []
+    # A phase that does not owe a seal is still held to one it already has.
+    # Dropping the check because the mode got lighter would let a sealed plan be
+    # rewritten under its own approval, which is the failure the seal exists for.
+    if not required and not revision.get("fingerprint"):
+        return issues
     if not isinstance(revision.get("version"), int) or revision.get("version", 0) < 1:
         issues.append(_issue("plan-revision", "plan revision version must be positive"))
     if not revision.get("decision_id"):
@@ -680,7 +807,11 @@ def validate_transition(
                     if not isinstance(contract, dict):
                         continue
                     for contract_issue in validate_task_contract(
-                        contract, load_test_policy(FRAMEWORK_ROOT)
+                        contract,
+                        load_test_policy(FRAMEWORK_ROOT),
+                        mode=effective_task_mode(
+                            state, root, task_id=contract.get("id"), index=index
+                        ),
                     ):
                         issues.append(
                             _issue(
@@ -693,10 +824,14 @@ def validate_transition(
                         )
             except DocumentError as exc:
                 issues.append(_issue("task-index-invalid", str(exc)))
-        issues.extend(_plan_seal_issues(state, root))
+        issues.extend(
+            _plan_seal_issues(state, root, required=phase_requires_seal(state, root))
+        )
 
     if current == "planned" and target == "executing":
-        issues.extend(_plan_seal_issues(state, root))
+        issues.extend(
+            _plan_seal_issues(state, root, required=phase_requires_seal(state, root))
+        )
         if _gate(state, "plan_quality") != "passed":
             issues.append(_issue("plan-gate", "plan quality gate must be passed"))
         if _mapping(state.get("risk")).get("level") in {None, "unclassified"}:
@@ -752,7 +887,11 @@ def validate_transition(
                     issues.append(_issue("task-contract-missing", "selected task has no contract"))
                 else:
                     for contract_issue in validate_task_contract(
-                        contract, load_test_policy(FRAMEWORK_ROOT)
+                        contract,
+                        load_test_policy(FRAMEWORK_ROOT),
+                        mode=effective_task_mode(
+                            state, root, task_id=task["id"], index=index
+                        ),
                     ):
                         issues.append(
                             _issue(
@@ -794,10 +933,43 @@ def validate_transition(
             )
 
     if current == "reviewing" and target == "verifying":
-        if _gate(state, "spec_compliance") not in {"passed", "passed_with_notes"}:
-            issues.append(_issue("spec-review", "spec compliance review has not passed"))
-        if _gate(state, "code_quality") not in {"approved", "approved_with_notes"}:
-            issues.append(_issue("quality-review", "code quality review has not approved"))
+        # How many independent judgements this task owes is a property of the
+        # task, not of the project it lives in. Two reviewers over the same diff
+        # is what `critical` buys; asking for it on every feature is what made
+        # the framework cost more than the features.
+        reviews = mode_requirements(effective_task_mode(state, root))[
+            "independent_reviews"
+        ]
+        spec = _gate(state, "spec_compliance")
+        quality = _gate(state, "code_quality")
+        spec_approving = spec in {"passed", "passed_with_notes"}
+        quality_approving = quality in {"approved", "approved_with_notes"}
+        if reviews >= 2:
+            if not spec_approving:
+                issues.append(
+                    _issue("spec-review", "spec compliance review has not passed")
+                )
+            if not quality_approving:
+                issues.append(
+                    _issue("quality-review", "code quality review has not approved")
+                )
+        else:
+            if reviews >= 1 and not (spec_approving or quality_approving):
+                issues.append(
+                    _issue(
+                        "independent-review",
+                        "standard requires one recorded review beyond the "
+                        "self-review before verification",
+                    )
+                )
+            if spec == "blocked":
+                issues.append(
+                    _issue("spec-review", "spec compliance review is blocked")
+                )
+            if quality == "changes_required":
+                issues.append(
+                    _issue("quality-review", "code quality review requires changes")
+                )
         if blockers:
             issues.append(_issue("open-blockers", "review cannot advance with blockers"))
 

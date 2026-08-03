@@ -66,6 +66,7 @@ from .state_machine import (
     FRAMEWORK_ROOT,
     REVIEW_GATES,
     compute_plan_fingerprint,
+    effective_task_mode,
     execution_binding,
     reopen_review_gates,
     validate_state,
@@ -207,7 +208,11 @@ def _contract_issues(
         if not isinstance(task, dict):
             issues.append("amended task index contains a non-object entry")
             continue
-        for contract_issue in validate_task_contract(task, policy):
+        for contract_issue in validate_task_contract(
+            task,
+            policy,
+            mode=effective_task_mode(state, root, task_id=task.get("id"), index=index),
+        ):
             issues.append(
                 "{}: {}".format(task.get("id", "<unknown>"), contract_issue["message"])
             )

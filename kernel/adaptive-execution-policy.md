@@ -1,21 +1,146 @@
 # Adaptive Execution Policy
 
-The framework preserves the complete persistent kernel, but does not apply it to
-every task.
+```text
+Fast optimises speed.
+Standard organises ordinary development.
+Critical protects the application from grave damage.
+```
+
+The framework preserves the complete persistent kernel and does not apply it to
+every task. Its job is memory, scope and objective guardrails — not to replace
+the reasoning of the model executing the work, and not to charge more ceremony
+than the feature costs to build.
+
+## What the framework is for
+
+- keeping context across sessions;
+- holding decisions and requirements that are expensive to rediscover;
+- stopping parts of the scope from being forgotten;
+- continuity and traceability;
+- preventing objective mistakes, such as working on the wrong task or branch;
+- asking for verification proportional to the risk.
+
+Persistence is never the thing to cut. What scales with the mode is *ceremony*.
 
 ## Selection rule
 
 ```text
-When in doubt → fast
-Proven complexity → standard
-Proven critical risk → critical
+Grave damage if it fails      → critical
+Short, contained, low impact  → fast
+Everything else               → standard
 ```
 
-File count, theoretical edge cases, or the claim that more process might improve
-quality are not escalation evidence. The router accepts `--fast`, `--standard`,
-`--critical`, and `--auto`; no option means `auto` with a preference for `fast`.
-An explicit lighter mode may be escalated only for grave security or data-loss
-risk, with the evidence stated.
+`standard` is the default and the resting state of the router. `fast` is claimed
+with positive evidence that the work is short and contained; `critical` is
+claimed with a named grave-damage path. The router accepts `--fast`,
+`--standard`, `--critical` and `--auto`; no option means `auto`.
+
+Expected distribution, as a calibration reference and not a quota:
+
+| Mode | Share |
+| --- | --- |
+| `fast` | ~30% |
+| `standard` | ~65–70% |
+| `critical` | ~1–5% |
+
+## Classification criteria, in order
+
+1. potential damage of a failure;
+2. sensitivity of the affected area;
+3. reversibility;
+4. blast radius;
+5. complexity and size;
+6. estimated time.
+
+Time separates `fast` from `standard` and nothing else. A task that runs for
+hours can stay `standard`. A ten-minute change inside the payment or
+authentication core can be `critical`.
+
+## Fast
+
+Short, simple, localized work — around ten minutes, few files, predictable
+behaviour, low impact, easy to revert, no sensitive part, no architectural
+decision, quick and proportional tests.
+
+Typical: small bugs, visual adjustments, copy fixes, simple redirects, missing
+tests, small helper changes, localized improvements inside an existing feature.
+
+Fast is not the absence of quality. It is the absence of ceremony: the context,
+the result and the tests are preserved; the planning cycle, the seal, multiple
+reviews and intermediate gates are not.
+
+## Standard
+
+Most medium and large features: more than fifteen minutes, several files,
+possibly more than one session, real planning and context, a complete feature,
+ordinary development risk, understandable scope and acceptance criteria.
+
+Frontend and backend features, onboarding, new entities and endpoints,
+controlled migrations, authorization following established patterns,
+integrations with known contracts, administrative flows, imports, larger but
+bounded refactors, changes that need E2E.
+
+A standard task may need a plan, `allowed_files`, persisted decisions, targeted
+tests, E2E, a self-review, one independent review, CI, and a rollback plan for a
+migration. **None of those turn it into `critical`.**
+
+## Critical
+
+Reserved for changes where a defect causes grave damage:
+
+- breaking the authentication or session core;
+- allowing intrusion or privilege escalation;
+- exposing data across tenants;
+- serious data loss or corruption;
+- moving money incorrectly;
+- compromising a payment gateway;
+- material financial loss;
+- a destructive or hard-to-reverse migration;
+- compromising cryptography or secret management;
+- breaking account recovery;
+- taking down an essential part of production;
+- an irreversible operation with a large blast radius.
+
+It also covers work that is genuinely oversized and coupled — but only when it
+cannot be split into standard units safely. When it can be split, split it and
+classify each unit.
+
+`critical` is **not** justified by: the feature being large, indirectly touching
+authentication, having a migration, touching permissions, involving financial
+data, carrying risk, needing many tests, or changing many files. Those are areas
+and sizes, not damage.
+
+The executable vocabulary of grave-damage paths is
+`SEVERE_HARM_FACTORS` in `kernel/runtime/execution_modes.py`. An escalation names
+one of them.
+
+## Granularity
+
+The mode belongs to the **task**. One phase may hold `fast`, `standard` and
+`critical` tasks at once, and a critical task does not raise the rigour of its
+neighbours.
+
+Resolution is most-specific-wins, never the maximum:
+
+```text
+task override (STATE.md) → task contract → phase default → project default
+```
+
+- a task declares `execution_mode` in its contract in `TASKS.md`;
+- a phase declares `default_execution_mode` in its `TASKS.md` frontmatter;
+- the project's `execution_mode` in `STATE.md` is a **default**, not a floor.
+
+## Escalation and reduction
+
+`framework-next set-execution-mode` records a change of classification with its
+justification, for one task (`--scope task --task-id`) or for the project default
+(`--scope project`). It writes to `STATE.md` and the evidence ledger; it never
+rewrites the sealed plan, a review, or an existing evidence entry.
+
+- **Escalating to `critical`** costs a named grave-damage path (`--risk`) plus a
+  reason. "It feels risky" is not a classification.
+- **Reducing** costs a plain reason. An over-classification is a mistake to
+  correct, not a decision to defend.
 
 ## Execution matrix
 
@@ -23,15 +148,46 @@ risk, with the evidence stated.
 | --- | --- | --- | --- |
 | Persistent state | no | optional by concrete need | required |
 | Formal spec | no | lightweight | required |
-| Task contract | no | optional/lightweight | required |
+| Task contract | no | proportional | complete |
 | Plan seal | no | no | required |
 | Evidence ledger | no | lightweight or none | required |
-| Independent reviews | no | no | required |
+| Independent reviews | 0 | 1 (integrated) | 2 (split) |
 | Worktree | no | conditional | proportional |
 | Review | integrated/light | integrated/normal | split/deep |
 | Verification | targeted | proportional | complete |
 
-The templates remain available. Instantiate them only when the selected row calls
+Inside the persistent kernel the same table applies per task:
+
+| Obligation | Fast task | Standard task | Critical task |
+| --- | --- | --- | --- |
+| `allowed_files` and acceptance | yes | yes | yes |
+| `read_first`, `forbidden_changes`, `requirements`, `runtime_verification` | optional | optional | required |
+| Rollback strategy | optional | required | required |
+| Self-review checklist | core checks | full | full |
+| Plan seal for the phase | not required | not required | required |
+| Reviews before `verifying` | none beyond self-review | one integrated | spec **and** quality |
+
+A phase owes a seal when any of its tasks is `critical`. A phase that already
+carries a seal keeps being held to it — lowering a mode never lets a sealed plan
+be rewritten under its own approval.
+
+## Guards by mode
+
+**Fast** — right task, right branch when applicable, scope, proportional tests,
+result, short handoff. No formal seal, no multiple reviews, no evidence for each
+transition, no intermediate gates.
+
+**Standard** — context and decisions, contract and acceptance criteria,
+`allowed_files` when useful, branch, tests, self-review, one proportional review,
+CI, continuity across sessions. Not two independent reviews, not a plan revision
+and gate for every small correction, not evidence for every status, not a
+lifecycle as heavy as critical.
+
+**Critical** — the complete lifecycle: strong alignment, formal plan, explicit
+decisions, checkpoints, rollback plan, independent reviewers, strict gates,
+evidence, E2E and complete validation, approval before advancing.
+
+The templates stay available; instantiate them only when the selected row calls
 for them:
 
 | Template | Fast | Standard | Critical |
@@ -40,7 +196,7 @@ for them:
 | Roadmap | no | no by default | yes |
 | Phase spec | no | lightweight/optional | yes |
 | Phase plan | no | short plan | yes |
-| Task contract | no | optional | yes |
+| Task contract | no | proportional | yes |
 | Evidence ledger | no | optional and summarized | yes |
 | Separate review | no | no | yes |
 | Handoff | no | when needed | yes |
@@ -106,6 +262,10 @@ One normal review round and one correction round is the budget. Do not invoke
 several reviewers over the same diff when one is enough; an extra reviewer needs
 stated evidence that the first could not cover the risk. If blockers survive the
 correction round, escalate with evidence instead of looping.
+
+Below `critical`, one reviewer closes the round: the same pass judges conformance
+and quality, and the second gate is recorded as `not_required` against that
+review document rather than left pending.
 
 ## Test scope
 

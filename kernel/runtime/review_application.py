@@ -51,8 +51,9 @@ from .documents import (
     write_frontmatter,
 )
 from .evidence import append_evidence_event
+from .execution_modes import mode_requirements
 from .reviews import validate_quality_review, validate_spec_review
-from .state_machine import execution_binding, validate_state
+from .state_machine import effective_task_mode, execution_binding, validate_state
 
 
 #: The two gates this module owns. Nothing else may write them: ``gate-status``
@@ -663,10 +664,12 @@ def _review_entry(
 # ---------------------------------------------------------------------------
 
 
-def _next_action(gate: str, gate_status: str, task_id: Any) -> Dict[str, Any]:
+def _next_action(
+    gate: str, gate_status: str, task_id: Any, *, closes_review: bool = False
+) -> Dict[str, Any]:
     if gate_status in {"blocked", "changes_required"}:
         return {"operation": "return-to-execution", "target": task_id}
-    if gate == SPEC_GATE:
+    if gate == SPEC_GATE and not closes_review:
         return {"operation": "run-quality-review", "target": task_id}
     return {"operation": "verify-phase", "target": task_id}
 
@@ -843,17 +846,61 @@ def _apply(
     updated["gate_records"] = dict(_mapping(updated.get("gate_records")))
     updated["gate_records"][gate] = record
 
+    # Below `critical`, one review closes the round. The reviewer read the diff
+    # against the contract *and* judged its quality — splitting that into two
+    # passes over the same diff buys a second opinion, which is what `critical`
+    # is for and what an ordinary feature does not need. The second gate is
+    # recorded as `not_required` against the same document rather than left
+    # `pending`, so the state says which judgement was made instead of leaving a
+    # gap a reader has to interpret.
+    reviews_owed = mode_requirements(effective_task_mode(state, project_root))[
+        "independent_reviews"
+    ]
+    closes_review = (
+        gate == SPEC_GATE and gate_status in SPEC_APPROVING and reviews_owed < 2
+    )
+    if closes_review:
+        updated["gates"][QUALITY_GATE] = "not_required"
+        updated["gate_records"][QUALITY_GATE] = _record(
+            _mapping(_mapping(state.get("gate_records")).get(QUALITY_GATE)),
+            {
+                "gate": QUALITY_GATE,
+                "status": "not_required",
+                "classification": None,
+                "task_id": task_id,
+                "plan_revision": revision,
+                "reviewer": report.get("reviewer"),
+                "executor": executor,
+                "report": report_relative,
+                "report_digest": report_digest,
+                "result": result_relative,
+                "reviewed_commit": report.get("reviewed_commit"),
+                "branch": identity["branch"],
+                "decision": None,
+                "evidence": report_relative,
+                "note": (
+                    "integrated review: {} covers conformance and quality in one "
+                    "pass; a second independent reviewer is required only in "
+                    "critical".format(report_relative)
+                ),
+                "at": recorded_at,
+                "by": actor,
+            },
+        )
+
     # The one task-status move a review owns. It is what makes
     # `reviewing → verifying` reachable at all: `TASK_STATUS_TRANSITIONS` has no
     # edge from `reviewing` to `verifying`, so without `reviewed` the phase
     # transition would be refused at the index even with both gates green.
     task_status_target = None
-    if gate == QUALITY_GATE and gate_status in QUALITY_APPROVING:
+    if closes_review or (gate == QUALITY_GATE and gate_status in QUALITY_APPROVING):
         task_status_target = "reviewed"
         updated["current_task"] = dict(_mapping(updated.get("current_task")))
         updated["current_task"]["status"] = task_status_target
 
-    updated["next_action"] = _next_action(gate, gate_status, task_id)
+    updated["next_action"] = _next_action(
+        gate, gate_status, task_id, closes_review=closes_review
+    )
     updated["updated_at"] = recorded_at
     updated["updated_by"] = actor
 
@@ -969,6 +1016,7 @@ def _apply(
                     "findings": findings,
                     "blockers_raised": [blocker["id"] for blocker in raised_blockers],
                     "blockers_resolved": resolved_blockers,
+                    "integrated_review": closes_review,
                     "task_transition": (
                         "{} -> {}".format(REVIEW_TASK_STATUS, task_status_target)
                         if task_status_target

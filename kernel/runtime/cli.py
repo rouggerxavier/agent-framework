@@ -24,8 +24,15 @@ from .contracts import (
 )
 from .amendment import amend_plan
 from .evidence import append_evidence_event
-from .execution_modes import state_execution_mode, validate_lightweight_state
+from .execution_modes import (
+    EXECUTION_MODES,
+    SEVERE_HARM_FACTORS,
+    is_persistent_state,
+    state_execution_mode,
+    validate_lightweight_state,
+)
 from .gates import set_gate_status
+from .mode_control import set_execution_mode
 from .next_operation import determine_next_operation
 from .project import initialize_phase, initialize_project
 from .reconcile import reconcile_phase
@@ -35,6 +42,7 @@ from .task_start import start_task
 from .state_machine import (
     REVIEW_GATES,
     compute_plan_fingerprint,
+    effective_task_mode,
     transition_state,
     validate_state,
     validate_transition,
@@ -47,6 +55,26 @@ FRAMEWORK_ROOT = Path(__file__).resolve().parents[2]
 
 def _project(value: Optional[str]) -> Path:
     return resolve_project_root(Path(value or "."))
+
+
+def _contract_mode(root: Path, contract: Dict[str, Any]) -> Optional[str]:
+    """The mode a contract is judged under, resolved against the project state.
+
+    Falls back to the contract's own declaration when the command is pointed at
+    a document outside an initialized project — the validators handle ``None``
+    by reading the contract and then defaulting to ``critical``.
+    """
+
+    state_path = root / ".agent" / "STATE.md"
+    if not state_path.is_file():
+        return None
+    try:
+        state, _ = load_frontmatter(state_path)
+    except DocumentError:
+        return None
+    if not is_persistent_state(state):
+        return None
+    return effective_task_mode(state, root, task_id=contract.get("id"))
 
 
 def _print_decision(decision: Dict[str, Any], as_json: bool) -> None:
@@ -87,7 +115,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--mode",
         default="critical",
         choices=("fast", "standard", "critical", "quick", "full", "audit"),
-        help="execution mode; quick/full/audit remain accepted as legacy aliases",
+        help="default execution mode for the project's tasks; quick/full/audit "
+        "remain accepted as legacy aliases",
+    )
+    init.add_argument(
+        "--persistent",
+        action="store_true",
+        help="create the full kernel (phases, contracts, gates, evidence) at a "
+        "standard default mode instead of the resume-only state",
     )
 
     phase = subparsers.add_parser("init-phase", help="create phase artifacts")
@@ -167,6 +202,36 @@ def build_parser() -> argparse.ArgumentParser:
     gate.add_argument("--evidence", required=True)
     gate.add_argument("--actor", required=True)
     gate.add_argument("--note")
+
+    mode = subparsers.add_parser(
+        "set-execution-mode",
+        help=(
+            "reclassify one task or the project default, with the justification; "
+            "never rewrites the sealed plan, a review or an evidence entry"
+        ),
+    )
+    mode.add_argument("--project", dest="mode_project")
+    mode.add_argument("--scope", default="task", choices=("task", "project"))
+    mode.add_argument("--task-id", dest="mode_task_id")
+    mode.add_argument("--to", dest="mode_to", required=True, choices=EXECUTION_MODES)
+    mode.add_argument("--reason", dest="mode_reason", required=True)
+    mode.add_argument(
+        "--risk",
+        dest="mode_risk",
+        action="append",
+        default=[],
+        choices=sorted(SEVERE_HARM_FACTORS),
+        help="named grave-damage path; required to escalate to critical, "
+        "repeatable",
+    )
+    mode.add_argument("--evidence", dest="mode_evidence")
+    mode.add_argument("--actor", dest="mode_actor", required=True)
+    mode.add_argument(
+        "--check",
+        dest="mode_check",
+        action="store_true",
+        help="report what would change without writing",
+    )
 
     validate = subparsers.add_parser("validate", help="validate STATE.md and references")
     validate.add_argument("--project", dest="validate_project")
@@ -385,7 +450,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.command == "init":
             root = _project(args.init_project or args.project)
             created = initialize_project(
-                root, FRAMEWORK_ROOT, project_name=args.name, mode=args.mode
+                root,
+                FRAMEWORK_ROOT,
+                project_name=args.name,
+                mode=args.mode,
+                persistent=args.persistent,
             )
             print("initialized: {}".format(created))
             return 0
@@ -495,17 +564,49 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 )
             )
             return 0
+        if args.command == "set-execution-mode":
+            root = _project(args.mode_project or args.project)
+            state, issues, changed = set_execution_mode(
+                root,
+                scope=args.scope,
+                mode=args.mode_to,
+                reason=args.mode_reason,
+                actor=args.mode_actor,
+                task_id=args.mode_task_id,
+                severe_harm_factors=args.mode_risk,
+                evidence=args.mode_evidence,
+                write=not args.mode_check,
+            )
+            if issues:
+                return _emit_issues(issues, "set-execution-mode")
+            target = (
+                "task {}".format(args.mode_task_id)
+                if args.scope == "task"
+                else "project default"
+            )
+            print(
+                "{}: {}{}".format(
+                    target,
+                    args.mode_to,
+                    ""
+                    if changed
+                    else " (not written; --check)"
+                    if args.mode_check
+                    else " (unchanged; already classified)",
+                )
+            )
+            return 0
         if args.command == "validate":
             root = _project(args.validate_project or args.project)
             state, _ = load_frontmatter(root / ".agent" / "STATE.md")
             try:
-                execution_mode = state_execution_mode(state)
+                state_execution_mode(state)
             except ValueError:
-                execution_mode = "invalid"
+                pass
             issues = (
-                validate_lightweight_state(state, root)
-                if execution_mode == "standard"
-                else validate_state(state, root)
+                validate_state(state, root)
+                if is_persistent_state(state)
+                else validate_lightweight_state(state, root)
             )
             if issues:
                 print(json.dumps(issues, ensure_ascii=False, indent=2))
@@ -681,7 +782,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             root = _project(args.task_project or args.project)
             contract = _contract(root, args.contract, args.task_id)
             issues = validate_task_contract(
-                contract, load_test_policy(FRAMEWORK_ROOT), project_root=root
+                contract,
+                load_test_policy(FRAMEWORK_ROOT),
+                project_root=root,
+                mode=_contract_mode(root, contract),
             )
             return _emit_issues(issues, "task contract")
         if args.command == "validate-result":
@@ -689,8 +793,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             contract = _contract(root, args.contract, args.task_id)
             result = _document(root, args.result)
             policy = load_test_policy(FRAMEWORK_ROOT)
-            issues = validate_task_contract(contract, policy, project_root=root)
-            issues.extend(validate_execution_result(contract, result, policy))
+            mode = _contract_mode(root, contract)
+            issues = validate_task_contract(
+                contract, policy, project_root=root, mode=mode
+            )
+            issues.extend(
+                validate_execution_result(contract, result, policy, mode=mode)
+            )
             return _emit_issues(issues, "execution result")
         if args.command == "validate-spec-review":
             root = _project(args.spec_project or args.project)

@@ -23,6 +23,16 @@ LEGACY_MODE_ALIASES = {
     "audit": "critical",
 }
 
+#: The mode ordinary development runs in. `fast` optimises speed, `critical`
+#: protects the application from grave damage, and everything between them is
+#: `standard` — which is where most real work lives.
+DEFAULT_EXECUTION_MODE = "standard"
+
+#: Only for comparing two classifications ("is this an escalation?"). It is
+#: deliberately not used to combine a phase mode with a task mode: a phase that
+#: contains one critical task does not make its other tasks critical.
+MODE_SEVERITY = {"fast": 0, "standard": 1, "critical": 2}
+
 VERIFICATION_BUDGETS: Dict[str, Dict[str, Any]] = {
     "fast": {"target_ratio": 0.20, "max_full_review_passes": 1},
     "standard": {"target_ratio": 0.30, "max_full_review_passes": 1},
@@ -141,35 +151,136 @@ def _signals(
     ]
 
 
-CRITICAL_PATTERNS: Tuple[Tuple[str, str], ...] = (
-    ("authentication_or_authorization", r"\b(auth|authentication|authorization|autenticacao|autorizacao)\b"),
-    ("payment_or_financial", r"\b(payment|payments|billing|finance|financial|pagamento|pagamentos|financeiro)\b"),
-    ("migration_or_backfill", r"\b(migration|migracao|migrate|backfill)\b"),
-    ("destructive_change", r"\b(destructive|destrutiv[ao]|irreversible|irreversivel|data loss|perda de dados)\b"),
-    ("security_sensitive", r"\b(security model|security boundary|permission model|secrets? rotation|modelo de seguranca|limite de seguranca)\b"),
-    ("data_synchronization", r"\b(data sync|data synchronization|sincronizacao de dados)\b"),
-    ("critical_external_integration", r"\b(critical integration|integracao critica|external financial integration|integracao financeira externa)\b"),
-    ("sensitive_external_contract", r"\b(sensitive external contract|contrato externo sensivel)\b"),
-    ("multiple_agents", r"\b(multiple agents|multi-agent|multiplos agentes)\b"),
-    ("long_running_task", r"\b(long[- ]running task|long task|tarefa longa)\b"),
-    ("complex_rollback", r"\b(complex rollback|rollback complexo)\b"),
-    ("high_operational_impact", r"\b(high operational impact|alto impacto operacional)\b"),
+#: What `critical` is for: a defect here causes grave damage. Every entry names a
+#: *harm*, never an area of the codebase. "Touches auth" is not one of them —
+#: "breaks the authentication core" is. This distinction is the whole policy:
+#: classifying by area is what made ordinary features critical because their
+#: description happened to contain the word `auth`, `migration` or `financeiro`.
+SEVERE_HARM_PATTERNS: Tuple[Tuple[str, str], ...] = (
+    (
+        "auth_core_breakage",
+        r"\b(n[uú]cleo de (auth|autentica[cç][aã]o)|authentication core|auth core|"
+        r"core de sess[oõ]es|session core|quebrar? (o )?login|"
+        r"fluxo de sess[aã]o|session management core)\b",
+    ),
+    (
+        "privilege_escalation",
+        r"\b(privilege escalation|escala[cç][aã]o de privil[eé]gio|eleva[cç][aã]o de privil[eé]gio|"
+        r"bypass de (permiss[aã]o|autoriza[cç][aã]o)|permission bypass|authorization bypass|"
+        r"invas[aã]o|unauthorized access|acesso n[aã]o autorizado)\b",
+    ),
+    (
+        "cross_tenant_exposure",
+        r"\b(cross[- ]tenant|entre tenants|vazamento entre tenants|tenant isolation|"
+        r"isolamento (central )?entre tenants|isolamento de tenant|data leak between)\b",
+    ),
+    (
+        "data_loss_or_corruption",
+        r"\b(data loss|data corruption|perda de dados|corrup[cç][aã]o de dados|"
+        r"perda s[eé]ria de dados|apagar dados|drop table|truncate)\b",
+    ),
+    (
+        "money_movement",
+        r"\b(mover dinheiro|movimenta[cç][aã]o de dinheiro|move money|transfer(ir)? fundos|"
+        r"transfer funds|cobran[cç]a real|charge (the )?customer|preju[ií]zo financeiro|"
+        r"financial loss|settlement)\b",
+    ),
+    (
+        "payment_gateway",
+        r"\b(payment gateway|gateway de pagamento|checkout gateway|adquirente|"
+        r"processadora de pagamento|payment processor|psp)\b",
+    ),
+    (
+        "secrets_or_cryptography",
+        r"\b(criptografia|cryptograph|encryption key|chave de criptografia|"
+        r"secrets? rotation|rota[cç][aã]o de segredos|gest[aã]o de segredos|secret management|"
+        r"key management|assinatura de token|token signing)\b",
+    ),
+    (
+        "account_recovery",
+        r"\b(recupera[cç][aã]o de conta|account recovery|password reset|"
+        r"reset de senha|esqueci minha senha|magic link)\b",
+    ),
+    (
+        "destructive_migration",
+        r"\b(migration destrutiva|migra[cç][aã]o destrutiva|destructive migration|"
+        r"destructive backfill|migration irrevers[ií]vel|migra[cç][aã]o irrevers[ií]vel|"
+        r"drop column|remover coluna com dados)\b",
+    ),
+    (
+        "production_outage",
+        r"\b(derrubar (a )?produ[cç][aã]o|production outage|indisponibilidade em produ[cç][aã]o|"
+        r"parte essencial da aplica[cç][aã]o em produ[cç][aã]o|downtime em produ[cç][aã]o)\b",
+    ),
+    (
+        "irreversible_wide_operation",
+        r"\b(opera[cç][aã]o irrevers[ií]vel|irreversible operation|blast radius (grande|amplo|wide|large))\b",
+    ),
 )
 
-GRAVE_PATTERNS: Tuple[Tuple[str, str], ...] = (
-    ("authentication_or_authorization", r"\b(auth|authentication|authorization|autenticacao|autorizacao)\b"),
-    ("destructive_migration", r"\b(destructive migration|migration destrutiva|migracao destrutiva|destructive backfill)\b"),
-    ("data_loss_or_corruption", r"\b(data loss|data corruption|perda de dados|corrupcao de dados)\b"),
-    ("security_sensitive", r"\b(security model|security boundary|permission model|secrets? rotation|modelo de seguranca|limite de seguranca)\b"),
+#: Recognised harm categories. An escalation to `critical` has to name one of
+#: these, so "it feels risky" cannot become a classification.
+SEVERE_HARM_FACTORS = frozenset(name for name, _ in SEVERE_HARM_PATTERNS)
+
+#: Areas that deserve care and *no* automatic escalation. They are reported so a
+#: reader sees why the work is sensitive, and they raise the bar for `fast` only
+#: through the ordinary criteria — never by themselves.
+SENSITIVE_AREA_PATTERNS: Tuple[Tuple[str, str], ...] = (
+    ("authentication_area", r"\b(auth|authentication|autentica[cç][aã]o|login|sess[aã]o|session)\b"),
+    (
+        "authorization_area",
+        r"\b(authorization|autoriza[cç][aã]o|permission|permiss[aã]o|role|papel|capability)\b",
+    ),
+    (
+        "financial_area",
+        r"\b(payment|pagamento|billing|faturamento|finance|financial|financeiro|invoice|fatura)\b",
+    ),
+    ("migration_area", r"\b(migration|migra[cç][aã]o|migrate|backfill|schema)\b"),
+    ("tenant_area", r"\b(tenant|multi-?tenant|organization|organiza[cç][aã]o)\b"),
+    ("personal_data_area", r"\b(pii|dados pessoais|personal data|lgpd|gdpr)\b"),
 )
 
+#: Positive evidence that the work is short and contained. `fast` is claimed, not
+#: assumed: without one of these the request falls to `standard`.
+FAST_PATTERNS: Tuple[Tuple[str, str], ...] = (
+    (
+        "copy_or_text_fix",
+        r"\b(typo|copy fix|wording|mensagem de erro|label)\b"
+        r"|\b(corrij|ajust|alter|mud)\w*\s+(apenas\s+|somente\s+)?(o\s+)?texto\b",
+    ),
+    (
+        "visual_adjustment",
+        r"\b(ajuste visual|espa[cç]amento|padding|margin|alinhamento|cor do bot[aã]o|"
+        r"visual adjustment|styling fix)\b",
+    ),
+    ("small_bug", r"\b(bug pequeno|pequeno bug|small bug|corre[cç][aã]o pontual|quick fix|hotfix simples)\b"),
+    ("simple_redirect", r"\b(redirect simples|simple redirect|redirecionamento simples)\b"),
+    (
+        "missing_test",
+        r"\b(teste faltante|testes faltantes|missing tests?|adicione (um )?teste|cobrir com teste)\b",
+    ),
+    (
+        "helper_tweak",
+        r"\b(helper|util(it[aá]rio)?|fun[cç][aã]o auxiliar|pequena altera[cç][aã]o|small change)\b",
+    ),
+    (
+        "explicitly_small_scope",
+        r"\b(um arquivo|one file|poucos arquivos|few files|10 minutos|10 minutes|"
+        r"altera[cç][aã]o localizada|localized change|melhoria localizada)\b",
+    ),
+)
+
+#: Complexity worth reporting. It no longer *selects* `standard` — `standard` is
+#: the default — but it explains the choice and argues against `fast`.
 STANDARD_PATTERNS: Tuple[Tuple[str, str], ...] = (
     ("cross_session_work", r"\b(cross[- ]session|multiple sessions|varias sessoes|atravessar sessoes|retomada)\b"),
     ("dependent_steps", r"\b(dependent steps|etapas dependentes|multi[- ]step|multiplas etapas)\b"),
     ("distributed_feature", r"\b(distributed feature|feature distribuida|multiple modules|varios modulos)\b"),
-    ("moderate_refactor", r"\b(moderate refactor|refatoracao moderada)\b"),
-    ("new_endpoint_or_route", r"\b(new|novo|nova)\b.{0,30}\b(endpoint|route|rota)\b"),
+    ("moderate_refactor", r"\b(moderate refactor|refatoracao moderada|refactor)\b"),
+    ("new_endpoint_or_route", r"\b(new|novo|nova)\b.{0,30}\b(endpoint|route|rota|entidade|entity)\b"),
     ("moderate_regression_risk", r"\b(moderate regression|risco moderado de regressao)\b"),
+    ("feature_work", r"\b(feature|funcionalidade|onboarding|importa[cç][aã]o|import|fluxo administrativo)\b"),
+    ("integration_work", r"\b(integra[cç][aã]o|integration|contrato conhecido|known contract)\b"),
 )
 
 
@@ -209,18 +320,140 @@ def should_create_persistent_state(
     return crosses_sessions or dependent_tasks or user_requested
 
 
+BLAST_RADII = ("local", "feature", "module", "application", "tenant-wide")
+REVERSIBILITY_LEVELS = ("trivial", "straightforward", "hard", "irreversible")
+
+#: Above this, work is not "one short task" any more, whatever it touches. Time
+#: separates `fast` from `standard` and nothing else: a task that runs for hours
+#: is still `standard` unless a failure would cause grave damage.
+FAST_MINUTES = 15
+FAST_FILES = 4
+
+
+def classify_task(
+    *,
+    severe_harm_factors: Sequence[str] = (),
+    sensitive_areas: Sequence[str] = (),
+    reversibility: str = "straightforward",
+    blast_radius: str = "feature",
+    estimated_minutes: Optional[float] = None,
+    files_touched: Optional[int] = None,
+    localized: bool = False,
+    architectural_decision: bool = False,
+    splittable: bool = True,
+    coupled_oversized_work: bool = False,
+) -> Dict[str, Any]:
+    """Classify one unit of work by the six ordered factors.
+
+    The order is the policy: potential damage, sensitivity of the area,
+    reversibility, blast radius, complexity and size, and only then time. Time
+    separates `fast` from `standard`; damage is what reaches `critical`.
+
+    A sensitive area on its own never escalates. Neither does size, a migration,
+    a permission change or a long estimate — those are the reasons `critical`
+    used to be handed out for ordinary features.
+    """
+
+    if reversibility not in REVERSIBILITY_LEVELS:
+        raise ValueError("unknown reversibility: {!r}".format(reversibility))
+    if blast_radius not in BLAST_RADII:
+        raise ValueError("unknown blast radius: {!r}".format(blast_radius))
+
+    harm = [factor for factor in severe_harm_factors if factor]
+    unknown = sorted(set(harm) - SEVERE_HARM_FACTORS)
+    if unknown:
+        raise ValueError(
+            "unknown severe harm factor(s): {}; known: {}".format(
+                ", ".join(unknown), ", ".join(sorted(SEVERE_HARM_FACTORS))
+            )
+        )
+    areas = [area for area in sensitive_areas if area]
+
+    if harm:
+        return _classification(
+            "critical",
+            "A defect here causes grave damage: {}.".format(", ".join(sorted(set(harm)))),
+            harm,
+            areas,
+        )
+    if reversibility == "irreversible" and blast_radius in {"application", "tenant-wide"}:
+        return _classification(
+            "critical",
+            "The operation is irreversible with an application-wide blast radius.",
+            harm,
+            areas,
+        )
+    if coupled_oversized_work and not splittable:
+        return _classification(
+            "critical",
+            "The work is oversized and coupled, and cannot be split into standard "
+            "units safely.",
+            harm,
+            areas,
+        )
+    if coupled_oversized_work and splittable:
+        return _classification(
+            "standard",
+            "Oversized work that can be split: classify each resulting unit on its "
+            "own instead of escalating the whole.",
+            harm,
+            areas,
+        )
+
+    short = estimated_minutes is not None and estimated_minutes <= FAST_MINUTES
+    contained = files_touched is not None and files_touched <= FAST_FILES
+    if (
+        localized
+        and not architectural_decision
+        and blast_radius in {"local", "feature"}
+        and reversibility in {"trivial", "straightforward"}
+        and (short or estimated_minutes is None)
+        and (contained or files_touched is None)
+    ):
+        return _classification(
+            "fast",
+            "Short, contained and easily reverted change with no grave-damage path.",
+            harm,
+            areas,
+        )
+    return _classification(
+        "standard",
+        "Ordinary development risk: planning and proportional verification, not "
+        "the critical lifecycle.",
+        harm,
+        areas,
+    )
+
+
+def _classification(
+    mode: str, reason: str, harm: Sequence[str], areas: Sequence[str]
+) -> Dict[str, Any]:
+    return {
+        "mode": mode,
+        "reason": reason,
+        "severe_harm_factors": sorted(set(harm)),
+        "sensitive_areas": sorted(set(areas)),
+    }
+
+
 def route_execution(
     request: str,
     *,
     requested_mode: Optional[str] = None,
     persistence_requested: bool = False,
 ) -> Dict[str, Any]:
-    """Select a mode from concrete signals, preferring fast when evidence is absent."""
+    """Select a mode from concrete signals, defaulting to standard.
+
+    `standard` is the resting state of the router. `fast` needs positive evidence
+    that the work is short and contained; `critical` needs a named grave-damage
+    path. A sensitive area is reported and never escalates on its own.
+    """
 
     clean = _normalized_text(request)
     explicit = requested_mode_from_text(request, requested_mode)
-    risk_factors = _signals(clean, CRITICAL_PATTERNS)
-    grave_factors = _signals(clean, GRAVE_PATTERNS)
+    harm_factors = _signals(clean, SEVERE_HARM_PATTERNS)
+    sensitive_areas = _signals(clean, SENSITIVE_AREA_PATTERNS)
+    fast_factors = _signals(clean, FAST_PATTERNS)
     complexity_factors = _signals(clean, STANDARD_PATTERNS)
 
     escalated = False
@@ -228,27 +461,32 @@ def route_execution(
         selected = "critical"
         reason = "User explicitly selected critical mode."
     elif explicit in {"fast", "standard"}:
-        if grave_factors:
+        if harm_factors:
             selected = "critical"
             escalated = True
             reason = (
-                "Escalated from explicit {} because of grave security or data-loss risk: {}."
-                .format(explicit, ", ".join(grave_factors))
+                "Escalated from explicit {} because a failure would cause grave "
+                "damage: {}.".format(explicit, ", ".join(harm_factors))
             )
         else:
             selected = explicit
             reason = "User explicitly selected {} mode.".format(explicit)
-    elif risk_factors:
+    elif harm_factors:
         selected = "critical"
-        reason = "Concrete critical risk detected: {}.".format(", ".join(risk_factors))
-    elif complexity_factors:
-        selected = "standard"
-        reason = "Concrete moderate complexity detected: {}.".format(
-            ", ".join(complexity_factors)
+        reason = "A defect here would cause grave damage: {}.".format(
+            ", ".join(harm_factors)
         )
-    else:
+    elif fast_factors and not complexity_factors:
         selected = "fast"
-        reason = "No concrete critical risk or moderate complexity was detected; defaulting to fast."
+        reason = "Short, contained work: {}.".format(", ".join(fast_factors))
+    else:
+        selected = "standard"
+        reason = (
+            "Ordinary development: {}.".format(", ".join(complexity_factors))
+            if complexity_factors
+            else "Ordinary development with no grave-damage path and no evidence of "
+            "a short contained change; standard is the default."
+        )
 
     policy = deepcopy(MODE_POLICIES[selected])
     policy["verification_budget"] = deepcopy(VERIFICATION_BUDGETS[selected])
@@ -265,7 +503,11 @@ def route_execution(
     return {
         "selected_mode": selected,
         "reason": reason,
-        "risk_factors": risk_factors,
+        # Kept under the historical key so existing consumers keep reading the
+        # same field; what changed is that only grave-damage paths land in it.
+        "risk_factors": harm_factors,
+        "sensitive_areas": sensitive_areas,
+        "fast_factors": fast_factors,
         "complexity_factors": complexity_factors,
         "assets_selected": list(ASSETS_BY_MODE[selected]),
         "assets_skipped": list(SKIPPED_BY_MODE[selected]),
@@ -558,6 +800,148 @@ def build_review_package(
     }
 
 
+#: What the persistent kernel actually demands of one task, per mode. Persistence
+#: — state, decisions, contracts, evidence — is not in this table on purpose: it
+#: is memory, and memory is never the thing to cut. What scales with the mode is
+#: *ceremony*: the seal, the number of independent reviewers, the breadth of the
+#: self-review checklist.
+LIFECYCLE_REQUIREMENTS: Dict[str, Dict[str, Any]] = {
+    "fast": {
+        "plan_seal": False,
+        "independent_reviews": 0,
+        "full_self_review_checklist": False,
+        "contract_depth": "minimal",
+    },
+    "standard": {
+        "plan_seal": False,
+        "independent_reviews": 1,
+        "full_self_review_checklist": True,
+        "contract_depth": "proportional",
+    },
+    "critical": {
+        "plan_seal": True,
+        "independent_reviews": 2,
+        "full_self_review_checklist": True,
+        "contract_depth": "complete",
+    },
+}
+
+
+def mode_requirements(mode: str) -> Dict[str, Any]:
+    """The lifecycle obligations one task carries under ``mode``."""
+
+    selected = normalize_mode(mode, default=DEFAULT_EXECUTION_MODE)
+    if selected == "auto":
+        raise ValueError("lifecycle requirements need a selected execution mode")
+    return deepcopy(LIFECYCLE_REQUIREMENTS[selected])
+
+
+def resolve_execution_mode(
+    *,
+    project: Optional[str] = None,
+    phase: Optional[str] = None,
+    task: Optional[str] = None,
+    override: Optional[str] = None,
+) -> Dict[str, str]:
+    """Resolve the mode of one unit of work, most specific wins.
+
+    The phase and the project supply a *default*, never a floor. Taking the
+    maximum of the three — which is what a single project-level field amounts to
+    in practice — is how a ten-file frontend task ended up running the critical
+    lifecycle because the project it belonged to had been initialized as
+    critical.
+    """
+
+    for value, source in (
+        (override, "task-override"),
+        (task, "task"),
+        (phase, "phase"),
+        (project, "project"),
+    ):
+        if value is None:
+            continue
+        mode = normalize_mode(value, default=DEFAULT_EXECUTION_MODE)
+        if mode == "auto":
+            continue
+        return {"mode": mode, "source": source}
+    return {"mode": DEFAULT_EXECUTION_MODE, "source": "default"}
+
+
+MINIMUM_JUSTIFICATION = 12
+
+
+def reclassify_execution_mode(
+    current: str,
+    target: str,
+    *,
+    justification: str = "",
+    severe_harm_factors: Sequence[str] = (),
+) -> Dict[str, Any]:
+    """Decide whether a classification may move, and why.
+
+    Escalating to `critical` costs a named grave-damage path — the same
+    vocabulary `classify_task` uses — so "this feels risky" cannot become a
+    classification. Coming back down costs a plain reason and nothing more: an
+    over-classification is a mistake to correct, not a decision to defend.
+    """
+
+    source = normalize_mode(current, default=DEFAULT_EXECUTION_MODE)
+    destination = normalize_mode(target, default=DEFAULT_EXECUTION_MODE)
+    if "auto" in {source, destination}:
+        raise ValueError("reclassification needs two selected execution modes")
+
+    reason = justification.strip()
+    issues: List[str] = []
+    direction = (
+        "unchanged"
+        if MODE_SEVERITY[destination] == MODE_SEVERITY[source]
+        else "escalation"
+        if MODE_SEVERITY[destination] > MODE_SEVERITY[source]
+        else "reduction"
+    )
+
+    if direction != "unchanged" and len(reason) < MINIMUM_JUSTIFICATION:
+        issues.append(
+            "reclassification requires a justification of at least {} characters".format(
+                MINIMUM_JUSTIFICATION
+            )
+        )
+    named = [factor for factor in severe_harm_factors if factor]
+    unknown = sorted(set(named) - SEVERE_HARM_FACTORS)
+    if unknown:
+        issues.append(
+            "unknown severe harm factor(s): {}; known: {}".format(
+                ", ".join(unknown), ", ".join(sorted(SEVERE_HARM_FACTORS))
+            )
+        )
+    if destination == "critical" and direction == "escalation" and not named:
+        issues.append(
+            "escalating to critical requires at least one named severe harm factor: "
+            + ", ".join(sorted(SEVERE_HARM_FACTORS))
+        )
+
+    return {
+        "allowed": not issues,
+        "direction": direction,
+        "from": source,
+        "to": destination,
+        "justification": reason,
+        "severe_harm_factors": sorted(set(named)),
+        "issues": issues,
+    }
+
+
+def is_persistent_state(state: Mapping[str, Any]) -> bool:
+    """Whether this state carries the full kernel rather than the resume-only one.
+
+    Read from the shape, not from the mode. The two were fused — only `critical`
+    could own phases, contracts and gates — which left "I need the project to
+    remember things" and "a defect here is catastrophic" as the same request.
+    """
+
+    return isinstance(state.get("gates"), Mapping)
+
+
 def state_execution_mode(state: Mapping[str, Any]) -> str:
     explicit = state.get("execution_mode")
     if explicit is not None and not isinstance(explicit, str):
@@ -596,8 +980,12 @@ def validate_lightweight_state(
     except ValueError as exc:
         issue("execution-mode", str(exc))
         return issues
-    if mode != "standard":
-        issue("execution-mode", "lightweight state requires standard mode")
+    if mode == "critical":
+        issue(
+            "execution-mode",
+            "a critical default cannot run on the resume-only state; initialize the "
+            "persistent kernel instead",
+        )
     status = state.get("status")
     if status not in {
         "proposed",
@@ -660,6 +1048,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "selected_mode",
         "reason",
         "risk_factors",
+        "sensitive_areas",
+        "fast_factors",
         "complexity_factors",
         "assets_selected",
         "assets_skipped",

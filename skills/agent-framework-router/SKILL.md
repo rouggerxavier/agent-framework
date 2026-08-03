@@ -1,6 +1,6 @@
 ---
 name: agent-framework-router
-description: Use primeiro para selecionar fast, standard ou critical e escolher poucos assets proporcionais, sem ativar o kernel persistente por padrão.
+description: Use primeiro para selecionar fast, standard ou critical e escolher poucos assets proporcionais, com standard como padrão e critical apenas para dano grave.
 ---
 
 # Agent Framework Router
@@ -22,31 +22,46 @@ apontar rapidamente os assets certos. Dispatcher leve, nao executor.
 ## Workflow
 1. Leia a escolha explicita: `--fast`, `--standard`, `--critical` ou `--auto`;
    sem flag, use `auto`.
-2. Em `auto`, escolha `fast` na ausencia de evidencia concreta. Muitos arquivos,
-   edge cases possiveis ou "mais qualidade" nao justificam escalada.
-3. Escolha `standard` somente por complexidade observada: etapas dependentes,
-   risco moderado, mudanca distribuida ou necessidade real de retomada.
-4. Escolha `critical` somente por risco concreto: auth, migration, pagamentos,
-   seguranca, perda/corrupcao de dados, integracao critica, multiplos agentes,
-   rollback complexo ou alto impacto operacional.
-5. Respeite a flag do usuario. Escale `--fast`/`--standard` apenas diante de risco
-   grave de seguranca ou perda de dados e explique a evidencia.
-6. Se for retomada ou `critical`, e `.agent/STATE.md` existir, encaminhe para
+2. Em `auto`, `standard` e o padrao. E o modo do desenvolvimento normal.
+3. Escolha `fast` apenas com evidencia positiva de trabalho curto e contido:
+   ~10 minutos, poucos arquivos, comportamento previsivel, baixo impacto, facil
+   reversao, sem decisao arquitetural.
+4. Escolha `critical` apenas quando um defeito causar dano grave: quebrar o
+   nucleo de auth/sessoes, invasao ou escalada de privilegio, vazamento entre
+   tenants, perda/corrupcao seria de dados, movimentar dinheiro, gateway de
+   pagamento, criptografia/segredos, recuperacao de conta, migration destrutiva
+   ou dificil de reverter, derrubar parte essencial da producao, operacao
+   irreversivel de grande blast radius.
+5. Nao escale por area nem por tamanho. Tocar auth, ter migration, mexer em
+   permissoes, envolver dados financeiros, exigir muitos testes ou alterar
+   varios arquivos **nao** torna a tarefa `critical`.
+6. Respeite a flag do usuario. Escale `--fast`/`--standard` apenas diante de um
+   caminho de dano grave nomeado, e explique a evidencia.
+7. Se for retomada ou `critical`, e `.agent/STATE.md` existir, encaminhe para
    `framework-next`. A mera existencia de `.agent/` nao obriga uma nova tarefa a
    usar o kernel.
-7. Classifique a intencao, liste 1-4 assets relevantes e corte o resto.
-8. Indique o primeiro asset a invocar.
+8. Classifique a intencao, liste 1-4 assets relevantes e corte o resto.
+9. Indique o primeiro asset a invocar.
 
 ## Modos
 
 | Modo | Caminho | Defaults |
 |---|---|---|
 | `fast` | route → inspect → implement → targeted verification → diff review | sem `.agent/`, spec, contrato, seal, ledger, reviewers separados ou worktree |
-| `standard` | route → focused grounding → short plan → implement → tests → integrated review | estado opcional, spec/contrato leves, sem seal ou reviews separados |
-| `critical` | lifecycle persistente completo P0/P1 | estado, spec, contratos, seal, ledger e reviews separados obrigatorios |
+| `standard` | route → focused grounding → short plan → implement → tests → integrated review | estado opcional, spec/contrato leves, uma review integrada, sem seal |
+| `critical` | lifecycle persistente completo P0/P1 | estado, spec, contratos, seal, ledger e duas reviews independentes |
 
-Regra de desempate: duvida → `fast`; complexidade comprovada → `standard`; risco
-critico comprovado → `critical`.
+Regra de desempate: duvida → `standard`; curto e contido comprovado → `fast`;
+dano grave comprovado → `critical`.
+
+Calibracao esperada, como referencia e nao como cota: `fast` ~30%, `standard`
+~65-70%, `critical` ~1-5%.
+
+O modo pertence a tarefa. Uma fase pode conter tarefas `fast`, `standard` e
+`critical`; uma tarefa `critical` nao eleva as vizinhas. Para corrigir uma
+classificacao ja registrada, use
+`framework-next set-execution-mode` — escalada exige `--risk` nomeando o dano
+grave; reducao exige apenas `--reason`.
 
 ## Prioridade alta
 - Se o pedido mencionar brief, documentacao de feature/refatoracao, plano de execucao, organizar tarefa, quebrar em etapas ou preparar trabalho para outro agente, priorize `execution-plan-builder`.
@@ -124,17 +139,23 @@ critico comprovado → `critical`.
 ```yaml
 selected_mode: fast | standard | critical
 reason:
-risk_factors: []
+risk_factors: []      # apenas caminhos de dano grave nomeados
+sensitive_areas: []   # contexto; nunca escala sozinho
+fast_factors: []
 complexity_factors: []
 assets_selected: []
 assets_skipped: []
 ```
 
-Toda selecao `standard` ou `critical` inclui uma justificativa concreta. A saida
-pode ainda indicar intencao e primeiro asset.
+Toda selecao `fast` ou `critical` inclui uma justificativa concreta: `fast`
+mostra por que o trabalho e curto e contido; `critical` nomeia o dano grave. A
+saida pode ainda indicar intencao e primeiro asset.
 
 ## Criterios de aceite
-- `fast` e o default quando nao ha evidencia concreta de escalada.
+- `standard` e o default quando nada argumenta em contrario.
+- `fast` exige evidencia positiva de escopo curto e contido.
+- `critical` exige um caminho de dano grave nomeado.
+- Area sensivel (auth, migration, financeiro, tenant) nunca escala sozinha.
 - No maximo 4 assets; sem listar tudo.
 - Nao duplicar checklist de rubric/workflow aqui; so referenciar.
 - Backend simples nao e automaticamente `critical`.
@@ -142,7 +163,7 @@ pode ainda indicar intencao e primeiro asset.
 
 ## Exemplos de uso
 - Codex: `$agent-framework-router Qual skill para auditar este PR de API?`
-- Codex: `$agent-framework-router --fast Corrija o bug no filtro.`
+- Codex: `$agent-framework-router --fast Corrija o typo no título da página.`
 - Codex: `$agent-framework-router --standard Implemente o endpoint e os testes.`
-- Codex: `$agent-framework-router --critical Altere auth e faça a migration.`
+- Codex: `$agent-framework-router --critical Troque o gateway de pagamento.`
 - Claude Code: `/agent-framework-router Por onde começo neste repo desconhecido?`

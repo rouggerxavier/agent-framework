@@ -12,6 +12,7 @@ from .documents import (
     safe_project_path,
     write_frontmatter,
 )
+from .execution_modes import DEFAULT_EXECUTION_MODE, normalize_mode
 
 
 TASK_STATUSES = {
@@ -57,6 +58,52 @@ REQUIRED_CONTRACT_FIELDS = {
     "completion",
 }
 
+#: What a contract must state, per mode. The scope boundary — `allowed_files` —
+#: and the acceptance criteria are in every row: they are the guardrails that
+#: stop an agent from drifting into the wrong files or forgetting half the goal,
+#: and they cost one line each. What the lighter modes drop is paperwork that
+#: only pays for itself when a defect would be catastrophic.
+CONTRACT_FIELDS_BY_MODE: Dict[str, set] = {
+    "fast": {
+        "id",
+        "title",
+        "status",
+        "change_type",
+        "goal",
+        "allowed_files",
+        "acceptance",
+        "test_policy",
+        "completion",
+    },
+    "standard": {
+        "id",
+        "title",
+        "status",
+        "change_type",
+        "goal",
+        "depends_on",
+        "allowed_files",
+        "acceptance",
+        "test_policy",
+        "rollback",
+        "review",
+        "completion",
+    },
+    "critical": set(REQUIRED_CONTRACT_FIELDS),
+}
+
+#: List-shaped fields, checked only when the mode requires them or they are
+#: present anyway.
+CONTRACT_LIST_FIELDS = (
+    "depends_on",
+    "read_first",
+    "allowed_files",
+    "forbidden_changes",
+    "requirements",
+    "acceptance",
+    "runtime_verification",
+)
+
 SELF_REVIEW_CHECKS = {
     "complete_diff",
     "modified_files",
@@ -70,6 +117,16 @@ SELF_REVIEW_CHECKS = {
     "error_behavior",
     "compatibility",
     "documentation",
+}
+
+#: The part of the self-review that catches the errors a competent model still
+#: makes: wrong scope, missed acceptance, unrun tests, a secret in the diff.
+CORE_SELF_REVIEW_CHECKS = {
+    "complete_diff",
+    "scope",
+    "acceptance",
+    "tests",
+    "secrets",
 }
 
 GENERIC_WAIVER_REASONS = {
@@ -156,6 +213,30 @@ def task_by_id(tasks: Iterable[Dict[str, Any]], task_id: str) -> Optional[Dict[s
     return None
 
 
+def task_execution_mode(task: Dict[str, Any]) -> Optional[str]:
+    """The mode a task declares for itself, if any."""
+
+    declared = task.get("execution_mode")
+    if declared is None:
+        return None
+    if not isinstance(declared, str):
+        raise DocumentError(
+            "task {} has a non-text execution_mode".format(task.get("id", "<unknown>"))
+        )
+    return normalize_mode(declared, default=DEFAULT_EXECUTION_MODE)
+
+
+def phase_default_execution_mode(index: Dict[str, Any]) -> Optional[str]:
+    """The default mode a phase index declares for its tasks, if any."""
+
+    declared = index.get("default_execution_mode")
+    if declared is None:
+        return None
+    if not isinstance(declared, str):
+        raise DocumentError("phase default_execution_mode must be text")
+    return normalize_mode(declared, default=DEFAULT_EXECUTION_MODE)
+
+
 def validate_task_shape(task: Dict[str, Any]) -> List[str]:
     issues: List[str] = []
     for field in ("id", "title", "status"):
@@ -165,6 +246,47 @@ def validate_task_shape(task: Dict[str, Any]) -> List[str]:
         issues.append("task {} has invalid status".format(task.get("id", "<unknown>")))
     if not isinstance(task.get("depends_on", []), list):
         issues.append("task {} depends_on must be an array".format(task.get("id", "<unknown>")))
+    try:
+        task_execution_mode(task)
+    except (DocumentError, ValueError) as exc:
+        issues.append(str(exc))
+    return issues
+
+
+def _review_issues(
+    contract: Dict[str, Any], mode: str
+) -> List[Dict[str, str]]:
+    """How many judgements a contract has to promise, per mode."""
+
+    review = contract.get("review", {})
+    if mode == "fast":
+        if "review" in contract and not isinstance(review, dict):
+            return [_issue("review-policy", "review must be an object when present")]
+        return []
+    if not isinstance(review, dict):
+        return [_issue("review-policy", "review must be an object")]
+    if mode == "critical":
+        if any(
+            review.get(name) != "required"
+            for name in ("self_review", "spec_compliance", "code_quality")
+        ):
+            return [_issue("review-policy", "all three reviews must be marked required")]
+        return []
+
+    issues: List[Dict[str, str]] = []
+    if review.get("self_review") != "required":
+        issues.append(_issue("review-policy", "self_review must be required"))
+    independent = [
+        review.get(name) for name in ("spec_compliance", "code_quality")
+    ]
+    if not any(value in {"required", "integrated"} for value in independent):
+        issues.append(
+            _issue(
+                "review-policy",
+                "standard requires one review beyond the self-review: mark "
+                "spec_compliance or code_quality as required or integrated",
+            )
+        )
     return issues
 
 
@@ -173,9 +295,26 @@ def validate_task_contract(
     policy: Dict[str, Any],
     *,
     project_root: Optional[Path] = None,
+    mode: Optional[str] = None,
 ) -> List[Dict[str, str]]:
+    """Validate a contract against the obligations of its execution mode.
+
+    ``mode`` defaults to the contract's own declaration and then to ``critical``,
+    so a contract written before modes were per-task is held to exactly the rules
+    it was written under.
+    """
+
     issues: List[Dict[str, str]] = []
-    for field in sorted(REQUIRED_CONTRACT_FIELDS - set(contract)):
+    try:
+        declared = task_execution_mode(contract)
+    except (DocumentError, ValueError) as exc:
+        issues.append(_issue("contract-shape", str(exc)))
+        declared = None
+    selected = normalize_mode(mode or declared or "critical", default="critical")
+    if selected == "auto":
+        selected = "critical"
+
+    for field in sorted(CONTRACT_FIELDS_BY_MODE[selected] - set(contract)):
         issues.append(_issue("contract-field", "missing contract field {}".format(field)))
     for message in validate_task_shape(contract):
         issues.append(_issue("contract-shape", message))
@@ -212,15 +351,9 @@ def validate_task_contract(
     if not isinstance(goal, dict) or not goal.get("description"):
         issues.append(_issue("goal", "goal.description is required"))
 
-    for field in (
-        "depends_on",
-        "read_first",
-        "allowed_files",
-        "forbidden_changes",
-        "requirements",
-        "acceptance",
-        "runtime_verification",
-    ):
+    for field in CONTRACT_LIST_FIELDS:
+        if field not in contract and field not in CONTRACT_FIELDS_BY_MODE[selected]:
+            continue
         if not isinstance(contract.get(field), list):
             issues.append(_issue("contract-list", "{} must be an array".format(field)))
 
@@ -267,18 +400,12 @@ def validate_task_contract(
                         _issue("read-first-missing", "{} does not exist".format(relative))
                     )
 
-    review = contract.get("review", {})
-    if not isinstance(review, dict) or any(
-        review.get(name) != "required"
-        for name in ("self_review", "spec_compliance", "code_quality")
-    ):
-        issues.append(
-            _issue("review-policy", "all three reviews must be marked required")
-        )
+    issues.extend(_review_issues(contract, selected))
 
-    rollback = contract.get("rollback", {})
-    if not isinstance(rollback, dict) or not rollback.get("strategy"):
-        issues.append(_issue("rollback", "rollback.strategy is required"))
+    if "rollback" in CONTRACT_FIELDS_BY_MODE[selected] or "rollback" in contract:
+        rollback = contract.get("rollback", {})
+        if not isinstance(rollback, dict) or not rollback.get("strategy"):
+            issues.append(_issue("rollback", "rollback.strategy is required"))
     return issues
 
 
@@ -508,8 +635,17 @@ def validate_execution_result(
     contract: Dict[str, Any],
     result: Dict[str, Any],
     policy: Dict[str, Any],
+    *,
+    mode: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     issues: List[Dict[str, str]] = []
+    try:
+        declared = task_execution_mode(contract)
+    except (DocumentError, ValueError):
+        declared = None
+    selected = normalize_mode(mode or declared or "critical", default="critical")
+    if selected == "auto":
+        selected = "critical"
     task_result = result.get("task", {})
     if not isinstance(task_result, dict) or task_result.get("id") != contract.get("id"):
         issues.append(_issue("result-task", "result task id must match contract"))
@@ -581,7 +717,10 @@ def validate_execution_result(
     if not isinstance(checklist, dict):
         issues.append(_issue("self-review-checklist", "self-review checklist is required"))
     else:
-        for check in sorted(SELF_REVIEW_CHECKS):
+        required_checks = (
+            SELF_REVIEW_CHECKS if selected != "fast" else CORE_SELF_REVIEW_CHECKS
+        )
+        for check in sorted(required_checks):
             if checklist.get(check) is not True:
                 issues.append(
                     _issue(

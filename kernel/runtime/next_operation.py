@@ -7,7 +7,11 @@ from typing import Any, Dict, List
 
 from .contracts import eligible_tasks, load_task_index, task_by_id
 from .documents import DocumentError, git_snapshot, load_frontmatter, safe_project_path
-from .execution_modes import state_execution_mode, validate_lightweight_state
+from .execution_modes import (
+    is_persistent_state,
+    state_execution_mode,
+    validate_lightweight_state,
+)
 from .state_machine import execution_binding, validate_state
 
 
@@ -124,6 +128,18 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
     evidence.append("loaded state: {}".format(status))
     evidence.append("execution mode: {}".format(execution_mode))
 
+    # Which lifecycle runs is a property of the state that exists, not of the
+    # default mode recorded in it. A project keeps its phases, contracts and
+    # gates when its default mode is lowered to `standard`; what changes is how
+    # much ceremony each task inside it owes.
+    persistent = is_persistent_state(state)
+    evidence.append(
+        "state shape: {}".format("persistent kernel" if persistent else "resume-only")
+    )
+
+    # `fast` stays an opt-out even over a persistent state: the existence of
+    # `.agent/` does not oblige the next task to run the kernel, and a project
+    # that lowered its default to `fast` said exactly that.
     if execution_mode == "fast":
         return _decision(
             state=status,
@@ -136,7 +152,7 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
             execution_mode=execution_mode,
         )
 
-    if execution_mode == "standard":
+    if not persistent:
         lightweight_issues = validate_lightweight_state(state, project_root)
         if lightweight_issues:
             errors = [item["message"] for item in lightweight_issues]
@@ -179,7 +195,7 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
             )
         return _decision(
             state=status,
-            evidence=evidence + ["standard mode uses a lightweight lifecycle"],
+            evidence=evidence + ["resume-only state uses a lightweight lifecycle"],
             inconsistencies=[],
             operation=operation,
             target=target,
@@ -281,6 +297,10 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
         elif state["gates"].get("code_quality") not in {
             "approved",
             "approved_with_notes",
+            # Recorded by the integrated review below `critical`: the single
+            # reviewer covered quality, so pointing at a second one would send
+            # the operator back over a diff that has already been judged.
+            "not_required",
         }:
             operation = "run-quality-review"
         else:

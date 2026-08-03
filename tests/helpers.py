@@ -46,18 +46,19 @@ def write_state(root: Path, state: Dict[str, Any], body: str = "# State\n") -> N
     write_frontmatter(root / ".agent" / "STATE.md", state, body)
 
 
-def write_tasks(root: Path, tasks: List[Dict[str, Any]]) -> Path:
+def write_tasks(
+    root: Path, tasks: List[Dict[str, Any]], *, default_mode: str = None
+) -> Path:
     state, _ = read_state(root)
     path = root / state["artifacts"]["tasks"]
-    write_frontmatter(
-        path,
-        {
-            "schema_version": 1,
-            "phase": {"id": "P1", "name": "Kernel"},
-            "tasks": tasks,
-        },
-        "# Tasks\n",
-    )
+    index: Dict[str, Any] = {
+        "schema_version": 1,
+        "phase": {"id": "P1", "name": "Kernel"},
+        "tasks": tasks,
+    }
+    if default_mode is not None:
+        index["default_execution_mode"] = default_mode
+    write_frontmatter(path, index, "# Tasks\n")
     return path
 
 
