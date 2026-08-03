@@ -1173,3 +1173,221 @@ def apply_quality_review(
         actor=actor,
         write=write,
     )
+
+
+# ---------------------------------------------------------------------------
+# Closing a finding without a second review
+# ---------------------------------------------------------------------------
+
+
+#: The blockers a review raises, and the only ones this operation may close.
+#: Anything else in ``blockers`` was raised by something that is not a review
+#: and is not a finding to answer with a correction.
+REVIEW_BLOCKER_SOURCES = (SPEC_BLOCKER_SOURCE, QUALITY_BLOCKER_SOURCE)
+
+
+def resolve_review_finding(
+    project_root: Path,
+    *,
+    blocker_id: str,
+    evidence: str,
+    actor: Optional[str] = None,
+    note: Optional[str] = None,
+    write: bool = True,
+) -> Tuple[Dict[str, Any], List[Dict[str, str]], bool]:
+    """Record one review finding as corrected, against evidence of the correction.
+
+    Below ``critical`` this is what closes a ``CHANGES_REQUIRED`` round. The
+    approving second review remains the only closer in ``critical``, and remains
+    *available* everywhere — this does not remove a door, it adds the cheaper
+    one. The evidence is required and is checked to exist: "corrected" with
+    nothing behind it is the forged record the module exists to prevent, and the
+    test of the correction is the whole reason the round can end here.
+
+    The finding is not deleted. Its summary, severity, required change and the
+    review that raised it stay on the blocker; ``status`` becomes ``resolved``
+    and the correction is stamped alongside, so the history reads as a round
+    that was answered rather than a finding that disappeared.
+    """
+
+    state_path = project_root / ".agent" / "STATE.md"
+    if not state_path.is_file():
+        return {}, [_issue("finding-state", "no .agent/STATE.md to resolve against")], False
+
+    state, body = _load_state(project_root)
+    issues: List[Dict[str, str]] = []
+
+    if state.get("status") != "executing":
+        issues.append(
+            _issue(
+                "finding-phase",
+                "a finding is resolved by the correction, which happens in "
+                "executing; the phase is {!r}".format(state.get("status")),
+            )
+        )
+    if mode_requirements(effective_task_mode(state, project_root))[
+        "independent_reviews"
+    ] >= 2:
+        issues.append(
+            _issue(
+                "finding-mode",
+                "critical closes a finding through a new independent review, "
+                "not through the correction's own evidence",
+            )
+        )
+
+    task = _mapping(state.get("current_task"))
+    task_id = task.get("id")
+    blockers = _listing(state.get("blockers"))
+    position = None
+    for index, blocker in enumerate(blockers):
+        if isinstance(blocker, dict) and str(blocker.get("id")) == str(blocker_id):
+            position = index
+            break
+    if position is None:
+        issues.append(
+            _issue("finding-unknown", "no blocker is recorded as {}".format(blocker_id))
+        )
+    else:
+        target = blockers[position]
+        if target.get("source") not in REVIEW_BLOCKER_SOURCES:
+            issues.append(
+                _issue(
+                    "finding-source",
+                    "{} was not raised by a review; it is not a finding a "
+                    "correction closes".format(blocker_id),
+                )
+            )
+        if target.get("task_id") != task_id:
+            issues.append(
+                _issue(
+                    "finding-task",
+                    "{} belongs to {!r}, not to the task under way".format(
+                        blocker_id, target.get("task_id")
+                    ),
+                )
+            )
+
+    if not evidence:
+        issues.append(_issue("finding-evidence", "resolving a finding requires evidence"))
+    else:
+        try:
+            if not safe_project_path(project_root, str(evidence).split("#", 1)[0]).is_file():
+                issues.append(
+                    _issue(
+                        "finding-evidence",
+                        "the correction evidence {} does not exist".format(evidence),
+                    )
+                )
+        except DocumentError as exc:
+            issues.append(_issue("finding-evidence", str(exc)))
+    if write and not actor:
+        issues.append(_issue("finding-actor", "resolving a finding requires an actor"))
+
+    if issues:
+        return state, issues, False
+    if blockers[position].get("status") == "resolved":
+        # Asking again for what already happened is not an error.
+        return state, [], False
+    if not write:
+        return state, [], False
+
+    recorded_at = utc_now()
+    updated = deepcopy(state)
+    resolved = dict(_listing(updated.get("blockers"))[position])
+    gate = SPEC_GATE if resolved.get("source") == SPEC_BLOCKER_SOURCE else QUALITY_GATE
+    resolved["status"] = "resolved"
+    resolved["resolved_at"] = recorded_at
+    resolved["resolved_by"] = actor
+    resolved["resolution"] = "correction"
+    resolved["resolution_evidence"] = evidence
+    resolved["resolution_note"] = note
+    updated["blockers"] = list(_listing(updated.get("blockers")))
+    updated["blockers"][position] = resolved
+
+    remaining = [
+        blocker
+        for blocker in updated["blockers"]
+        if isinstance(blocker, dict)
+        and blocker.get("source") in REVIEW_BLOCKER_SOURCES
+        and blocker.get("task_id") == task_id
+        and blocker.get("status", "open") != "resolved"
+    ]
+    updated["next_action"] = (
+        {"operation": "resolve-finding", "target": remaining[0].get("id")}
+        if remaining
+        else {"operation": "verify-phase", "target": task_id}
+    )
+    updated["updated_at"] = recorded_at
+    updated["updated_by"] = actor
+
+    residual = [
+        item["message"]
+        for item in validate_state(updated, project_root)
+        if item["severity"] == "error"
+    ]
+    if residual:
+        return (
+            state,
+            [
+                _issue(
+                    "finding-result-state",
+                    "resolving the finding would produce an invalid state: "
+                    "{}".format("; ".join(residual)),
+                )
+            ],
+            False,
+        )
+
+    artifacts = _mapping(state.get("artifacts"))
+    ledger_relative = artifacts.get("evidence")
+    review_relative = artifacts.get("review")
+    if not ledger_relative or not review_relative:
+        return state, [_issue("finding-ledger", "state has no evidence ledger")], False
+    ledger_path = safe_project_path(project_root, ledger_relative)
+    review_path = safe_project_path(project_root, review_relative)
+    for path in (ledger_path, review_path):
+        if not path.is_file():
+            return (
+                state,
+                [_issue("finding-ledger", "missing artifact: {}".format(path.name))],
+                False,
+            )
+
+    state_before = state_path.read_bytes()
+    ledger_before = ledger_path.read_bytes()
+    review_before = review_path.read_bytes()
+    try:
+        append_evidence_event(
+            ledger_path,
+            {
+                "schema_version": 1,
+                "task_id": task_id,
+                "kind": "correction",
+                "actor": actor,
+                "status": "resolved",
+                "summary": "{} resolved by correction: {}".format(
+                    blocker_id, resolved.get("required_change") or resolved.get("summary")
+                ),
+                "source": evidence,
+                "acceptance_criteria": [],
+                "details": {"gate": gate, "blocker": blocker_id, "note": note},
+            },
+        )
+        review_path.write_text(
+            review_path.read_text(encoding="utf-8")
+            + "\n## {} — {} finding resolved: {}\n\n".format(recorded_at, task_id, blocker_id)
+            + "- Gate: {}\n".format(gate)
+            + "- Required change: {}\n".format(resolved.get("required_change"))
+            + "- Correction evidence: {}\n".format(evidence)
+            + "- Note: {}\n".format(note or "none")
+            + "- Resolved by: {}\n\n".format(actor),
+            encoding="utf-8",
+        )
+        write_frontmatter(state_path, updated, body)
+    except Exception:
+        review_path.write_bytes(review_before)
+        ledger_path.write_bytes(ledger_before)
+        state_path.write_bytes(state_before)
+        raise
+    return updated, [], True

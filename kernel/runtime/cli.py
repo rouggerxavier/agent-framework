@@ -37,7 +37,11 @@ from .next_operation import determine_next_operation
 from .project import initialize_phase, initialize_project
 from .reconcile import reconcile_phase
 from .rotation import activate_phase
-from .review_application import apply_quality_review, apply_spec_review
+from .review_application import (
+    apply_quality_review,
+    apply_spec_review,
+    resolve_review_finding,
+)
 from .task_start import start_task
 from .state_machine import (
     REVIEW_GATES,
@@ -326,6 +330,25 @@ def build_parser() -> argparse.ArgumentParser:
     quality.add_argument("--review", required=True)
     quality.add_argument("--actor", required=True)
     quality.add_argument(
+        "--check",
+        action="store_true",
+        help="run every check and write nothing",
+    )
+
+    finding = subparsers.add_parser(
+        "resolve-finding",
+        help=(
+            "record one review finding as corrected, against evidence of the "
+            "correction; below critical this is what closes a "
+            "CHANGES_REQUIRED round without a second independent review"
+        ),
+    )
+    finding.add_argument("--project", dest="finding_project")
+    finding.add_argument("--blocker", required=True)
+    finding.add_argument("--evidence", required=True)
+    finding.add_argument("--actor", required=True)
+    finding.add_argument("--note")
+    finding.add_argument(
         "--check",
         action="store_true",
         help="run every check and write nothing",
@@ -844,6 +867,40 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 checked=args.check,
                 as_json=args.json,
             )
+        if args.command == "resolve-finding":
+            root = _project(args.finding_project or args.project)
+            state, issues, changed = resolve_review_finding(
+                root,
+                blocker_id=args.blocker,
+                evidence=args.evidence,
+                actor=args.actor,
+                note=args.note,
+                write=not args.check,
+            )
+            if issues:
+                return _emit_issues(issues, "finding resolution")
+            outcome = "checked" if args.check else ("resolved" if changed else "unchanged")
+            action = _mapping_or_empty(state.get("next_action"))
+            if args.json:
+                print(
+                    json.dumps(
+                        {
+                            "outcome": outcome,
+                            "blocker": args.blocker,
+                            "evidence": args.evidence,
+                            "next_action": action,
+                        },
+                        indent=2,
+                    )
+                )
+            else:
+                print("finding {}: {}".format(outcome, args.blocker))
+                print(
+                    "next: {} {}".format(
+                        action.get("operation"), action.get("target") or ""
+                    ).strip()
+                )
+            return 0
         if args.command == "record-evidence":
             root = _project(args.evidence_project or args.project)
             ledger = Path(args.ledger)

@@ -12,7 +12,7 @@ from .execution_modes import (
     state_execution_mode,
     validate_lightweight_state,
 )
-from .state_machine import execution_binding, validate_state
+from .state_machine import REVIEW_BLOCKER_SOURCES, execution_binding, validate_state
 
 
 #: Validation codes that mean "the checkout moved", not "the state is wrong".
@@ -36,6 +36,7 @@ ASSET_BY_OPERATION = {
     "run-spec-review": "skills/spec-compliance-reviewer/SKILL.md",
     "run-quality-review": "skills/code-quality-reviewer/SKILL.md",
     "return-to-execution": "skills/task-runner/SKILL.md",
+    "resolve-finding": "skills/task-runner/SKILL.md",
     "verify-phase": "skills/goal-coverage-verifier/SKILL.md",
     "resolve-blocker": "skills/persistent-debug-session/SKILL.md",
     "ship": "skills/git-decision-router/SKILL.md",
@@ -290,6 +291,20 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
     elif status == "executing":
         operation, target = "resume-task", state["current_task"]["id"]
         evidence.append("active task contract found: {}".format(target))
+        # A correction round is not an ordinary resumption: what the task owes
+        # is the finding, and pointing at "resume" leaves the operator to
+        # rediscover which one.
+        pending_findings = [
+            blocker
+            for blocker in state.get("blockers") or []
+            if isinstance(blocker, dict)
+            and blocker.get("source") in REVIEW_BLOCKER_SOURCES
+            and blocker.get("task_id") == target
+            and blocker.get("status", "open") != "resolved"
+        ]
+        if pending_findings:
+            operation, target = "resolve-finding", pending_findings[0].get("id")
+            evidence.append("open review finding: {}".format(target))
     elif status == "reviewing":
         # A rejected review is not a missing one. Recommending the review that
         # already ran would send the reviewer back to re-read the same diff,

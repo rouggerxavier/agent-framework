@@ -310,6 +310,21 @@ Below `critical`, one reviewer closes the round: the same pass judges conformanc
 and quality, and the second gate is recorded as `not_required` against that
 review document rather than left pending.
 
+Below `critical`, the **correction** closes a round that required changes. Fix
+the finding, run the tests the fix affects, record each finding as resolved with
+that evidence (`framework-next resolve-finding`), and go straight to
+verification: `reviewing → executing → correction → findings resolved →
+verifying`. No second independent review is asked for. One is owed again only
+when the correction expanded the scope materially, surfaced a grave risk, or
+changed the contract — which is an amendment, and an amendment groups the
+mechanically affected fallout (generated files, migration head, architectural
+maps) into a single re-seal. `critical` keeps the strict flow: a new review after
+the correction, the full local suite, and multiple gates.
+
+While tests or a build run, wait for the result. Do not open a monitoring loop,
+poll a log, or start speculative work around them. Reports stay short: what
+changed, what ran, what is left. State results; do not re-narrate the work.
+
 ## Test scope
 
 Verification is proportional to the diff:
@@ -317,6 +332,11 @@ Verification is proportional to the diff:
 - targeted tests for a small local change, even when the suite was green before;
 - affected areas and their integration points for a broader diff;
 - the complete suite only at a real phase closure or when opening the PR.
+
+CI owns the full suite. Run it locally only for a real technical reason — no CI
+for the repository, a failure that only reproduces locally, or a change whose
+blast radius the targeted runs cannot bound. After a correction, run the tests
+the correction affects, not the round's whole verification again.
 
 Do not replay the whole suite after every small local change. When an E2E test
 fails on a selector, fixture, or assertion, reuse the running environment and

@@ -30,7 +30,16 @@ TASK_STATUSES = {
 TASK_STATUS_TRANSITIONS = {
     "pending": {"executing", "blocked", "cancelled"},
     "executing": {"implementation_complete", "blocked", "cancelled"},
-    "implementation_complete": {"reviewing", "executing", "blocked", "cancelled"},
+    # `verifying` is reachable without `reviewing` only for a correction that
+    # closes a review round already held: the phase guard for
+    # `executing -> verifying` demands the resolved findings and their evidence.
+    "implementation_complete": {
+        "reviewing",
+        "executing",
+        "verifying",
+        "blocked",
+        "cancelled",
+    },
     "reviewing": {"reviewed", "executing", "blocked", "cancelled"},
     "reviewed": {"verifying", "executing", "blocked", "cancelled"},
     "verifying": {"verified", "executing", "blocked", "cancelled"},
