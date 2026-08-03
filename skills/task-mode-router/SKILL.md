@@ -1,6 +1,6 @@
 ---
 name: task-mode-router
-description: "Use para escolher fast, standard ou critical com preferencia por fast e escalada somente por evidencia concreta."
+description: "Use para escolher fast, standard ou critical com standard como padrao, fast para trabalho curto e contido e critical somente para dano grave."
 ---
 
 # Task Mode Router
@@ -26,18 +26,23 @@ Escolher rapidamente o modo de trabalho proporcional ao risco, tamanho e incerte
 - Numero aproximado de arquivos, areas e comandos envolvidos.
 
 ## Workflow
-1. Classifique a tarefa por risco e incerteza, sem ler o repo inteiro.
+1. Classifique a tarefa aplicando os fatores nesta ordem: prejuizo potencial de
+   uma falha, sensibilidade da area, reversibilidade, blast radius, complexidade
+   e tamanho, tempo estimado. Nao leia o repo inteiro para isso.
 2. Escolha um modo:
-   - `fast`: default para tarefa pequena/localizada; inspecao, implementacao,
-     teste direcionado e diff review.
-   - `standard`: complexidade moderada comprovada; plano curto, testes
-     proporcionais e review integrado.
-   - `critical`: risco critico comprovado; kernel persistente completo.
+   - `standard`: **default**; a maioria das features medias e grandes. Plano
+     curto, testes proporcionais e uma review integrada.
+   - `fast`: trabalho curto e contido (~10 min, poucos arquivos, facil reversao);
+     inspecao, implementacao, teste direcionado e diff review.
+   - `critical`: um defeito causaria dano grave; kernel persistente completo.
 3. Liste as skills recomendadas para o modo escolhido.
 4. Defina a verificacao minima esperada.
-5. Se houver duvida, escolha `fast`; escale somente se aparecer evidencia nova.
-6. Aceite `--fast`, `--standard`, `--critical`, `--auto`. Sem flag use `auto`.
-7. Preserve aliases legados apenas para compatibilidade: `quick → standard`,
+5. Na duvida, escolha `standard`.
+6. O tempo separa `fast` de `standard` e nada mais. Uma tarefa de varias horas
+   continua `standard`; uma alteracao curta no nucleo de pagamentos ou
+   autenticacao pode ser `critical`.
+7. Aceite `--fast`, `--standard`, `--critical`, `--auto`. Sem flag use `auto`.
+8. Preserve aliases legados apenas para compatibilidade: `quick → standard`,
    `full/audit → critical`.
 
 ## Saida obrigatoria
@@ -50,8 +55,13 @@ Escolher rapidamente o modo de trabalho proporcional ao risco, tamanho e incerte
 ## Criterios de aceite
 - Nao acionar `workflow-orchestrator` para tarefa pequena.
 - Backend/API simples pode ser `fast` ou `standard`.
-- `critical` exige risco concreto e justificativa.
-- Escolha explicita so escala por risco grave de seguranca/perda de dados.
+- `critical` exige um caminho de dano grave nomeado, nao "parece arriscado".
+- Feature grande, migration controlada, permissoes, dados financeiros, muitos
+  testes ou muitos arquivos **nao** justificam `critical` por si.
+- Trabalho enorme e acoplado que pode ser dividido vira `standard` apos a
+  divisao; `critical` so quando dividir com seguranca nao for possivel.
+- Escolha explicita so escala diante de dano grave, com a evidencia dita.
+- O modo e por tarefa: uma fase pode misturar `fast`, `standard` e `critical`.
 
 ## Arquivos de apoio
 - Router geral: ../../skills/agent-framework-router/SKILL.md

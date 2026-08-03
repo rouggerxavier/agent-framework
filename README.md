@@ -31,25 +31,34 @@ agent-framework/
 
 ## Execucao adaptativa
 
-O framework e rapido por padrao e seleciona uma de tres rotas:
+```text
+Fast otimiza a velocidade.
+Standard organiza o desenvolvimento normal.
+Critical protege a aplicacao contra danos graves.
+```
+
+O framework seleciona uma de tres rotas:
 
 ```text
-Duvida → fast
-Complexidade comprovada → standard
-Risco critico comprovado → critical
+Dano grave se falhar        → critical
+Curto, contido, baixo impacto → fast
+O resto                      → standard
 ```
 
 | Modo | Fluxo | Governanca |
 | --- | --- | --- |
 | `fast` | inspect → implement → targeted verification → diff review | sem `.agent/`, spec, contrato, seal, ledger, reviewers separados ou worktree |
-| `standard` | focused grounding → short plan → implement → tests → integrated review | estado opcional, sem seal ou reviews separados |
-| `critical` | lifecycle persistente completo | P0/P1 integral |
+| `standard` | focused grounding → short plan → implement → tests → integrated review | estado opcional, uma review integrada, sem seal nem reviews separadas |
+| `critical` | lifecycle persistente completo | P0/P1 integral, duas reviews independentes |
+
+Calibracao esperada, como referencia e nao como cota: `fast` ~30%, `standard`
+~65-70%, `critical` ~1-5%.
 
 Use o router como entrada de uma tarefa nova:
 
 ```text
 $agent-framework-router --fast
-Corrija o bug no filtro de imoveis.
+Corrija o typo no titulo da pagina.
 ```
 
 ```text
@@ -59,22 +68,59 @@ Implemente o novo endpoint e os testes.
 
 ```text
 $agent-framework-router --critical
-Altere o modelo de autenticacao e faca a migration.
+Troque o gateway de pagamento do checkout.
 ```
 
-`--auto` (ou nenhuma flag) deixa o router decidir com preferencia por `fast`.
-Toda selecao `standard`/`critical` deve citar fatores concretos. Muitos arquivos,
-edge cases teoricos ou a possibilidade abstrata de mais qualidade nao justificam
-escalada. O script `scripts/agent-framework-route` expoe a mesma politica de
-forma executavel e sem efeitos colaterais.
+`--auto` (ou nenhuma flag) deixa o router decidir, e o padrao e `standard`.
+`fast` exige evidencia positiva de escopo curto e contido; `critical` exige um
+caminho de dano grave nomeado — quebrar o nucleo de auth/sessoes, escalada de
+privilegio, vazamento entre tenants, perda de dados, movimentacao de dinheiro,
+gateway de pagamento, criptografia/segredos, recuperacao de conta, migration
+destrutiva, queda de producao ou operacao irreversivel de grande blast radius.
+
+Tocar uma area sensivel nao escala nada por si. Feature grande, migration
+controlada, permissoes, dados financeiros, muitos testes ou muitos arquivos
+continuam `standard`. O script `scripts/agent-framework-route` expoe a mesma
+politica de forma executavel e sem efeitos colaterais.
 
 > O kernel completo e uma capacidade disponivel, nao o fluxo obrigatorio.
 
-Veja `kernel/adaptive-execution-policy.md` para matriz de templates, budget de
-verificacao, severidades de review e reuso de contexto.
+### O modo pertence a tarefa
 
-Quando `standard` realmente precisar sobreviver a outra sessao, a inicializacao
-leve cria somente `.agent/STATE.md` e `.agent/PLAN.md`:
+Uma fase pode conter tarefas `fast`, `standard` e `critical` ao mesmo tempo, e
+uma tarefa `critical` nao eleva as vizinhas. A resolucao e do mais especifico
+para o mais geral, nunca pelo maximo:
+
+```text
+STATE.md task_modes[<id>] → execution_mode em TASKS.md
+                          → default_execution_mode da fase
+                          → execution_mode do projeto (default, nao piso)
+                          → standard
+```
+
+Para corrigir uma classificacao ja registrada:
+
+```bash
+./scripts/framework-next set-execution-mode \
+  --project /caminho/do/projeto \
+  --scope task --task-id U3A --to standard \
+  --reason "Frontend delimitado, sem backend, sem migration" \
+  --actor "<quem>"
+```
+
+Escalar para `critical` exige `--risk` nomeando o dano grave; reduzir exige
+apenas `--reason`. A operacao grava em `STATE.md` e no ledger de evidencias, e
+nunca reescreve plano selado, review ou evidencia historica.
+
+Veja `kernel/adaptive-execution-policy.md` para matriz de templates, budget de
+verificacao, severidades de review e reuso de contexto, e
+`workflows/execution-mode-classification.md` para o passo a passo.
+
+### Persistencia sem cerimonia
+
+Persistencia e cerimonia sao escolhas separadas. Um projeto que so precisa
+sobreviver a outra sessao usa a inicializacao leve, que cria somente
+`.agent/STATE.md` e `.agent/PLAN.md`:
 
 ```bash
 ./scripts/framework-next init \
@@ -83,8 +129,18 @@ leve cria somente `.agent/STATE.md` e `.agent/PLAN.md`:
   --mode standard
 ```
 
-`fast` recusa inicializacao persistente. Roadmap, phase spec, contratos, ledger,
-reviews separados e plan seal continuam exclusivos do fluxo `critical`.
+Um projeto que precisa do kernel completo — fases, contratos, gates, ledger —
+sem declarar tudo `critical` usa `--persistent`:
+
+```bash
+./scripts/framework-next init \
+  --project /caminho/do/projeto \
+  --name example-project \
+  --mode standard --persistent
+```
+
+`fast` recusa inicializacao persistente. O plan seal e as duas reviews
+independentes continuam exclusivos das tarefas `critical`.
 
 ## Kernel persistente `critical` (P0 + P1)
 
@@ -295,6 +351,28 @@ passar o gate e dar `shipped` continuam dois atos deliberados. `spec_compliance`
 e `code_quality` são recusados aqui — pertencem a `validate-spec-review` e
 `validate-quality-review`, que validam o próprio documento de revisão. Repetir a
 mesma mudança é no-op; repetir com outra justificativa é recusado.
+
+### Reclassificação formal do modo
+
+`set-execution-mode` é o único escritor de classificação. Ele grava o modo, o
+valor anterior, o motivo e — em escaladas — o caminho de dano grave nomeado, em
+`STATE.md`, e anexa um evento `classification` ao ledger da fase:
+
+```bash
+./scripts/framework-next set-execution-mode \
+  --project /caminho/do/projeto \
+  --scope task --task-id U3B1 --to critical \
+  --risk cross_tenant_exposure \
+  --reason "A consulta nova atravessa o filtro de tenant" \
+  --actor planner
+```
+
+O registro fica em `STATE.md`, nunca em `TASKS.md`: uma classificação não faz
+parte do contrato que o selo congelou, e reescrever o índice selado para
+corrigir um rótulo exigiria quebrar o fingerprint ou re-selar tudo. `--check`
+não escreve nada, repetir uma classificação vigente é no-op, e a classificação
+anterior vai para `history`. `--scope project` altera o default do projeto sem
+perder o kernel persistente.
 
 ### Aplicação formal de revisões
 
@@ -546,6 +624,12 @@ interpretados como `critical`; novas inicializacoes registram o campo. Aliases
 legados `quick`, `full` e `audit` continuam aceitos como `standard`, `critical`
 e `critical`.
 
+A calibracao por tarefa e opt-in: um projeto `critical` sem `execution_mode` em
+nenhuma tarefa continua com o lifecycle integral, incluindo plan seal e duas
+reviews independentes. A cerimonia so diminui quando alguem classifica a tarefa
+explicitamente — no contrato, no default da fase, ou por
+`framework-next set-execution-mode`.
+
 Os installers agora sincronizam, arquivo a arquivo, skills e assets compartilhados
 (`kernel`, workflows, rubrics, templates, docs, scripts e installers), preservando
 arquivos externos e criando backup antes de substituir nomes existentes. Veja
@@ -745,7 +829,8 @@ $performance-budget-auditor Audite latencia, custo, queries, memoria, batch e ti
 
 Use `$task-mode-router` antes de tarefas de backend quando quiser escolher entre
 `fast`, `standard` ou `critical`. Backend simples nao e automaticamente
-`critical`.
+`critical`, e nem migration controlada, entidade nova, endpoint novo ou
+autorizacao seguindo padroes ja estabelecidos: tudo isso e `standard`.
 
 Fluxo completo quando o risco justificar:
 

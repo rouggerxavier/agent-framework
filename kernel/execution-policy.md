@@ -1,8 +1,13 @@
 # Kernel Execution Policy
 
-This complete policy governs `critical`. For `fast` and `standard`, use
+This complete policy governs `critical` **tasks**. For `fast` and `standard`, use
 `adaptive-execution-policy.md` and apply only the proportional scope, test, diff
 review, and risk controls selected there.
+
+The mode is a property of the task, not of the project it lives in. A persistent
+project may hold tasks of all three modes; each one owes what its own
+classification demands. Nothing below is imposed on a task the classifier placed
+under `critical`'s threshold.
 
 ## Scope and concurrency
 
@@ -64,3 +69,9 @@ After the plan gate, the runner seals `PLAN.md` and `TASKS.md` with a SHA-256
 fingerprint, revision, decision ID, and evidence reference in `STATE.md`.
 Any later content change blocks execution until the planner records a revision,
 reruns the plan gate, and seals the new content.
+
+The seal is owed by a phase that contains at least one `critical` task. A phase
+of ordinary work is planned without one — the plan is meant to be adjusted as the
+work teaches you something, and freezing it costs a revision and a gate for every
+correction. A phase that already carries a seal stays held to it: lowering a
+classification never unlocks a sealed plan.

@@ -2,10 +2,16 @@
 
 ## Adaptive entry
 
-Apply `adaptive-execution-policy.md` before this lifecycle. `fast` is the default
-for ordinary work, `standard` uses a short proportional flow, and the lifecycle
-below is mandatory only for `critical`. The complete kernel is a capability, not
-the default entry path.
+Apply `adaptive-execution-policy.md` before this lifecycle. `standard` is the
+default for ordinary development, `fast` covers short contained work, and the
+lifecycle below is mandatory only for `critical` **tasks**. The complete kernel
+is a capability, not the default entry path.
+
+Persistence and ceremony are separate choices. A project may own the persistent
+kernel — phases, contracts, decisions, evidence — with a `standard` default mode
+(`framework-next init --mode standard --persistent`), so "this project has to
+remember things across sessions" no longer has to be bought by declaring
+everything critical.
 
 ## Purpose
 

@@ -95,6 +95,28 @@ artifacts.
 Required in `critical`; optional in `standard`; do not instantiate in `fast`.
 States created before `execution_mode` default safely to `critical`.
 
+`execution_mode` is the project's **default** mode for its tasks, not a floor.
+A task resolves its own mode from `task_modes[<id>].mode` here, then its
+`execution_mode` in `TASKS.md`, then the phase's `default_execution_mode`, then
+this field. `task_modes` is written only by
+`framework-next set-execution-mode`, which records the reason, the previous
+value and, for an escalation to `critical`, the named grave-damage path:
+
+```json
+"task_modes": {
+  "U3A": {
+    "mode": "standard",
+    "previous": "critical",
+    "direction": "reduction",
+    "reason": "Frontend delimitado, sem backend, sem migration",
+    "severe_harm_factors": [],
+    "at": "2026-08-03T00:00:00+00:00",
+    "by": "policy-recalibration",
+    "history": []
+  }
+}
+```
+
 ## `git.worktree` is portable
 
 `STATE.md` is shared, versioned state, so it never stores a path that only
