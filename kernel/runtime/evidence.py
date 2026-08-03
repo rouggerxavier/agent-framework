@@ -30,6 +30,7 @@ VALID_EVIDENCE_KINDS = {
     "task-start",
     "gate",
     "plan-amendment",
+    "classification",
 }
 
 
