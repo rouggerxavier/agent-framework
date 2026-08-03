@@ -60,8 +60,8 @@ critico comprovado → `critical`.
 | Especificar e planejar fase persistente | workflow-planner | execution-plan-builder, plan-quality-checker |
 | Executar plano persistente | workflow-runner | task-runner, kernel/state-machine |
 | Executar contrato de tarefa | task-runner | kernel/test-policy, templates/task-result |
-| Revisar conformidade com spec | spec-compliance-reviewer | templates/spec-compliance-review |
-| Revisar qualidade depois da spec | code-quality-reviewer | diff-reviewer, code-review-gate |
+| Revisar conformidade com spec | spec-compliance-reviewer | templates/spec-compliance-review, workflows/review-application |
+| Revisar qualidade depois da spec | code-quality-reviewer | diff-reviewer, workflows/review-application |
 | Entrar em repo novo | project-context-loader, repo-map-builder | — |
 | Ideias / objetivo aberto | brainstorm-lab | — |
 | Brief/documentacao/plano de execucao | execution-plan-builder | workflows/execution-brief, brainstorm-lab, plan-quality-checker |

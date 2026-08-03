@@ -296,6 +296,65 @@ e `code_quality` são recusados aqui — pertencem a `validate-spec-review` e
 `validate-quality-review`, que validam o próprio documento de revisão. Repetir a
 mesma mudança é no-op; repetir com outra justificativa é recusado.
 
+### Aplicação formal de revisões
+
+Cada gate de revisão tem **um único escritor**, e ele valida e aplica na mesma
+operação:
+
+| Gate | Escritor formal | Recusado por |
+| --- | --- | --- |
+| `spec_compliance` | `validate-spec-review` | `gate-status` |
+| `code_quality` | `validate-quality-review` | `gate-status` |
+
+```bash
+./scripts/framework-next validate-spec-review \
+  --project /caminho/do/projeto \
+  --contract .agent/phases/01-example/TASKS.md --task-id U3A \
+  --result .agent/phases/01-example/U3A-result.md \
+  --review .agent/phases/01-example/U3A-spec-review.md \
+  --actor reviewer-cli
+```
+
+Validar e aplicar são **um ato só**. Um estado durável em que a revisão foi
+validada mas não registrada é a mesma meia-verdade que o framework recusa em
+todo lugar: o veredito existe e nada no estado persistido pode ser perguntado
+sobre ele. Use `--check` para rodar todos os guards **sem escrever nada**.
+
+Classificações mapeiam para os estados reais dos gates, sem inventar
+vocabulário: `PASS → passed`, `PASS_WITH_NOTES → passed_with_notes`,
+`BLOCKED → blocked`; `APPROVED → approved`, `APPROVED_WITH_NOTES →
+approved_with_notes`, `CHANGES_REQUIRED → changes_required`. Não existe
+`REJECTED`.
+
+A aplicação **não** move o ciclo de vida. Uma aprovação de spec deixa fase e
+tarefa em `reviewing` e aponta para `run-quality-review`. Uma aprovação de
+qualidade move a tarefa para `reviewed` — sem isso `reviewing → verifying` seria
+recusada no índice, porque não existe aresta `reviewing → verifying` em
+`TASK_STATUS_TRANSITIONS` — e aponta para `verify-phase`. A transição continua
+sendo um ato deliberado, com actor e razão próprios.
+
+Um veredito bloqueante registra o gate, abre os blockers com evidência e aponta
+`return-to-execution`; ele também não executa a transição. Depois da correção,
+`transition --to executing` reabre os cinco gates de revisão, então **as duas
+revisões são pagas de novo** — nenhuma aprovação é herdada. A revisão que
+aprova o trabalho corrigido é o que fecha o blocker que ela mesma abriu; a
+revisão anterior permanece como histórico do achado. Uma correção de código que
+não altera o contrato **não** é caso de `amend-plan`.
+
+Toda aplicação exige independência (reviewer ≠ executor), diff inspecionado,
+`files_inspected` e `evidence_inspected` não vazios, e correspondência com o
+trabalho real: task, fase, `plan_revision`, commit revisado e branch vinculada.
+Uma revisão é **carimbada com a revisão do plano** sob a qual foi concedida:
+depois de `amend-plan` a aprovação antiga vira histórico e uma revisão da v1 é
+recusada contra a v2. Repetir a mesma aplicação é no-op; repetir com outro
+relatório, resultado, reviewer, SHA ou revisão é recusado — inclusive quando o
+relatório foi editado depois de aplicado, porque o digest do documento faz parte
+da identidade.
+
+Quatro documentos se movem juntos — ledger, `REVIEW.md`, `TASKS.md` e
+`STATE.md` — nessa ordem, com rollback byte a byte se qualquer etapa falhar.
+Ver `workflows/review-application.md`.
+
 `shipped` significa fase integrada e encerrada no ciclo controlado de
 desenvolvimento, **não** liberação em produção. Blockers externos de produção
 continuam registrados e abertos sem reabrir a fase concluída.
