@@ -85,12 +85,49 @@ CONTRACT_FIELDS_BY_MODE: Dict[str, set] = {
         "allowed_files",
         "acceptance",
         "test_policy",
-        "rollback",
         "review",
         "completion",
     },
     "critical": set(REQUIRED_CONTRACT_FIELDS),
 }
+
+#: Named reasons a rollback or mitigation plan is mandatory rather than
+#: optional for a `standard` task. `database_migration` and
+#: `external_integration` change types imply their matching signal
+#: automatically; anything else has to be declared by the contract itself in
+#: `rollback_signals`, e.g. a `business_logic` change that deletes rows.
+ROLLBACK_SIGNALS = frozenset(
+    {
+        "migration",
+        "destructive_data_effect",
+        "incompatible_change",
+        "persistent_external_integration",
+        "infrastructure_change",
+        "production_operational_change",
+        "feature_flag_launch",
+        "hard_to_reverse_regression_risk",
+    }
+)
+
+_ROLLBACK_SIGNAL_BY_CHANGE_TYPE = {
+    "database_migration": "migration",
+    "external_integration": "persistent_external_integration",
+}
+
+
+def rollback_signals_for(contract: Dict[str, Any]) -> List[str]:
+    """The named reasons, if any, that make rollback mandatory for this contract.
+
+    An empty result means rollback is proportional, not required: `standard`
+    may leave it out, or state `not_applicable` with a short reason.
+    """
+
+    declared = contract.get("rollback_signals") or []
+    signals = {signal for signal in declared if signal in ROLLBACK_SIGNALS}
+    implied = _ROLLBACK_SIGNAL_BY_CHANGE_TYPE.get(contract.get("change_type"))
+    if implied:
+        signals.add(implied)
+    return sorted(signals)
 
 #: List-shaped fields, checked only when the mode requires them or they are
 #: present anyway.
@@ -401,12 +438,75 @@ def validate_task_contract(
                     )
 
     issues.extend(_review_issues(contract, selected))
-
-    if "rollback" in CONTRACT_FIELDS_BY_MODE[selected] or "rollback" in contract:
-        rollback = contract.get("rollback", {})
-        if not isinstance(rollback, dict) or not rollback.get("strategy"):
-            issues.append(_issue("rollback", "rollback.strategy is required"))
+    issues.extend(_rollback_issues(contract, selected))
     return issues
+
+
+def _rollback_issues(contract: Dict[str, Any], mode: str) -> List[Dict[str, str]]:
+    """Rollback obligations, proportional to the mode.
+
+    `critical` always owes a real plan; when true rollback is impossible it
+    owes containment (feature flag, kill switch, restore, recovery procedure)
+    plus an explicit justification instead. `standard` only owes a plan when a
+    concrete signal makes one applicable — otherwise the field is optional, or
+    `not_applicable` with a short reason. `fast` owes neither: the change is
+    expected to be trivially reversible on its own.
+    """
+
+    if mode == "fast":
+        return []
+
+    rollback = contract.get("rollback")
+    if mode == "critical":
+        if not isinstance(rollback, dict) or not str(rollback.get("strategy", "")).strip():
+            return [_issue("rollback", "rollback.strategy is required")]
+        strategy = str(rollback["strategy"]).strip().casefold()
+        if strategy in {"not_applicable", "none", "impossible"} and not (
+            rollback.get("containment") or rollback.get("justification")
+        ):
+            return [
+                _issue(
+                    "rollback",
+                    "when rollback is impossible, containment (feature flag, kill "
+                    "switch, restore, recovery procedure) and an explicit "
+                    "justification are required",
+                )
+            ]
+        return []
+
+    # standard
+    applicable = rollback_signals_for(contract)
+    if rollback is None:
+        if applicable:
+            return [
+                _issue(
+                    "rollback",
+                    "rollback.strategy is required ({})".format(", ".join(applicable)),
+                )
+            ]
+        return []
+    if not isinstance(rollback, dict):
+        return [_issue("rollback", "rollback must be an object")]
+    strategy = str(rollback.get("strategy", "")).strip()
+    if not strategy:
+        return [_issue("rollback", "rollback.strategy is required")]
+    if strategy.casefold() == "not_applicable":
+        if applicable:
+            return [
+                _issue(
+                    "rollback",
+                    "rollback is applicable ({}); strategy cannot be "
+                    "not_applicable".format(", ".join(applicable)),
+                )
+            ]
+        if not str(rollback.get("reason", "")).strip():
+            return [
+                _issue(
+                    "rollback",
+                    "rollback.strategy not_applicable requires a short reason",
+                )
+            ]
+    return []
 
 
 def dependency_issues(task: Dict[str, Any], tasks: List[Dict[str, Any]]) -> List[str]:

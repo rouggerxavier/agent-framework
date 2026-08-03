@@ -85,12 +85,16 @@ class AdaptiveRoutingTests(unittest.TestCase):
         self.assertTrue(decision["escalated"])
         self.assertIn("grave damage", decision["reason"])
 
-    def test_touching_a_sensitive_area_does_not_escalate_on_its_own(self) -> None:
+    def test_touching_a_sensitive_area_blocks_fast_but_not_critical(self) -> None:
         decision = route_execution(
             "--fast ajuste o texto do formulário de login e da tela de pagamento"
         )
-        self.assertEqual("fast", decision["selected_mode"])
-        self.assertFalse(decision["escalated"])
+        self.assertEqual("standard", decision["selected_mode"])
+        self.assertTrue(decision["escalated"])
+        self.assertIn(
+            "fast rejected: sensitive area requires at least standard",
+            decision["reason"],
+        )
         self.assertEqual([], decision["risk_factors"])
         self.assertIn("authentication_area", decision["sensitive_areas"])
         self.assertIn("financial_area", decision["sensitive_areas"])
