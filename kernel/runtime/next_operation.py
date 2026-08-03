@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from .contracts import eligible_tasks, load_task_index, task_by_id
 from .documents import DocumentError, git_snapshot, load_frontmatter, safe_project_path
@@ -52,12 +52,22 @@ def _decision(
     target: Any,
     blockers: List[str],
     execution_mode: Any = None,
+    stale_next_action: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     return {
         "current_state": state,
         "execution_mode": execution_mode,
         "detected_evidence": evidence,
         "inconsistencies": inconsistencies,
+        # The subset of `inconsistencies` that is only the persisted
+        # `next_action` lagging behind what the state now implies. It is
+        # reported separately because a reader cannot tell the two apart by
+        # string, and the difference matters: a stale cursor describes a field
+        # this kernel rewrites on the next transition, while every other
+        # inconsistency describes a state someone has to repair. Callers that
+        # are about to rewrite `next_action` anyway may proceed past these;
+        # nothing may proceed past the rest.
+        "stale_next_action": list(stale_next_action or []),
         "next_operation": {"operation": operation, "target": target},
         "required_asset": ASSET_BY_OPERATION.get(operation),
         "blocking_conditions": blockers,
@@ -323,19 +333,23 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
     else:
         operation, target = mapping[status]
 
-    inconsistencies: List[str] = []
+    # Everything reachable here is the persisted cursor lagging the state, not
+    # a state defect: the real defects returned above, with `blocking_conditions`
+    # set. Keeping the two apart is what lets `start-task` advance a phase whose
+    # only fault is a `next_action` it is about to overwrite.
+    staleness: List[str] = []
     persisted_action = state.get("next_action", {})
     if isinstance(persisted_action, dict):
         persisted_operation = persisted_action.get("operation")
         persisted_target = persisted_action.get("target")
         if persisted_operation != operation:
-            inconsistencies.append(
+            staleness.append(
                 "persisted next_action {} is stale; observed state requires {}".format(
                     persisted_operation, operation
                 )
             )
         elif persisted_target is not None and persisted_target != target:
-            inconsistencies.append(
+            staleness.append(
                 "persisted next_action target {} differs from observed {}".format(
                     persisted_target, target
                 )
@@ -344,9 +358,10 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
     return _decision(
         state=status,
         evidence=evidence,
-        inconsistencies=inconsistencies,
+        inconsistencies=list(staleness),
         operation=operation,
         target=target,
         blockers=[],
         execution_mode=execution_mode,
+        stale_next_action=staleness,
     )

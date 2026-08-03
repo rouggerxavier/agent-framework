@@ -268,9 +268,9 @@ while lifecycle blockers are open.
 `current_task.id` has no other prospective writer, and that is deliberate.
 `initialize_project` and `activate-phase` clear it; `reconcile-phase` fills it
 from work already `verified`; everything else touches only `.status`. Without
-`start-task`, a phase that reached `planned` honestly had no legal move —
-`task-status` refuses a task that is not yet current, and `transition --to
-executing` refuses because none is selected.
+`start-task`, a phase had no legal move at either of the two moments a task
+begins — `task-status` refuses a task that is not yet current, and `transition
+--to executing` refuses because none is selected.
 
 **The target comes from the kernel, not the operator.** `start-task` reads it
 from `determine_next_operation`; a `--task-id` may be passed, but only as a
@@ -280,13 +280,57 @@ different task.
 Selection and start are one operation because the state between them is not a
 state the lifecycle can read: a selected task that is not executing and not
 bound to a branch. The selection is made in memory and spent immediately on the
-guarded `planned → executing` transition, which owns the hard checks — plan
-seal, plan gate, risk, dirty worktree, detached HEAD, integration branch,
-contract and dependencies — and captures the execution binding.
+guarded transition into `executing`, which owns the hard checks — plan seal,
+plan gate, risk, dirty worktree, detached HEAD, integration branch, contract and
+dependencies — and captures the execution binding.
+
+### Two contexts, one operation
+
+`start-task` starts a task that has not run. There are two moments when that
+happens, and they are the same operation:
+
+| Context | From | Requires |
+| --- | --- | --- |
+| the phase's first task | `planned` | the plan gate, and an eligible contract |
+| the phase's next task | `verifying` | `current_task` already `verified`, in both `STATE.md` and the index, and another eligible contract |
+
+The second context was documented as legal — `verifying → executing` "may select
+the next eligible task" — and had no writer. The derivation computed
+`execute-task -> <next>` from `verifying` with no blockers, so the kernel named
+an operation nothing could carry out and a phase of four tasks could only ever
+start its first. This is not reconciliation: nothing is back-filled from work
+that already happened, and the finished task is not re-opened.
+
+What the advance carries over:
+
+- **The finished task keeps its status.** `verified` stays `verified`, in
+  `STATE.md` and in the index.
+- **Its approvals become history.** The review gates re-open `pending` for the
+  new task, and each prior verdict is appended to its record's `history` — the
+  same mechanism every other re-open uses. Nothing is erased.
+- **Its binding rotates rather than being overwritten.** The released binding
+  moves to `git.last_execution`, and the new task is bound to the checkout the
+  operator is actually standing on. A phase may therefore advance onto a new
+  branch, which is the normal case once the previous task's branch is merged.
+- **The new task's gates follow its own effective mode.** A `critical` task does
+  not raise the one that follows it, and a phase never inherits its heaviest
+  task's mode.
+
+A **`verified` task stops pinning the checkout.** Branch affinity applies while
+a task is genuinely being worked on; a phase sits in `verifying` from the moment
+its task is verified until the next one starts, and holding the checkout to the
+finished task's branch for that whole window is the same defect the bound-state
+set warns about — a merged branch outliving its work.
+
+A **stale `next_action` does not block the advance.** The persisted cursor still
+naming `verify-phase` is the normal shape here, and it is the field this
+operation rewrites; refusing over it would demand a repair of the value the
+write is about to correct. The derivation reports that staleness separately from
+real inconsistencies, and only the staleness is forgiven.
 
 | Writer | Effect on `current_task` |
 | --- | --- |
-| `start-task` | selects the eligible task and starts it, with binding |
+| `start-task` | selects the eligible task and starts it, with binding — the phase's first task from `planned`, or its next from `verifying` |
 | `task-status` | changes `.status` of the task already current |
 | `transition` | changes `.status` as the phase moves |
 | `amend-plan` | returns the task under way to `executing`, binding intact |
@@ -448,7 +492,8 @@ when the amendment landed and a completion when it did not.
 - A test failure during execution stays `executing`; repeated investigation may
   enter `blocked`.
 - After a task is verified, `verifying → executing` may select the next eligible
-  task. When no task remains, phase verification continues toward `ready_to_ship`.
+  task; `start-task` is what performs it. When no task remains, phase
+  verification continues toward `ready_to_ship`.
 - A verification failure returns to `executing` for code defects or `reviewing`
   for review defects. All invalidated approvals must be rerun.
 - `ready_to_ship` is rejected when any blocker, missing acceptance evidence,
