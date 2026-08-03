@@ -102,6 +102,77 @@ lifecycle already resets gates when a task starts executing.
 document itself; a second writer would let a review be recorded without one
 being written.
 
+### Applying a review
+
+Each review gate has exactly one formal writer, and it validates and applies in
+the same operation:
+
+| Gate | Writer | Refused by |
+| --- | --- | --- |
+| `spec_compliance` | `framework-next validate-spec-review` | `gate-status` |
+| `code_quality` | `framework-next validate-quality-review` | `gate-status` |
+
+Validation and application are one act. A durable state in which a review has
+been validated but not recorded is the same half-truth the framework refuses
+everywhere else: the verdict exists and nothing in the persisted state can be
+asked about it. `--check` runs every guard and writes nothing.
+
+Classifications map onto the gate states the transition guards already read. No
+vocabulary is invented — there is no `REJECTED`, because `CHANGES_REQUIRED` is
+the rejection this framework has.
+
+| Classification | Gate state |
+| --- | --- |
+| `PASS` | `spec_compliance: passed` |
+| `PASS_WITH_NOTES` | `spec_compliance: passed_with_notes` |
+| `BLOCKED` | `spec_compliance: blocked` |
+| `APPROVED` | `code_quality: approved` |
+| `APPROVED_WITH_NOTES` | `code_quality: approved_with_notes` |
+| `CHANGES_REQUIRED` | `code_quality: changes_required` |
+
+Applying a review never moves the lifecycle. A spec approval leaves the phase
+and the task in `reviewing` and points at `run-quality-review`. A quality
+approval moves the task to `reviewed` — without it `reviewing → verifying` would
+be refused at the index, because `TASK_STATUS_TRANSITIONS` has no
+`reviewing → verifying` edge — and points at `verify-phase`. The transition
+itself keeps its own actor, reason and guards.
+
+An approving quality review cannot carry a finding that names a
+`required_change`: a change that has not been made is not an approval, and
+recording the gate would leave the demand with nothing to enforce it. Notes
+without a required change stay legal — that is what `APPROVED_WITH_NOTES` is
+for.
+
+A blocking verdict records the gate, opens the blockers with their evidence and
+points at `return-to-execution`; it does not perform it either. After the
+correction, `transition --to executing` retires all five review gates, so
+**both** reviews are earned again — no approval is inherited. The review that
+approves the corrected work is what closes the blocker it raised; the earlier
+review stays in `history` as the record of the finding. A code correction that
+does not change the contract is not an amendment and must not go through
+`amend-plan`.
+
+Every application requires independence (reviewer ≠ executor), an inspected
+diff, non-empty `files_inspected` and `evidence_inspected`, and correspondence
+with the work actually under way: task, phase, `plan_revision`, reviewed commit,
+bound branch, and a working tree that carries no product changes the reviewer
+did not read. Reviews are stamped with the plan revision they were granted
+under, so an approval from before an amendment is history and a revision-1
+review is refused against revision 2.
+
+Repeating the same application is a no-op. Repeating it with a different report,
+result, reviewer, commit or revision is refused — including a report edited
+after it was applied, because the document's digest is part of the identity.
+
+Four documents move together — the ledger, `REVIEW.md`, `TASKS.md` and
+`STATE.md`, in that order — and all four are restored byte for byte if any step
+fails. The order is chosen by which half-written outcome is safest: a ledger
+event and a review entry without the gate describe a review that did not take
+effect, and repeating the command completes it. The reverse — a passed gate with
+no trail — is the outcome this operation exists to make impossible. A process
+killed between two writes is the residual risk; `validate` reports the state as
+clean and the gate still blocks, so the command is simply run again.
+
 The command refuses evidence that does not resolve to a file inside the project,
 and evidence under `.agent/phases/<slug>/` that belongs to a phase other than the
 active one. Repeating a change that already holds is a no-op; repeating it with a

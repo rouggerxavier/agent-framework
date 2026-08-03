@@ -3,12 +3,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from kernel.runtime.evidence import append_evidence_event
-from kernel.runtime.reviews import (
-    apply_quality_review,
-    apply_spec_review,
-    validate_quality_review,
-    validate_spec_review,
-)
+from kernel.runtime.reviews import validate_quality_review, validate_spec_review
 from kernel.runtime.state_machine import validate_transition
 from tests.helpers import (
     full_contract,
@@ -81,21 +76,11 @@ class TaskReviewTests(unittest.TestCase):
                 "evidence": ["app/mapper.py drops unknown values"],
             }
         ]
+        # Applying this verdict is `review_application`'s job and is covered in
+        # `test_review_application`; validation is what this module owns.
         self.assertEqual(
             [], validate_spec_review(full_contract(), full_result(), report)
         )
-
-        state = {
-            "gates": {"spec_compliance": "pending", "code_quality": "pending"},
-            "current_task": {"id": "P1-T03", "status": "reviewing"},
-            "status": "reviewing",
-            "phase": {"id": "P1", "status": "reviewing"},
-            "blockers": [],
-        }
-        updated, target = apply_spec_review(state, report)
-        self.assertEqual("executing", target)
-        self.assertEqual("blocked", updated["gates"]["spec_compliance"])
-        self.assertTrue(updated["blockers"])
 
     def test_passing_spec_cannot_hide_missing_requirement(self) -> None:
         report = passing_spec_review()
@@ -118,20 +103,6 @@ class TaskReviewTests(unittest.TestCase):
             [],
             validate_quality_review(full_result(), passing_spec_review(), report),
         )
-        state = {
-            "gates": {
-                "spec_compliance": "passed",
-                "code_quality": "pending",
-            },
-            "current_task": {"id": "P1-T03", "status": "reviewing"},
-            "status": "reviewing",
-            "phase": {"id": "P1", "status": "reviewing"},
-            "blockers": [],
-        }
-        updated, target = apply_quality_review(state, report)
-        self.assertEqual("executing", target)
-        self.assertEqual("pending", updated["gates"]["spec_compliance"])
-        self.assertTrue(updated["blockers"])
 
     def test_correction_must_return_through_review(self) -> None:
         with TemporaryDirectory() as temporary:

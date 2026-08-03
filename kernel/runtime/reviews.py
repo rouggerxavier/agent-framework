@@ -1,11 +1,19 @@
-"""Independent spec-compliance and code-quality review validation."""
+"""Independent spec-compliance and code-quality review validation.
+
+These functions answer one question: *is this a well-formed, independent review
+of this contract and this result?* They read documents and return issues; they
+never read the persisted state and never write anything.
+
+Applying a validated review — moving the gate, stamping the record with the plan
+revision it was granted under, recording the blockers and the ledger event — is
+``review_application.py``, which owns the questions this module cannot answer:
+whether the review describes the work that is actually under way, at the
+revision and commit that actually exist.
+"""
 
 from __future__ import annotations
 
-from copy import deepcopy
-from typing import Any, Dict, List, Tuple
-
-from .documents import DocumentError
+from typing import Any, Dict, List
 
 QUALITY_AREAS = {
     "bugs",
@@ -153,20 +161,42 @@ def validate_quality_review(
     if not isinstance(findings, list):
         issues.append(_issue("quality-findings", "findings must be an array"))
         findings = []
-    if classification == "CHANGES_REQUIRED":
-        actionable = [
+    actionable = [
+        item
+        for item in findings
+        if isinstance(item, dict)
+        and item.get("severity")
+        and item.get("evidence")
+        and item.get("required_change")
+    ]
+    if classification == "CHANGES_REQUIRED" and not actionable:
+        issues.append(
+            _issue(
+                "quality-change-evidence",
+                "CHANGES_REQUIRED needs an evidenced actionable finding",
+            )
+        )
+    # The mirror of `spec-pass-invalid`, and it was missing. A finding that
+    # names a `required_change` is a change that has not been made; approving
+    # while carrying one records the gate as satisfied and leaves the demand
+    # with nothing to enforce it. Notes without a required change stay legal —
+    # that is what `APPROVED_WITH_NOTES` is for.
+    if classification in {"APPROVED", "APPROVED_WITH_NOTES"}:
+        unmet = [
             item
             for item in findings
-            if isinstance(item, dict)
-            and item.get("severity")
-            and item.get("evidence")
-            and item.get("required_change")
+            if isinstance(item, dict) and item.get("required_change")
         ]
-        if not actionable:
+        if unmet:
             issues.append(
                 _issue(
-                    "quality-change-evidence",
-                    "CHANGES_REQUIRED needs an evidenced actionable finding",
+                    "quality-approval-invalid",
+                    "an approving review cannot carry a required change: {}".format(
+                        "; ".join(
+                            str(item.get("summary") or item.get("required_change"))
+                            for item in unmet
+                        )
+                    ),
                 )
             )
     areas = report.get("areas_checked")
@@ -184,52 +214,9 @@ def validate_quality_review(
     return issues
 
 
-def apply_spec_review(
-    state: Dict[str, Any], report: Dict[str, Any]
-) -> Tuple[Dict[str, Any], str]:
-    updated = deepcopy(state)
-    classification = report.get("classification")
-    if classification == "BLOCKED":
-        updated["gates"]["spec_compliance"] = "blocked"
-        updated["gates"]["code_quality"] = "pending"
-        updated["current_task"]["status"] = "executing"
-        updated["status"] = "executing"
-        updated["phase"]["status"] = "executing"
-        updated["blockers"] = list(report.get("blockers", []))
-        return updated, "executing"
-    if classification not in {"PASS", "PASS_WITH_NOTES"}:
-        raise DocumentError("cannot apply invalid spec review")
-    updated["gates"]["spec_compliance"] = (
-        "passed" if classification == "PASS" else "passed_with_notes"
-    )
-    return updated, "reviewing"
-
-
-def apply_quality_review(
-    state: Dict[str, Any], report: Dict[str, Any]
-) -> Tuple[Dict[str, Any], str]:
-    updated = deepcopy(state)
-    classification = report.get("classification")
-    if classification == "CHANGES_REQUIRED":
-        updated["gates"]["code_quality"] = "changes_required"
-        updated["gates"]["spec_compliance"] = "pending"
-        updated["current_task"]["status"] = "executing"
-        updated["status"] = "executing"
-        updated["phase"]["status"] = "executing"
-        updated["blockers"] = [
-            {
-                "id": "QUALITY-{}".format(updated["current_task"].get("id")),
-                "summary": item.get("summary", "quality change required"),
-                "evidence": item.get("evidence", []),
-            }
-            for item in report.get("findings", [])
-            if isinstance(item, dict)
-        ]
-        return updated, "executing"
-    if classification not in {"APPROVED", "APPROVED_WITH_NOTES"}:
-        raise DocumentError("cannot apply invalid quality review")
-    updated["gates"]["code_quality"] = (
-        "approved" if classification == "APPROVED" else "approved_with_notes"
-    )
-    updated["current_task"]["status"] = "reviewed"
-    return updated, "verifying"
+# `apply_spec_review` and `apply_quality_review` used to live here as in-memory
+# state transforms. They were reachable from nothing but the tests, kept no
+# record, replaced the blocker list outright and moved the lifecycle themselves.
+# Both names now belong to `review_application`, which applies a review to the
+# documents on disk. They are deliberately not re-exported: a second `apply_*`
+# that writes nothing is the ambiguity this split removes.
