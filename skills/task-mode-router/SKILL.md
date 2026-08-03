@@ -32,8 +32,9 @@ Escolher rapidamente o modo de trabalho proporcional ao risco, tamanho e incerte
 2. Escolha um modo:
    - `standard`: **default**; a maioria das features medias e grandes. Plano
      curto, testes proporcionais e uma review integrada.
-   - `fast`: trabalho curto e contido (~10 min, poucos arquivos, facil reversao);
-     inspecao, implementacao, teste direcionado e diff review.
+   - `fast`: trabalho curto e contido (~10 min, poucos arquivos, facil reversao,
+     **sem area sensivel**); inspecao, implementacao, teste direcionado e diff
+     review.
    - `critical`: um defeito causaria dano grave; kernel persistente completo.
 3. Liste as skills recomendadas para o modo escolhido.
 4. Defina a verificacao minima esperada.
@@ -58,6 +59,9 @@ Escolher rapidamente o modo de trabalho proporcional ao risco, tamanho e incerte
 - `critical` exige um caminho de dano grave nomeado, nao "parece arriscado".
 - Feature grande, migration controlada, permissoes, dados financeiros, muitos
   testes ou muitos arquivos **nao** justificam `critical` por si.
+- Area sensivel (auth, sessao, autorizacao, tenant, dados financeiros/pessoais,
+  migration, segredos, recuperacao de conta, cobranca) impede `fast`: o piso
+  vira `standard`, sem escalar sozinha para `critical`.
 - Trabalho enorme e acoplado que pode ser dividido vira `standard` apos a
   divisao; `critical` so quando dividir com seguranca nao for possivel.
 - Escolha explicita so escala diante de dano grave, com a evidencia dita.

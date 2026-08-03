@@ -140,7 +140,7 @@ grave; reducao exige apenas `--reason`.
 selected_mode: fast | standard | critical
 reason:
 risk_factors: []      # apenas caminhos de dano grave nomeados
-sensitive_areas: []   # contexto; nunca escala sozinho
+sensitive_areas: []   # impede fast (piso standard); nunca escala sozinho para critical
 fast_factors: []
 complexity_factors: []
 assets_selected: []
@@ -153,9 +153,10 @@ saida pode ainda indicar intencao e primeiro asset.
 
 ## Criterios de aceite
 - `standard` e o default quando nada argumenta em contrario.
-- `fast` exige evidencia positiva de escopo curto e contido.
+- `fast` exige evidencia positiva de escopo curto e contido, sem area sensivel.
 - `critical` exige um caminho de dano grave nomeado.
-- Area sensivel (auth, migration, financeiro, tenant) nunca escala sozinha.
+- Area sensivel (auth, migration, financeiro, tenant) impede `fast` (piso
+  `standard`) mas nunca escala sozinha para `critical`.
 - No maximo 4 assets; sem listar tudo.
 - Nao duplicar checklist de rubric/workflow aqui; so referenciar.
 - Backend simples nao e automaticamente `critical`.

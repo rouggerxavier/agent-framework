@@ -14,6 +14,7 @@ from kernel.runtime.documents import load_frontmatter, write_frontmatter
 from kernel.runtime.contracts import (
     CORE_SELF_REVIEW_CHECKS,
     load_test_policy,
+    rollback_signals_for,
     validate_task_contract,
 )
 from kernel.runtime.execution_modes import (
@@ -32,6 +33,7 @@ from kernel.runtime.state_machine import (
 )
 from tests.helpers import (
     FRAMEWORK_ROOT,
+    full_contract,
     initialized_project,
     minimal_task,
     read_state,
@@ -68,9 +70,11 @@ class FastClassificationTests(unittest.TestCase):
             ),
         )
 
-    def test_sensitive_area_alone_does_not_cost_a_task_its_fast_mode(self) -> None:
+    def test_sensitive_area_costs_a_task_its_fast_mode(self) -> None:
+        """A sensitive area rules out `fast`; the floor becomes `standard`."""
+
         self.assertEqual(
-            "fast",
+            "standard",
             _mode(
                 localized=True,
                 files_touched=1,
@@ -89,6 +93,27 @@ class FastClassificationTests(unittest.TestCase):
         ):
             with self.subTest(request=request):
                 self.assertEqual("fast", route_execution(request)["selected_mode"])
+
+    def test_short_non_sensitive_task_is_fast(self) -> None:
+        self.assertEqual(
+            "fast",
+            route_execution("Corrija um bug pequeno no botão de salvar.")[
+                "selected_mode"
+            ],
+        )
+
+    def test_explicit_fast_in_a_sensitive_area_is_elevated_to_standard(self) -> None:
+        decision = route_execution(
+            "Ajuste o texto da tela de permissão do time.", requested_mode="fast"
+        )
+        self.assertEqual("standard", decision["selected_mode"])
+        self.assertTrue(decision["escalated"])
+        self.assertIn(
+            "fast rejected: sensitive area requires at least standard",
+            decision["reason"],
+        )
+        self.assertIn("authorization_area", decision["sensitive_areas"])
+        self.assertEqual([], decision["risk_factors"])
 
 
 class StandardClassificationTests(unittest.TestCase):
@@ -182,6 +207,33 @@ class StandardClassificationTests(unittest.TestCase):
         self.assertEqual("standard", classification["mode"])
         self.assertIn("split", classification["reason"])
 
+    def test_short_task_in_non_core_authentication_is_standard(self) -> None:
+        decision = route_execution(
+            "Corrija um bug pequeno na mensagem de erro do login."
+        )
+        self.assertEqual("standard", decision["selected_mode"])
+        self.assertEqual([], decision["risk_factors"])
+        self.assertIn("authentication_area", decision["sensitive_areas"])
+
+    def test_short_task_touching_permissions_is_standard(self) -> None:
+        decision = route_execution(
+            "Ajuste pequeno e localizado na regra de permissão do formulário."
+        )
+        self.assertEqual("standard", decision["selected_mode"])
+        self.assertEqual([], decision["risk_factors"])
+        self.assertIn("authorization_area", decision["sensitive_areas"])
+
+    def test_sensitive_area_does_not_escalate_to_critical_on_its_own(self) -> None:
+        for request in (
+            "Ajuste pequeno na tela de autenticação sem risco conhecido.",
+            "Pequeno bug na tela de faturamento.",
+            "Corrija o typo no campo de migration do formulário.",
+        ):
+            with self.subTest(request=request):
+                decision = route_execution(request)
+                self.assertNotEqual("critical", decision["selected_mode"])
+                self.assertEqual([], decision["risk_factors"])
+
     def test_size_files_and_hours_never_reach_critical_on_their_own(self) -> None:
         self.assertEqual(
             "standard",
@@ -244,6 +296,144 @@ class CriticalClassificationTests(unittest.TestCase):
     def test_an_unnamed_risk_cannot_become_critical(self) -> None:
         with self.assertRaises(ValueError):
             classify_task(severe_harm_factors=["parece arriscado"])
+
+
+class RollbackObligationTests(unittest.TestCase):
+    """Rollback is proportional: mandatory only where it is applicable."""
+
+    def _ordinary_frontend_contract(self, **rollback_override):
+        contract = {
+            "id": "T1",
+            "title": "Add supplier form",
+            "status": "pending",
+            "change_type": "documentation",
+            "goal": {"description": "Add the supplier form."},
+            "depends_on": [],
+            "allowed_files": ["app/form.tsx"],
+            "acceptance": [{"id": "AC-1", "criterion": "Form saves."}],
+            "test_policy": {"mode": "test-exempt", "commands": []},
+            "review": {"self_review": "required", "spec_compliance": "required"},
+            "completion": {"requires": ["reviewed-diff"]},
+        }
+        if rollback_override:
+            contract["rollback"] = rollback_override
+        return contract
+
+    def test_standard_ordinary_frontend_accepts_missing_rollback(self) -> None:
+        policy = load_test_policy(FRAMEWORK_ROOT)
+        contract = self._ordinary_frontend_contract()
+        self.assertEqual([], validate_task_contract(contract, policy, mode="standard"))
+
+    def test_standard_ordinary_frontend_accepts_rollback_not_applicable(self) -> None:
+        policy = load_test_policy(FRAMEWORK_ROOT)
+        contract = self._ordinary_frontend_contract(
+            strategy="not_applicable", reason="No persistence; revert the commit."
+        )
+        self.assertEqual([], validate_task_contract(contract, policy, mode="standard"))
+
+    def test_standard_rollback_not_applicable_needs_a_reason(self) -> None:
+        policy = load_test_policy(FRAMEWORK_ROOT)
+        contract = self._ordinary_frontend_contract(strategy="not_applicable")
+        codes = {
+            issue["code"]
+            for issue in validate_task_contract(contract, policy, mode="standard")
+        }
+        self.assertIn("rollback", codes)
+
+    def test_standard_migration_requires_rollback_or_mitigation(self) -> None:
+        policy = load_test_policy(FRAMEWORK_ROOT)
+        contract = {
+            "id": "T2",
+            "title": "Add onboarding_completed_at",
+            "status": "pending",
+            "change_type": "database_migration",
+            "goal": {"description": "Add a compatible column with backfill."},
+            "depends_on": [],
+            "allowed_files": ["migrations/0099_add_onboarding.py"],
+            "acceptance": [{"id": "AC-1", "criterion": "Column backfills safely."}],
+            "test_policy": {
+                "mode": "forward-and-rollback-required",
+                "commands": ["pytest tests/test_migration.py"],
+            },
+            "review": {"self_review": "required", "spec_compliance": "required"},
+            "completion": {"requires": ["reviewed-diff"]},
+        }
+        self.assertEqual(["migration"], rollback_signals_for(contract))
+
+        codes = {
+            issue["code"]
+            for issue in validate_task_contract(contract, policy, mode="standard")
+        }
+        self.assertIn("rollback", codes)
+
+        contract["rollback"] = {"strategy": "not_applicable", "reason": "n/a"}
+        codes = {
+            issue["code"]
+            for issue in validate_task_contract(contract, policy, mode="standard")
+        }
+        self.assertIn("rollback", codes)
+
+        contract["rollback"] = {
+            "strategy": "backfill is additive; drop the new column to revert"
+        }
+        self.assertEqual([], validate_task_contract(contract, policy, mode="standard"))
+
+    def test_standard_destructive_write_requires_rollback(self) -> None:
+        policy = load_test_policy(FRAMEWORK_ROOT)
+        contract = {
+            "id": "T3",
+            "title": "Purge stale invitations",
+            "status": "pending",
+            "change_type": "business_logic",
+            "goal": {"description": "Delete expired invitation rows."},
+            "depends_on": [],
+            "allowed_files": ["app/invitations/cleanup.py"],
+            "acceptance": [{"id": "AC-1", "criterion": "Expired rows are removed."}],
+            "test_policy": {
+                "mode": "red-green-required",
+                "commands": ["pytest tests/test_cleanup.py"],
+            },
+            "review": {"self_review": "required", "spec_compliance": "required"},
+            "completion": {"requires": ["reviewed-diff"]},
+            "rollback_signals": ["destructive_data_effect"],
+        }
+        codes = {
+            issue["code"]
+            for issue in validate_task_contract(contract, policy, mode="standard")
+        }
+        self.assertIn("rollback", codes)
+
+        contract["rollback"] = {"strategy": "restore the affected rows from backup"}
+        self.assertEqual([], validate_task_contract(contract, policy, mode="standard"))
+
+    def test_critical_always_requires_rollback_or_containment(self) -> None:
+        policy = load_test_policy(FRAMEWORK_ROOT)
+
+        without_rollback = full_contract()
+        del without_rollback["rollback"]
+        codes = {
+            issue["code"]
+            for issue in validate_task_contract(without_rollback, policy, mode="critical")
+        }
+        self.assertIn("rollback", codes)
+
+        impossible_without_containment = full_contract()
+        impossible_without_containment["rollback"] = {"strategy": "not_applicable"}
+        codes = {
+            issue["code"]
+            for issue in validate_task_contract(
+                impossible_without_containment, policy, mode="critical"
+            )
+        }
+        self.assertIn("rollback", codes)
+
+        contained = full_contract()
+        contained["rollback"] = {
+            "strategy": "not_applicable",
+            "containment": "feature flag kill switch, restore from snapshot",
+            "justification": "Irreversible external side effect; contain instead.",
+        }
+        self.assertEqual([], validate_task_contract(contained, policy, mode="critical"))
 
 
 class ResolutionTests(unittest.TestCase):

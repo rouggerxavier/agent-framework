@@ -222,9 +222,10 @@ SEVERE_HARM_PATTERNS: Tuple[Tuple[str, str], ...] = (
 #: these, so "it feels risky" cannot become a classification.
 SEVERE_HARM_FACTORS = frozenset(name for name, _ in SEVERE_HARM_PATTERNS)
 
-#: Areas that deserve care and *no* automatic escalation. They are reported so a
-#: reader sees why the work is sensitive, and they raise the bar for `fast` only
-#: through the ordinary criteria — never by themselves.
+#: Areas that deserve care and *no* automatic escalation to `critical`. A
+#: sensitive area is reported so a reader sees why the work is sensitive, and it
+#: rules out `fast` by itself — the floor becomes `standard` — but it never
+#: reaches `critical` without a named severe harm factor.
 SENSITIVE_AREA_PATTERNS: Tuple[Tuple[str, str], ...] = (
     ("authentication_area", r"\b(auth|authentication|autentica[cç][aã]o|login|sess[aã]o|session)\b"),
     (
@@ -349,9 +350,11 @@ def classify_task(
     reversibility, blast radius, complexity and size, and only then time. Time
     separates `fast` from `standard`; damage is what reaches `critical`.
 
-    A sensitive area on its own never escalates. Neither does size, a migration,
-    a permission change or a long estimate — those are the reasons `critical`
-    used to be handed out for ordinary features.
+    A sensitive area on its own never escalates to `critical`. Neither does
+    size, a migration, a permission change or a long estimate — those are the
+    reasons `critical` used to be handed out for ordinary features. But a
+    sensitive area does rule out `fast`: the floor for work in a sensitive
+    area is `standard`, whatever else is true about it.
     """
 
     if reversibility not in REVERSIBILITY_LEVELS:
@@ -396,6 +399,16 @@ def classify_task(
             "standard",
             "Oversized work that can be split: classify each resulting unit on its "
             "own instead of escalating the whole.",
+            harm,
+            areas,
+        )
+
+    if areas:
+        return _classification(
+            "standard",
+            "fast rejected: sensitive area requires at least standard: {}.".format(
+                ", ".join(sorted(set(areas)))
+            ),
             harm,
             areas,
         )
@@ -445,8 +458,10 @@ def route_execution(
     """Select a mode from concrete signals, defaulting to standard.
 
     `standard` is the resting state of the router. `fast` needs positive evidence
-    that the work is short and contained; `critical` needs a named grave-damage
-    path. A sensitive area is reported and never escalates on its own.
+    that the work is short and contained *and* that no sensitive area is
+    involved; `critical` needs a named grave-damage path. A sensitive area never
+    escalates to `critical` on its own, but it does rule out `fast` — the floor
+    becomes `standard`.
     """
 
     clean = _normalized_text(request)
@@ -468,6 +483,12 @@ def route_execution(
                 "Escalated from explicit {} because a failure would cause grave "
                 "damage: {}.".format(explicit, ", ".join(harm_factors))
             )
+        elif explicit == "fast" and sensitive_areas:
+            selected = "standard"
+            escalated = True
+            reason = "fast rejected: sensitive area requires at least standard: {}.".format(
+                ", ".join(sensitive_areas)
+            )
         else:
             selected = explicit
             reason = "User explicitly selected {} mode.".format(explicit)
@@ -475,6 +496,17 @@ def route_execution(
         selected = "critical"
         reason = "A defect here would cause grave damage: {}.".format(
             ", ".join(harm_factors)
+        )
+    elif sensitive_areas:
+        selected = "standard"
+        reason = (
+            "fast rejected: sensitive area requires at least standard: {}.".format(
+                ", ".join(sensitive_areas)
+            )
+            if fast_factors
+            else "Sensitive area requires at least standard: {}.".format(
+                ", ".join(sensitive_areas)
+            )
         )
     elif fast_factors and not complexity_factors:
         selected = "fast"

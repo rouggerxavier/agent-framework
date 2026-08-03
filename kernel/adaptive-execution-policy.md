@@ -56,14 +56,32 @@ Time separates `fast` from `standard` and nothing else. A task that runs for
 hours can stay `standard`. A ten-minute change inside the payment or
 authentication core can be `critical`.
 
+A sensitive area (authentication, sessions, authorization/permissions, tenant
+isolation, financial data, personal data, migrations, secrets, account
+recovery, billing, integrations that write important data) never escalates to
+`critical` by itself, but it does rule out `fast`: the floor for work touching
+one is `standard`.
+
+```text
+1. severe harm identified                      → critical
+2. sensitive area identified, no severe harm    → at least standard
+3. short, contained, non-sensitive work         → may be fast
+4. everything else                              → standard
+```
+
 ## Fast
 
 Short, simple, localized work — around ten minutes, few files, predictable
-behaviour, low impact, easy to revert, no sensitive part, no architectural
+behaviour, low impact, easy to revert, **no sensitive area**, no architectural
 decision, quick and proportional tests.
 
 Typical: small bugs, visual adjustments, copy fixes, simple redirects, missing
 tests, small helper changes, localized improvements inside an existing feature.
+
+A request for `fast` that touches a sensitive area is rejected and raised to
+`standard`, with the reason `fast rejected: sensitive area requires at least
+standard`. The area alone still does not make it `critical` — that needs a
+named severe harm factor.
 
 Fast is not the absence of quality. It is the absence of ceremony: the context,
 the result and the tests are preserved; the planning cycle, the seal, multiple
@@ -81,8 +99,33 @@ integrations with known contracts, administrative flows, imports, larger but
 bounded refactors, changes that need E2E.
 
 A standard task may need a plan, `allowed_files`, persisted decisions, targeted
-tests, E2E, a self-review, one independent review, CI, and a rollback plan for a
-migration. **None of those turn it into `critical`.**
+tests, E2E, a self-review, one independent review, and CI. **None of those turn
+it into `critical`.**
+
+### Rollback, proportional to the change
+
+`fast` never needs a formal rollback — the change only has to be trivially
+reversible.
+
+`standard` owes a rollback or mitigation plan only when it is applicable:
+
+- a migration;
+- writing, transforming, or deleting data;
+- an incompatible change;
+- an external integration with persistent effects;
+- an infrastructure change;
+- a production operational change;
+- a launch that needs a feature flag;
+- a relevant, hard-to-undo regression risk.
+
+For ordinary standard work — a frontend feature, a new screen, a navigation
+flow, onboarding without destructive persistence, an additive endpoint, a
+bounded refactor, tests, interface tweaks — the field is optional, or
+`not_applicable` with a short reason.
+
+`critical` always owes a rollback or containment plan. When a real rollback is
+impossible, it owes containment instead: a feature flag, a kill switch, a
+restore, a recovery procedure, plus an explicit justification.
 
 ## Critical
 
@@ -162,7 +205,7 @@ Inside the persistent kernel the same table applies per task:
 | --- | --- | --- | --- |
 | `allowed_files` and acceptance | yes | yes | yes |
 | `read_first`, `forbidden_changes`, `requirements`, `runtime_verification` | optional | optional | required |
-| Rollback strategy | optional | required | required |
+| Rollback strategy | optional (trivially reversible) | proportional — required only when applicable | required (or containment) |
 | Self-review checklist | core checks | full | full |
 | Plan seal for the phase | not required | not required | required |
 | Reviews before `verifying` | none beyond self-review | one integrated | spec **and** quality |

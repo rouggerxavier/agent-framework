@@ -85,11 +85,22 @@ critical neighbour. The example above shows the `critical` shape — every field
 required there.
 
 A `standard` task needs `id`, `title`, `status`, `change_type`, `goal`,
-`depends_on`, `allowed_files`, `acceptance`, `test_policy`, `rollback`, `review`
-and `completion`, with `self_review: required` plus one of `spec_compliance` or
+`depends_on`, `allowed_files`, `acceptance`, `test_policy`, `review` and
+`completion`, with `self_review: required` plus one of `spec_compliance` or
 `code_quality` marked `required` or `integrated`. A `fast` task needs `id`,
 `title`, `status`, `change_type`, `goal`, `allowed_files`, `acceptance`,
 `test_policy` and `completion`.
+
+`rollback` is proportional for `standard`: it is required only when applicable
+— a migration, a destructive data effect, an incompatible change, a persistent
+external integration, an infrastructure change, a production operational
+change, a feature-flag launch, or a hard-to-reverse regression risk (a
+`database_migration` or `external_integration` `change_type` implies it
+automatically; anything else declares it via `rollback_signals`). Otherwise the
+field is optional, or `{"strategy": "not_applicable", "reason": "..."}`.
+`critical` always needs a real `rollback.strategy`, or, when a real rollback is
+impossible, `containment`/`justification` describing the feature flag, kill
+switch, restore, or recovery procedure instead.
 
 `allowed_files` and `acceptance` are required in every mode: they are the scope
 boundary and the definition of done, and they cost one line each.

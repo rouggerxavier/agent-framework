@@ -20,9 +20,9 @@ agent-framework-route --auto "<the request>"
 ```
 
 The router is side-effect free and prints `selected_mode`, the named
-grave-damage paths in `risk_factors`, the `sensitive_areas` that are context
-only, and the assets worth loading. `standard` is the answer when nothing argues
-otherwise.
+grave-damage paths in `risk_factors`, the `sensitive_areas` (which rule out
+`fast` but never escalate to `critical` on their own), and the assets worth
+loading. `standard` is the answer when nothing argues otherwise.
 
 Record the classification where the work lives:
 
@@ -80,7 +80,7 @@ already holds is a no-op. The previous classification is kept in the record's
 | --- | --- | --- | --- |
 | `allowed_files` and acceptance in the contract | yes | yes | yes |
 | `read_first`, `forbidden_changes`, `requirements`, `runtime_verification` | optional | optional | required |
-| Rollback strategy | optional | required | required |
+| Rollback strategy | optional (trivially reversible) | proportional — required only when applicable | required (or containment) |
 | Self-review checklist | core checks | full | full |
 | Plan seal for the phase | not required | not required | required |
 | Reviews before `verifying` | none beyond self-review | one integrated | spec **and** quality |
