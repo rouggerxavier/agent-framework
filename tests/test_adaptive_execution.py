@@ -30,6 +30,13 @@ class AdaptiveRoutingTests(unittest.TestCase):
             self.assertFalse((root / ".agent").exists())
             self.assertNotIn("skills/framework-next/SKILL.md", decision["assets_selected"])
 
+    def test_ordinary_work_defaults_to_standard(self) -> None:
+        decision = route_execution(
+            "Implemente a tela de cadastro de fornecedores com os testes."
+        )
+        self.assertEqual("standard", decision["selected_mode"])
+        self.assertEqual([], decision["risk_factors"])
+
     def test_moderate_feature_routes_to_standard_short_flow(self) -> None:
         decision = route_execution(
             "Implemente um novo endpoint e testes seguindo o padrão existente."
@@ -70,13 +77,23 @@ class AdaptiveRoutingTests(unittest.TestCase):
             route_execution("--critical corrija o typo")["selected_mode"],
         )
 
-    def test_explicit_fast_escalates_only_for_grave_risk_with_reason(self) -> None:
+    def test_explicit_fast_escalates_only_for_grave_damage_with_reason(self) -> None:
         decision = route_execution(
-            "--fast altere autenticação e autorização do sistema"
+            "--fast troque o núcleo de autenticação e o core de sessões"
         )
         self.assertEqual("critical", decision["selected_mode"])
         self.assertTrue(decision["escalated"])
-        self.assertIn("grave security or data-loss risk", decision["reason"])
+        self.assertIn("grave damage", decision["reason"])
+
+    def test_touching_a_sensitive_area_does_not_escalate_on_its_own(self) -> None:
+        decision = route_execution(
+            "--fast ajuste o texto do formulário de login e da tela de pagamento"
+        )
+        self.assertEqual("fast", decision["selected_mode"])
+        self.assertFalse(decision["escalated"])
+        self.assertEqual([], decision["risk_factors"])
+        self.assertIn("authentication_area", decision["sensitive_areas"])
+        self.assertIn("financial_area", decision["sensitive_areas"])
 
     def test_router_cli_emits_required_contract(self) -> None:
         completed = subprocess.run(

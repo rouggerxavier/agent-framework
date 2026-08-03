@@ -90,7 +90,7 @@ class InitializationTests(unittest.TestCase):
             )
             self.assertEqual(0, validated.returncode, validated.stdout)
 
-    def test_standard_mode_cannot_create_critical_phase_artifacts(self) -> None:
+    def test_the_resume_only_state_cannot_create_phase_artifacts(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             initialize_project(

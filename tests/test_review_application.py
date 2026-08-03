@@ -75,7 +75,7 @@ def _write(root: Path, relative: str, data, body: str = "# Document\n") -> None:
     write_frontmatter(root / relative, data, body)
 
 
-def _reviewing_phase(root: Path, *, revision: int = 2) -> str:
+def _reviewing_phase(root: Path, *, revision: int = 2, task_mode: str = None) -> str:
     """U3A under review at revision 2, exactly as reported.
 
     Self review passed, both independent gates pending, three later tasks still
@@ -91,10 +91,13 @@ def _reviewing_phase(root: Path, *, revision: int = 2) -> str:
     _git(root, "checkout", "-b", FEATURE)
 
     initialized_project(root, with_phase=True)
+    u3a = minimal_task("U3A", status="reviewing")
+    if task_mode:
+        u3a["execution_mode"] = task_mode
     write_tasks(
         root,
         [
-            minimal_task("U3A", status="reviewing"),
+            u3a,
             minimal_task("U3B1"),
             minimal_task("U3B2", depends_on=["U3A", "U3B1"]),
             minimal_task("U3C"),
@@ -1200,6 +1203,74 @@ class CommandLine(unittest.TestCase):
                     "--result", RESULT, "--review", SPEC_REPORT,
                 ]
             )
+
+
+class IntegratedReviewTests(unittest.TestCase):
+    """One reviewer closes the round below `critical`.
+
+    The point of these tests is that the reduction is real: a standard task
+    reaches `verifying` after a single application, without a second reviewer
+    reading the same diff and without a second document to write.
+    """
+
+    def test_one_review_carries_a_standard_task_to_verification(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _reviewing_phase(root, task_mode="standard")
+
+            state, issues, changed = _spec(root)
+            self.assertEqual([], issues)
+            self.assertTrue(changed)
+            self.assertEqual("passed", state["gates"]["spec_compliance"])
+            self.assertEqual("not_required", state["gates"]["code_quality"])
+            self.assertEqual("reviewed", state["current_task"]["status"])
+            self.assertEqual("verify-phase", state["next_action"]["operation"])
+
+            index, _ = load_task_index(root / PHASE_DIR / "TASKS.md")
+            self.assertEqual(
+                "reviewed",
+                [task for task in index["tasks"] if task["id"] == "U3A"][0]["status"],
+            )
+            self.assertEqual([], validate_transition(state, "verifying", root))
+            self.assertEqual(
+                "verify-phase",
+                determine_next_operation(root)["next_operation"]["operation"],
+            )
+
+    def test_the_second_gate_says_why_it_was_not_required(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _reviewing_phase(root, task_mode="standard")
+            state, _, _ = _spec(root)
+            record = state["gate_records"]["code_quality"]
+            self.assertEqual("not_required", record["status"])
+            self.assertEqual(SPEC_REPORT, record["evidence"])
+            self.assertIn("integrated review", record["note"])
+
+    def test_a_critical_task_still_owes_the_second_reviewer(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _reviewing_phase(root)
+            state, _, _ = _spec(root)
+            self.assertEqual("pending", state["gates"]["code_quality"])
+            self.assertEqual("reviewing", state["current_task"]["status"])
+            self.assertEqual("run-quality-review", state["next_action"]["operation"])
+            self.assertTrue(validate_transition(state, "verifying", root))
+
+    def test_a_blocking_review_still_returns_a_standard_task_to_execution(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            commit = _reviewing_phase(root, task_mode="standard")
+            _write(root, SPEC_REPORT, _blocking_spec(commit))
+            state, issues, changed = _spec(root)
+            self.assertEqual([], issues)
+            self.assertTrue(changed)
+            self.assertEqual("blocked", state["gates"]["spec_compliance"])
+            self.assertEqual("pending", state["gates"]["code_quality"])
+            self.assertEqual(
+                "return-to-execution", state["next_action"]["operation"]
+            )
+            self.assertTrue(validate_transition(state, "verifying", root))
 
 
 if __name__ == "__main__":
