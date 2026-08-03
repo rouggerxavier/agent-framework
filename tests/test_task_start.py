@@ -255,7 +255,7 @@ class TheTargetIsNotTheOperatorsToChoose(unittest.TestCase):
 
 
 class StartIsRefused(unittest.TestCase):
-    def test_when_the_phase_is_not_planned(self) -> None:
+    def test_when_the_phase_is_neither_planned_nor_verifying(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             _on_feature(root)
@@ -267,7 +267,10 @@ class StartIsRefused(unittest.TestCase):
             _, issues, changed = _start(root)
 
             self.assertFalse(changed)
-            self.assertTrue(any("requires a 'planned' phase" in m for m in issues), issues)
+            self.assertTrue(
+                any("requires a 'planned' or 'verifying' phase" in m for m in issues),
+                issues,
+            )
 
     def test_when_no_task_is_eligible(self) -> None:
         with TemporaryDirectory() as temporary:

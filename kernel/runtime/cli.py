@@ -260,7 +260,11 @@ def build_parser() -> argparse.ArgumentParser:
         "start-task",
         help=(
             "start the task the kernel selected: selects it, moves task and "
-            "phase to executing, and binds the checkout, in one operation"
+            "phase to executing, and binds the checkout, in one operation. "
+            "Starts the phase's first task from 'planned', and its next task "
+            "from 'verifying' once the previous one is verified — rotating the "
+            "binding to the current branch and leaving the finished task, its "
+            "approvals and its history untouched"
         ),
     )
     start.add_argument("--project", dest="start_project")
