@@ -5,9 +5,21 @@ planejada e selada.
 
 ## Quando usar
 
-- `next_action` e `execute-task -> <ID>`.
-- O plano da fase esta selado.
+- A operacao derivada e `execute-task -> <ID>`.
 - A tarefa alvo esta `pending` e com dependencias satisfeitas.
+- A fase esta em **um destes dois contextos**:
+
+| Contexto | Status da fase | Exige |
+| --- | --- | --- |
+| primeira tarefa da fase | `planned` | plano selado quando o modo exigir |
+| proxima tarefa da fase | `verifying` | `current_task` ja `verified`, em `STATE.md` **e** no indice |
+
+O segundo contexto e o mesmo comando. Nao e reconciliacao: nada e preenchido
+retroativamente e a tarefa concluida nao e reaberta.
+
+Na proxima tarefa, `next_action` persistido normalmente ainda diz
+`verify-phase`. Isso **nao** bloqueia: e o campo que a propria operacao
+reescreve. Qualquer outra inconsistencia continua recusando.
 
 ## Quando nao usar
 
@@ -62,7 +74,11 @@ iniciar trabalho. Nenhum hand-edit de `STATE.md` e necessario.
 - nenhuma tarefa selecionada em `current_task.id`;
 - contrato invalido, dependencia insatisfeita, plano nao selado, risco nao
   classificado ou worktree suja sem worktree isolada;
-- fase fora de `planned`;
+- fase fora de `planned` ou `verifying`;
+- fase em `verifying` com a tarefa corrente ainda nao `verified`, ou com o
+  indice discordando do `STATE.md`;
+- blocker aberto;
+- indice descrevendo outra fase;
 - outra tarefa ja em `executing`, `reviewing` ou `verifying`;
 - `--task-id` diferente da tarefa selecionada pelo kernel.
 
@@ -89,6 +105,20 @@ Sair dos estados de execucao libera o binding para `git.last_execution`, que e
 historico e nunca e validado. A branch pode ser mergeada e apagada, e a branch
 de integracao continua valida. A proxima tarefa cria o seu proprio binding ao
 comecar.
+
+Uma tarefa `verified` **deixa de prender o checkout**, mesmo com a fase ainda em
+`verifying`. Por isso a proxima tarefa pode comecar em outra branch — o caso
+normal depois que a branch anterior foi mergeada:
+
+```bash
+git switch -c feat/<slug-da-proxima-tarefa>
+framework-next start-task --actor workflow-runner --reason "<ID anterior> verified; <ID> is next"
+```
+
+O binding anterior vai para `git.last_execution` e o novo aponta para a branch
+atual. Os gates de review reabrem `pending` para a nova tarefa, com os vereditos
+anteriores preservados no `history` de cada record, e seguem o **modo efetivo da
+nova tarefa** — uma tarefa `critical` nao eleva a seguinte.
 
 ## Saidas
 
