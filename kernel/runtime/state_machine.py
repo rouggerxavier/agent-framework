@@ -134,6 +134,37 @@ def _bind_execution(state: Dict[str, Any], root: Path, *, actor: str) -> None:
     }
 
 
+def bind_execution(state: Dict[str, Any], root: Path, *, actor: str) -> None:
+    """Capture the checkout as the active task's binding.
+
+    The public name for ``_bind_execution``. Rotating from one task to the next
+    needs the same capture the transition performs, one step earlier — the
+    selected task has to be bound *before* the state is validated, because
+    ``verifying`` is an execution-bound state and an unbound ``current_task``
+    would fall back to the legacy working branch and report a mismatch against
+    a branch nobody is on.
+    """
+
+    _bind_execution(state, root, actor=actor)
+
+
+def release_execution_binding(state: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Move the active task's binding into history, returning what was released.
+
+    History lives in ``git.last_execution``, which validation never reads. A
+    binding that stayed on a task that is over would keep speaking for it — the
+    way a merged branch once kept the integration branch permanently invalid.
+    """
+
+    current_task = _mapping(state.get("current_task"))
+    released = current_task.pop("execution", None)
+    if not released:
+        return None
+    state["git"] = dict(_mapping(state.get("git")))
+    state["git"]["last_execution"] = dict(released, released_at=utc_now())
+    return released
+
+
 def _task_index(state: Dict[str, Any], root: Path) -> Optional[Dict[str, Any]]:
     """The phase task index, or ``None`` when it cannot be read.
 
@@ -265,6 +296,20 @@ def execution_binding(state: Dict[str, Any]) -> Dict[str, Any]:
             "legacy": True,
         }
     return {}
+
+
+def _task_is_finished(state: Dict[str, Any]) -> bool:
+    """Whether the bound task is over, leaving the checkout free.
+
+    A phase sits in ``verifying`` from the moment its task is verified until the
+    next one starts, and for that whole window the task is finished while the
+    phase is still execution-bound. Holding the checkout to the finished task's
+    branch there is the same defect the set's own comment describes: a merged
+    branch outliving its work. The binding stays as the record of where the task
+    ran; it stops being a constraint on where the next one may.
+    """
+
+    return _mapping(state.get("current_task")).get("status") == "verified"
 
 
 def _binding_issues(
@@ -494,7 +539,7 @@ def validate_state(
                     ),
                 )
             )
-        if status in EXECUTION_BOUND_STATES:
+        if status in EXECUTION_BOUND_STATES and not _task_is_finished(state):
             issues.extend(_binding_issues(state, snapshot))
         resolution = resolve_worktree(git_state.get("worktree"), root)
         if resolution.code:
@@ -1130,11 +1175,7 @@ def transition_state(
     # "the branch this ran on" and "the branch this must run on" stop being the
     # same value.
     if target not in EXECUTION_BOUND_STATES:
-        current_task = _mapping(updated.get("current_task"))
-        released = current_task.pop("execution", None)
-        if released:
-            updated["git"] = dict(_mapping(updated.get("git")))
-            updated["git"]["last_execution"] = dict(released, released_at=utc_now())
+        release_execution_binding(updated)
     elif not _mapping(_mapping(updated.get("current_task")).get("execution")).get(
         "branch"
     ):
