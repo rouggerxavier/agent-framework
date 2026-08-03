@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from .documents import DocumentError, git_snapshot, load_frontmatter, utc_now, write_frontmatter
-from .execution_modes import normalize_mode, state_execution_mode
+from .execution_modes import is_persistent_state, normalize_mode
 
 
 PHASE_SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -25,13 +25,17 @@ def _render_template(path: Path, values: Dict[str, Any]) -> str:
 
 
 def _initial_state(
-    project_name: str, mode: str, snapshot: Dict[str, Any], timestamp: str
+    project_name: str,
+    mode: str,
+    snapshot: Dict[str, Any],
+    timestamp: str,
+    *,
+    execution_mode: str = "critical",
 ) -> Dict[str, Any]:
-    execution_mode = normalize_mode(mode, default="critical")
-    if execution_mode == "auto":
-        execution_mode = "critical"
     return {
         "schema_version": 1,
+        # The default mode for the project's tasks, not a floor: each task
+        # resolves its own, and `set-execution-mode` records a correction.
         "execution_mode": execution_mode,
         "status": "proposed",
         "project": {"name": project_name, "mode": mode},
@@ -102,7 +106,7 @@ def _initial_standard_state(
 ) -> Dict[str, Any]:
     return {
         "schema_version": 1,
-        "execution_mode": "standard",
+        "execution_mode": normalize_mode(mode, default="standard"),
         "status": "proposed",
         "project": {"name": project_name, "mode": mode},
         "current_task": {"id": None, "status": None},
@@ -132,7 +136,18 @@ def initialize_project(
     *,
     project_name: str,
     mode: str = "full",
+    persistent: bool = False,
 ) -> Path:
+    """Create ``.agent`` for a project.
+
+    ``persistent`` asks for the full kernel — phases, contracts, gates, evidence
+    — at a `standard` default mode. Without it, `standard` gets the resume-only
+    state it always had. The flag exists because "this project has to remember
+    things across sessions" and "a defect here is catastrophic" were the same
+    request: the full kernel was reachable only through `critical`, so every task
+    of every phase inherited the critical lifecycle to buy memory.
+    """
+
     project_root = project_root.expanduser().resolve()
     if not project_root.is_dir():
         raise DocumentError("project root does not exist: {}".format(project_root))
@@ -151,6 +166,8 @@ def initialize_project(
     }:
         raise DocumentError("invalid project mode: {}".format(mode))
     execution_mode = normalize_mode(mode, default="critical")
+    if execution_mode == "auto":
+        execution_mode = "critical"
     if execution_mode == "fast":
         raise DocumentError(
             "fast mode does not initialize .agent; use agent-framework-router"
@@ -159,7 +176,7 @@ def initialize_project(
     templates = framework_root / "templates"
     timestamp = utc_now()
     snapshot = git_snapshot(project_root)
-    if execution_mode == "standard":
+    if execution_mode == "standard" and not persistent:
         short_plan = templates / "short-plan.md"
         if not short_plan.is_file():
             raise DocumentError("missing initialization template: short-plan.md")
@@ -207,7 +224,13 @@ def initialize_project(
             (temporary / destination).write_text(rendered, encoding="utf-8")
         write_frontmatter(
             temporary / "STATE.md",
-            _initial_state(project_name, mode, snapshot, timestamp),
+            _initial_state(
+                project_name,
+                mode,
+                snapshot,
+                timestamp,
+                execution_mode=execution_mode,
+            ),
             "# Project State\n\nThis file is managed by the Agent Framework kernel.\n",
         )
         os.replace(str(temporary), str(agent_dir))
@@ -229,12 +252,11 @@ def initialize_phase(
     project_root = project_root.expanduser().resolve()
     state_path = project_root / ".agent" / "STATE.md"
     state, body = load_frontmatter(state_path)
-    try:
-        execution_mode = state_execution_mode(state)
-    except ValueError as exc:
-        raise DocumentError(str(exc)) from exc
-    if execution_mode != "critical":
-        raise DocumentError("phase artifacts are available only in critical mode")
+    if not is_persistent_state(state):
+        raise DocumentError(
+            "phase artifacts require the persistent kernel; this project holds the "
+            "resume-only state"
+        )
     if state.get("status") not in {"proposed", "discussing", "specified"}:
         raise DocumentError("cannot initialize a phase from {}".format(state.get("status")))
     if not PHASE_SLUG.match(slug):
