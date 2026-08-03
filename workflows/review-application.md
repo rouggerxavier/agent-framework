@@ -120,9 +120,38 @@ Recusa nao escreve nada.
 4. `transition --to executing` devolve a tarefa a correcao. O binding atravessa
    intacto; a `plan_revision` **nao** muda.
 5. Os cinco gates de revisao sao reabertos: nenhuma aprovacao e herdada.
-6. Feita a correcao, `task-status --to implementation_complete`, self review, e
-   `transition --to reviewing`.
-7. As duas revisoes sao pagas de novo, com reviewers independentes.
+6. Feita a correcao, `task-status --to implementation_complete` e self review.
+
+A partir daqui o caminho depende do modo.
+
+### Abaixo de `critical`: a correcao fecha a rodada
+
+7. Rode **somente os testes afetados pela correcao** e registre a evidencia.
+8. `resolve-finding --blocker <ID> --evidence <arquivo> --actor <quem>` para cada
+   achado. O achado nao e apagado: `status` vira `resolved` e a correcao fica
+   carimbada em `resolution`, `resolution_evidence` e `resolved_by`.
+9. Com todos os achados resolvidos e nenhum blocker aberto,
+   `transition --to verifying` abre — **sem segunda review independente**.
+
+```bash
+framework-next resolve-finding \
+  --blocker QUALITY-U3B1-01 \
+  --evidence .agent/phases/<fase>/U3B1-correction.md \
+  --actor <executor> --note "targeted tests re-run"
+framework-next transition --to verifying \
+  --actor workflow-runner --reason "finding corrected"
+```
+
+Uma segunda review so volta a ser exigida quando a correcao deixou de ser
+correcao: escopo expandiu materialmente, surgiu risco grave, ou o contrato
+mudou. Isso e `amend-plan`, que reabre os gates e devolve a tarefa a `reviewing`
+— e agrupa numa unica emenda o que foi mecanicamente afetado (arquivos gerados,
+migration head, mapas arquiteturais).
+
+### `critical`: a rodada fecha com nova review
+
+7. `transition --to reviewing`; as duas revisoes sao pagas de novo, com
+   reviewers independentes. `resolve-finding` e recusado neste modo.
 8. A quality review que aprova o trabalho corrigido fecha o blocker que ela
    mesma abriu. A revisao anterior permanece em `history` como registro do
    achado — **ela nao e apagada**.

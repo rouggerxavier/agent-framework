@@ -48,7 +48,7 @@ ALLOWED_TRANSITIONS = {
     "discussing": {"specified", "blocked", "cancelled", "superseded"},
     "specified": {"discussing", "planned", "blocked", "cancelled", "superseded"},
     "planned": {"specified", "executing", "blocked", "cancelled", "superseded"},
-    "executing": {"reviewing", "blocked", "cancelled", "superseded"},
+    "executing": {"reviewing", "verifying", "blocked", "cancelled", "superseded"},
     "reviewing": {"executing", "verifying", "blocked", "cancelled", "superseded"},
     "verifying": {
         "executing",
@@ -84,6 +84,11 @@ ACTIVE_TASK_STATES = {"executing", "reviewing", "verifying"}
 #: Applying affinity there made a merged working branch outlive its own work and
 #: leave the integration branch permanently invalid.
 EXECUTION_BOUND_STATES = {"executing", "reviewing", "verifying"}
+
+#: The ``source`` an independent review stamps on the blockers it raises. Kept
+#: here rather than imported from ``review_application`` because that module
+#: imports this one; it owns the writing, this one owns reading them back.
+REVIEW_BLOCKER_SOURCES = frozenset({"spec-compliance", "code-quality"})
 PHASE_ARTIFACTS = ("spec", "plan", "tasks", "evidence", "review", "handoff")
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[2]
 
@@ -684,6 +689,29 @@ def _blockers_have_evidence(blockers: Iterable[Dict[str, Any]]) -> bool:
     return found
 
 
+def review_findings(
+    state: Dict[str, Any], task_id: Any, *, resolved: bool
+) -> List[Dict[str, Any]]:
+    """The blockers a review raised for ``task_id``, resolved or still open.
+
+    A review finding is the only blocker the framework raises with a ``source``
+    naming the gate that raised it, which is what makes it possible to ask "did
+    the round this correction answers actually happen" without trusting a field
+    a caller could have written for itself.
+    """
+
+    wanted = "resolved" if resolved else "open"
+    return [
+        blocker
+        for blocker in _blockers(state)
+        if isinstance(blocker, dict)
+        and blocker.get("source") in REVIEW_BLOCKER_SOURCES
+        and blocker.get("task_id") == task_id
+        and ("resolved" if blocker.get("status", "open") == "resolved" else "open")
+        == wanted
+    ]
+
+
 def _open_blockers(state: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         blocker
@@ -957,6 +985,62 @@ def validate_transition(
                 _issue(
                     "implementation-incomplete",
                     "executor may enter review only after implementation_complete",
+                )
+            )
+        if _gate(state, "self_review") != "passed":
+            issues.append(_issue("self-review", "self-review must be recorded as passed"))
+
+    if current == "executing" and target == "verifying":
+        # The correction closes the round it answers. Below `critical`, sending a
+        # corrected diff back through a second independent review buys a second
+        # opinion on changes the first reviewer already specified — which is the
+        # ceremony that made a one-finding round cost two full reviews. What is
+        # demanded instead is the record: the round happened, every finding it
+        # raised is resolved against evidence of the correction, and nothing is
+        # still open. A second review is not forbidden, it is simply no longer
+        # the only door: a correction that outgrows its finding — new scope, a
+        # changed contract, a grave risk — is an amendment, and `amend-plan`
+        # reopens the gates and puts the task back through `reviewing`.
+        reviews = mode_requirements(effective_task_mode(state, root))[
+            "independent_reviews"
+        ]
+        if reviews >= 2:
+            issues.append(
+                _issue(
+                    "correction-requires-review",
+                    "critical closes a correction through a new independent "
+                    "review; return through reviewing",
+                )
+            )
+        task_id = task.get("id")
+        resolved = review_findings(state, task_id, resolved=True)
+        if not resolved:
+            issues.append(
+                _issue(
+                    "no-resolved-finding",
+                    "execution may reach verification only to close a review "
+                    "round whose findings are recorded as resolved",
+                )
+            )
+        for finding in resolved:
+            if not finding.get("resolution_evidence"):
+                issues.append(
+                    _issue(
+                        "finding-resolution-evidence",
+                        "resolved finding {} carries no evidence of the "
+                        "correction".format(finding.get("id")),
+                    )
+                )
+        if blockers:
+            issues.append(
+                _issue("open-blockers", "verification cannot start with an open finding")
+            )
+        if task.get("status") != "implementation_complete":
+            issues.append(
+                _issue(
+                    "implementation-incomplete",
+                    "the correction must be implementation_complete before "
+                    "verification",
                 )
             )
         if _gate(state, "self_review") != "passed":

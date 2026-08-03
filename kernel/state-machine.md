@@ -53,6 +53,7 @@ verifier alone requests `ready_to_ship`; shipping skills request `shipped`.
 | `executing → reviewing` | result is `implementation_complete`; required tests/waiver and acceptance evidence exist; self-review passed | runner |
 | `reviewing → executing` | spec is `BLOCKED` or quality is `CHANGES_REQUIRED`; blocker contains direct evidence | reviewer + runner |
 | `reviewing → verifying` | spec is `PASS`/`PASS_WITH_NOTES`; quality is `APPROVED`/`APPROVED_WITH_NOTES`; no blocker | runner |
+| `executing → verifying` | below `critical` only: a review round was held, every finding it raised is `resolved` with evidence of the correction, no blocker is open, result is `implementation_complete`, self-review passed | runner |
 | `verifying → executing` | verification failed with evidence, or current task is verified and the next eligible contract/dependencies are valid | verifier + runner |
 | `verifying → reviewing` | review/evidence defect recorded; affected review invalidated | verifier + runner |
 | `verifying → ready_to_ship` | every acceptance criterion has evidence; required verification passed; blockers resolved; waivers reviewed | verifier |
@@ -203,12 +204,37 @@ for.
 
 A blocking verdict records the gate, opens the blockers with their evidence and
 points at `return-to-execution`; it does not perform it either. After the
-correction, `transition --to executing` retires all five review gates, so
-**both** reviews are earned again — no approval is inherited. The review that
-approves the corrected work is what closes the blocker it raised; the earlier
-review stays in `history` as the record of the finding. A code correction that
-does not change the contract is not an amendment and must not go through
-`amend-plan`.
+correction, `transition --to executing` retires all five review gates, so in
+`critical` **both** reviews are earned again — no approval is inherited. The
+review that approves the corrected work is what closes the blocker it raised;
+the earlier review stays in `history` as the record of the finding. A code
+correction that does not change the contract is not an amendment and must not go
+through `amend-plan`.
+
+**Below `critical`, the correction closes the round it answers.** A second
+independent pass over a diff whose changes the first reviewer specified is what
+made a one-finding round cost two full reviews. `framework-next resolve-finding`
+records one finding as corrected against evidence of the correction — the
+targeted test run that proves it — and when every finding the round raised is
+resolved, `executing → verifying` opens. The finding is not erased: its summary,
+severity, required change and originating review stay on the blocker, alongside
+`resolution`, `resolution_evidence` and who recorded it, and the blocking review
+itself stays in `gate_records[...].history`.
+
+The lifecycle for a `standard` round with findings is therefore:
+
+```text
+reviewing → executing → correction → findings resolved → verifying
+```
+
+A second review is owed again only when the correction stopped being a
+correction: it expanded the scope materially, a grave risk surfaced, or the
+contract changed. Those are amendments — `amend-plan` reopens the gates and the
+task returns through `reviewing`. The mechanically affected fallout of one
+correction — generated files, a migration head, an architectural map — is
+grouped into that single amendment rather than split across several. In
+`critical` `resolve-finding` is refused and `executing → verifying` reports
+`correction-requires-review`.
 
 Every application requires independence (reviewer ≠ executor), an inspected
 diff, non-empty `files_inspected` and `evidence_inspected`, and correspondence

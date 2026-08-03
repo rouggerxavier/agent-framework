@@ -413,11 +413,27 @@ sendo um ato deliberado, com actor e razão próprios.
 
 Um veredito bloqueante registra o gate, abre os blockers com evidência e aponta
 `return-to-execution`; ele também não executa a transição. Depois da correção,
-`transition --to executing` reabre os cinco gates de revisão, então **as duas
-revisões são pagas de novo** — nenhuma aprovação é herdada. A revisão que
-aprova o trabalho corrigido é o que fecha o blocker que ela mesma abriu; a
-revisão anterior permanece como histórico do achado. Uma correção de código que
-não altera o contrato **não** é caso de `amend-plan`.
+`transition --to executing` reabre os cinco gates de revisão — nenhuma aprovação
+é herdada.
+
+**Abaixo de `critical`, a correção fecha a rodada que ela responde.** Rode os
+testes afetados pela correção, registre cada achado como resolvido com essa
+evidência (`framework-next resolve-finding --blocker <ID> --evidence <arquivo>
+--actor <quem>`) e vá direto para verificação:
+
+```text
+reviewing → executing → correção → findings resolved → verifying
+```
+
+Nada é apagado: o achado guarda `resolution`, `resolution_evidence` e quem
+registrou, e a review bloqueante permanece em `gate_records[...].history`. Uma
+segunda review só volta a ser exigida quando a correção expandiu materialmente o
+escopo, revelou risco grave ou mudou o contrato — isso é `amend-plan`, que
+reabre os gates e devolve a tarefa a `reviewing`, agrupando numa única emenda o
+que foi mecanicamente afetado (arquivos gerados, migration head, mapas
+arquiteturais). Em `critical` `resolve-finding` é recusado e **as duas revisões
+são pagas de novo**. Uma correção de código que não altera o contrato **não** é
+caso de `amend-plan`.
 
 Toda aplicação exige independência (reviewer ≠ executor), diff inspecionado,
 `files_inspected` e `evidence_inspected` não vazios, e correspondência com o
