@@ -31,6 +31,7 @@ ASSET_BY_OPERATION = {
     "resume-task": "skills/task-runner/SKILL.md",
     "run-spec-review": "skills/spec-compliance-reviewer/SKILL.md",
     "run-quality-review": "skills/code-quality-reviewer/SKILL.md",
+    "return-to-execution": "skills/task-runner/SKILL.md",
     "verify-phase": "skills/goal-coverage-verifier/SKILL.md",
     "resolve-blocker": "skills/persistent-debug-session/SKILL.md",
     "ship": "skills/git-decision-router/SKILL.md",
@@ -264,7 +265,18 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
         operation, target = "resume-task", state["current_task"]["id"]
         evidence.append("active task contract found: {}".format(target))
     elif status == "reviewing":
-        if state["gates"].get("spec_compliance") not in {"passed", "passed_with_notes"}:
+        # A rejected review is not a missing one. Recommending the review that
+        # already ran would send the reviewer back to re-read the same diff,
+        # when what the verdict asked for is a correction.
+        if (
+            state["gates"].get("spec_compliance") == "blocked"
+            or state["gates"].get("code_quality") == "changes_required"
+        ):
+            operation = "return-to-execution"
+        elif state["gates"].get("spec_compliance") not in {
+            "passed",
+            "passed_with_notes",
+        }:
             operation = "run-spec-review"
         elif state["gates"].get("code_quality") not in {
             "approved",

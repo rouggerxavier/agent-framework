@@ -412,12 +412,9 @@ def reopen_review_gates(
     An approval is never dropped. It is appended to the record's ``history``
     with the revision it was granted under.
 
-    A gate with no record keeps none. Creating one here would be the wrong kind
-    of thorough: ``spec_compliance`` and ``code_quality`` are written by the
-    review appliers, which move the map and keep no record, and inventing a
-    record for them would make the very next review look like a divergence. What
-    those gates leave behind instead is the ledger event the caller writes,
-    which carries their previous values.
+    A gate with no record keeps none. Creating one here would invent a judgement
+    nobody made, and a gate whose record has never been written is exactly the
+    gate that has never been paid for.
     """
 
     gates = dict(_mapping(state.get("gates")))

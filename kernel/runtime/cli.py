@@ -30,7 +30,7 @@ from .next_operation import determine_next_operation
 from .project import initialize_phase, initialize_project
 from .reconcile import reconcile_phase
 from .rotation import activate_phase
-from .reviews import validate_quality_review, validate_spec_review
+from .review_application import apply_quality_review, apply_spec_review
 from .task_start import start_task
 from .state_machine import (
     REVIEW_GATES,
@@ -226,21 +226,41 @@ def build_parser() -> argparse.ArgumentParser:
     result.add_argument("--result", required=True)
 
     spec = subparsers.add_parser(
-        "validate-spec-review", help="validate independent spec review"
+        "validate-spec-review",
+        help=(
+            "validate an independent spec review and record its verdict on the "
+            "spec_compliance gate, in one operation"
+        ),
     )
     spec.add_argument("--project", dest="spec_project")
     spec.add_argument("--contract", required=True)
     spec.add_argument("--task-id")
     spec.add_argument("--result", required=True)
     spec.add_argument("--review", required=True)
+    spec.add_argument("--actor", required=True)
+    spec.add_argument(
+        "--check",
+        action="store_true",
+        help="run every check and write nothing",
+    )
 
     quality = subparsers.add_parser(
-        "validate-quality-review", help="validate independent quality review"
+        "validate-quality-review",
+        help=(
+            "validate an independent quality review and record its verdict on "
+            "the code_quality gate, in one operation"
+        ),
     )
     quality.add_argument("--project", dest="quality_project")
     quality.add_argument("--result", required=True)
     quality.add_argument("--spec-review", required=True)
     quality.add_argument("--review", required=True)
+    quality.add_argument("--actor", required=True)
+    quality.add_argument(
+        "--check",
+        action="store_true",
+        help="run every check and write nothing",
+    )
 
     evidence = subparsers.add_parser(
         "record-evidence", help="append a validated event to EVIDENCE.md"
@@ -268,6 +288,86 @@ def _contract(root: Path, value: str, task_id: Optional[str]) -> Dict[str, Any]:
 
 def _mapping_or_empty(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _emit_review(
+    gate: str,
+    label: str,
+    state: Dict[str, Any],
+    issues: Sequence[Dict[str, str]],
+    changed: bool,
+    *,
+    checked: bool,
+    as_json: bool,
+) -> int:
+    """Render one review application. Nothing here decides anything.
+
+    ``--check`` and an unchanged repeat are reported apart from an application
+    that landed, because "valid" and "recorded" are the two things this command
+    used to conflate.
+    """
+
+    if issues:
+        return _emit_issues(issues, label)
+
+    # On `--check` nothing was written, so the state carries the record of
+    # whatever ran *before* this review. Reporting it would describe an
+    # application that did not happen.
+    record = (
+        {}
+        if checked
+        else _mapping_or_empty(_mapping_or_empty(state.get("gate_records")).get(gate))
+    )
+    action = _mapping_or_empty(state.get("next_action"))
+    outcome = "checked" if checked else ("applied" if changed else "unchanged")
+    if as_json:
+        payload = {
+            "outcome": outcome,
+            "gate": gate,
+            "status": _mapping_or_empty(state.get("gates")).get(gate),
+        }
+        if not checked:
+            payload.update(
+                {
+                    "classification": record.get("classification"),
+                    "task_id": record.get("task_id"),
+                    "plan_revision": record.get("plan_revision"),
+                    "reviewer": record.get("reviewer"),
+                    "report": record.get("report"),
+                    "blockers_raised": record.get("blockers_raised") or [],
+                    "blockers_resolved": record.get("blockers_resolved") or [],
+                    "next_action": action,
+                }
+            )
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    if checked:
+        print("{}: valid; nothing written (--check)".format(label))
+        return 0
+    if not changed:
+        print(
+            "{}: gate {} already holds {!r} for this review (unchanged)".format(
+                label, gate, _mapping_or_empty(state.get("gates")).get(gate)
+            )
+        )
+        return 0
+    print(
+        "{}: gate {} -> {} for {} at plan revision {}; reviewer {}; next {}{}".format(
+            label,
+            gate,
+            _mapping_or_empty(state.get("gates")).get(gate),
+            record.get("task_id"),
+            record.get("plan_revision"),
+            record.get("reviewer"),
+            action.get("operation"),
+            " {}".format(action.get("target")) if action.get("target") else "",
+        )
+    )
+    for blocker in record.get("blockers_raised") or []:
+        print("blocker raised: {}".format(blocker))
+    for blocker in record.get("blockers_resolved") or []:
+        print("blocker resolved: {}".format(blocker))
+    return 0
 
 
 def _emit_issues(issues: Sequence[Dict[str, str]], label: str) -> int:
@@ -594,20 +694,43 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return _emit_issues(issues, "execution result")
         if args.command == "validate-spec-review":
             root = _project(args.spec_project or args.project)
-            issues = validate_spec_review(
-                _contract(root, args.contract, args.task_id),
-                _document(root, args.result),
-                _document(root, args.review),
+            state, issues, changed = apply_spec_review(
+                root,
+                contract_reference=args.contract,
+                task_id=args.task_id,
+                result_reference=args.result,
+                review_reference=args.review,
+                actor=args.actor,
+                write=not args.check,
             )
-            return _emit_issues(issues, "spec review")
+            return _emit_review(
+                "spec_compliance",
+                "spec review",
+                state,
+                issues,
+                changed,
+                checked=args.check,
+                as_json=args.json,
+            )
         if args.command == "validate-quality-review":
             root = _project(args.quality_project or args.project)
-            issues = validate_quality_review(
-                _document(root, args.result),
-                _document(root, args.spec_review),
-                _document(root, args.review),
+            state, issues, changed = apply_quality_review(
+                root,
+                result_reference=args.result,
+                spec_review_reference=args.spec_review,
+                review_reference=args.review,
+                actor=args.actor,
+                write=not args.check,
             )
-            return _emit_issues(issues, "quality review")
+            return _emit_review(
+                "code_quality",
+                "quality review",
+                state,
+                issues,
+                changed,
+                checked=args.check,
+                as_json=args.json,
+            )
         if args.command == "record-evidence":
             root = _project(args.evidence_project or args.project)
             ledger = Path(args.ledger)
