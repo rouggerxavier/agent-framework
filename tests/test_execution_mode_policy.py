@@ -698,6 +698,120 @@ class ProportionalReviewTests(unittest.TestCase):
             self.assertIn("spec-review", codes)
 
 
+class ContractReviewPrecedenceTests(unittest.TestCase):
+    """What a contract asking for more reviews than its mode owes actually does.
+
+    Fluxo Nexo's U3B1 contract was written under `critical` and still carries
+    `review.code_quality: required`, while the task now resolves `standard`,
+    where one independent review closes the round. The question is which of the
+    two wins, and the answer has to be readable rather than inferred: the
+    contract's `review` block is a *floor for validation* — it must promise at
+    least what the mode owes — and never an obligation the lifecycle enforces.
+    Every gate decision reads the effective mode.
+    """
+
+    def _u3b1_contract(self) -> dict:
+        return dict(
+            minimal_task("U3B1"),
+            change_type="database_migration",
+            review={
+                "self_review": "required",
+                "spec_compliance": "required",
+                "code_quality": "required",
+            },
+        )
+
+    def test_the_contract_is_valid_under_standard(self) -> None:
+        """Promising all three is allowed; standard demands only one of them."""
+
+        policy = load_test_policy(FRAMEWORK_ROOT)
+        issues = validate_task_contract(
+            self._u3b1_contract(), policy, mode="standard"
+        )
+        codes = {issue["code"] for issue in issues}
+        self.assertNotIn("review-policy", codes)
+
+    def test_a_standard_contract_may_promise_only_the_spec_review(self) -> None:
+        contract = dict(
+            self._u3b1_contract(),
+            review={
+                "self_review": "required",
+                "spec_compliance": "required",
+                "code_quality": "not_required",
+            },
+        )
+        policy = load_test_policy(FRAMEWORK_ROOT)
+        codes = {
+            issue["code"]
+            for issue in validate_task_contract(contract, policy, mode="standard")
+        }
+        self.assertNotIn("review-policy", codes)
+
+    def test_the_contract_does_not_add_a_second_review_to_a_standard_task(self) -> None:
+        """The lifecycle reads the mode, so `required` here blocks nothing."""
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialized_project(root, with_phase=True)
+            write_tasks(
+                root,
+                [
+                    dict(
+                        self._u3b1_contract(),
+                        status="reviewing",
+                        execution_mode="standard",
+                    )
+                ],
+            )
+            state, _ = read_state(root)
+            set_lifecycle(state, "reviewing")
+            state["current_task"] = {"id": "U3B1", "status": "reviewing"}
+            state["gates"]["self_review"] = "passed"
+            state["gates"]["spec_compliance"] = "passed_with_notes"
+            # The single independent review closed the round; the second gate
+            # was never paid for, and the contract still calls it required.
+            state["gates"]["code_quality"] = "not_required"
+            write_state(root, state)
+            state, _ = read_state(root)
+
+            self.assertEqual(effective_task_mode(state, root, task_id="U3B1"), "standard")
+            codes = {
+                issue["code"] for issue in validate_transition(state, "verifying", root)
+            }
+            self.assertNotIn("quality-review", codes)
+            self.assertNotIn("independent-review", codes)
+
+    def test_the_same_contract_under_critical_does_owe_both(self) -> None:
+        """Precedence is the mode's, in both directions."""
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            initialized_project(root, with_phase=True)
+            write_tasks(
+                root,
+                [
+                    dict(
+                        self._u3b1_contract(),
+                        status="reviewing",
+                        execution_mode="critical",
+                    )
+                ],
+            )
+            state, _ = read_state(root)
+            set_lifecycle(state, "reviewing")
+            state["current_task"] = {"id": "U3B1", "status": "reviewing"}
+            state["gates"]["self_review"] = "passed"
+            state["gates"]["spec_compliance"] = "passed_with_notes"
+            state["gates"]["code_quality"] = "not_required"
+            write_state(root, state)
+            state, _ = read_state(root)
+
+            codes = {
+                issue["code"] for issue in validate_transition(state, "verifying", root)
+            }
+            self.assertIn("quality-review", codes)
+
+
 class SetExecutionModeTests(unittest.TestCase):
     def _project_with_task(self, root: Path, status: str = "pending") -> None:
         initialized_project(root, with_phase=True)
