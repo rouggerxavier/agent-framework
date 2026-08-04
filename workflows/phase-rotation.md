@@ -46,6 +46,31 @@ a fase que esta sendo ativada, ainda confere. Qualquer outro caso e plano nao
 selado: `plan_revision` e zerado e o gate de plano e pago de novo. Ativar uma
 fase nunca produz `execute-task` prematuro.
 
+## Gates que a rotacao reabre
+
+Um gate julga o trabalho de **uma** fase. A rotacao reabre em `pending` os cinco
+gates de review (`self_review`, `spec_compliance`, `code_quality`, `acceptance`,
+`verification`) e o gate de `release`, e a fase ativada comeca a pagar os seus.
+
+`release` e o caso critico. Ele guarda `ready_to_ship -> shipped`: herdado, a
+fase nova nasce ja `passed` com evidencia apontando para o diretorio da fase
+anterior — e nunca conseguiria registrar o proprio veredito, porque
+`GATE_TRANSITIONS` nao tem aresta de `passed` para `passed`.
+
+O record anterior nao e reaproveitado nem descartado. No gate fica um record
+`pending` da fase agora ativa, carimbado com a revisao dela; o veredito da fase
+encerrada vai para `history` com o campo `phase` nomeando a fase que ele julgou.
+
+`specification` e `plan_quality` nao sao reabertos, pela mesma razao que
+`amend-plan` os preserva: a rotacao aterrissa em `specified` justamente porque o
+SPEC da fase de destino existe, e `plan_quality` e o que `specified -> planned` e
+`planned -> executing` exigem. Quem cobra o plano da fase ativada e o selo — o
+fingerprint e zerado a menos que descreva de fato a fase agora ativa.
+`waivers` e um registro, nao um julgamento sobre a fase.
+
+A fase encerrada entra em `completed_phases` na propria rotacao, com id, nome,
+status, indice de tarefas e `closed_at`. Ninguem edita esse registro a mao.
+
 Depois de selar, `specified -> planned` e uma transicao normal:
 
 ```bash

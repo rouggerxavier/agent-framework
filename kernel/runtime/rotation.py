@@ -36,7 +36,7 @@ from .documents import (
     utc_now,
     write_frontmatter,
 )
-from .state_machine import compute_plan_fingerprint
+from .state_machine import REVIEW_GATES, compute_plan_fingerprint
 
 
 PHASE_ARTIFACT_FILES = {
@@ -60,6 +60,26 @@ EXECUTED_TASK_STATES = {"executing", "reviewing", "verifying", "verified"}
 #: States a not-yet-started task may legitimately hold.
 UNSTARTED_TASK_STATES = {"pending", "cancelled"}
 
+#: The gates that judge one phase and must not be inherited by the next.
+#:
+#: ``release`` is the sharp end of it. It guards ``ready_to_ship -> shipped``,
+#: and carried across a rotation the activated phase starts already shipped —
+#: on a record whose evidence points inside the *previous* phase's directory,
+#: which ``set-gate`` would refuse if anyone tried to write it there. Worse, it
+#: could never record its own: ``GATE_TRANSITIONS`` has no edge from ``passed``
+#: to ``passed``, so the honest verdict was not merely missing, it was
+#: unreachable.
+#:
+#: ``specification`` and ``plan_quality`` are deliberately absent, for the same
+#: reason ``amend-plan`` leaves them alone. The rotation lands on ``specified``
+#: precisely because the new phase's SPEC exists on disk, and a gate saying
+#: otherwise would contradict the landing; ``plan_quality`` is what
+#: ``specified -> planned`` and ``planned -> executing`` require, and the plan
+#: of the activated phase is held to account by its seal — the fingerprint is
+#: reset unless it genuinely describes the phase now active. ``waivers`` is a
+#: register, not a judgement about a phase.
+PHASE_SCOPED_GATES = REVIEW_GATES + ("release",)
+
 
 def _mapping(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
@@ -79,6 +99,72 @@ def _open_blockers(state: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def _phase_relative(slug: str) -> str:
     return ".agent/phases/{}".format(slug)
+
+
+def reopen_phase_gates(
+    state: Dict[str, Any],
+    *,
+    closed_phase_id: Any,
+    revision: Optional[int],
+    at: str,
+    actor: str,
+) -> List[str]:
+    """Retire the closed phase's gates in place. Mutates ``state``.
+
+    Returns the gates that actually moved.
+
+    A gate is a judgement about one phase's work. The rotation was resetting
+    the phase, the artifacts, the task and the plan seal, and leaving the gates
+    exactly where the closed phase left them — so the activated phase inherited
+    verdicts nobody had passed on it.
+
+    The previous record is neither reused nor dropped. What stands on the gate
+    is a ``pending`` record for the phase now active, stamped with its revision;
+    the closed phase's verdict moves into ``history``, carrying the phase id it
+    judged so the two can never be read as one. A gate with no record keeps
+    none — creating one here would invent a judgement nobody made.
+    """
+
+    gates = dict(_mapping(state.get("gates")))
+    records = deepcopy(_mapping(state.get("gate_records")))
+    moved: List[str] = []
+
+    for gate in PHASE_SCOPED_GATES:
+        if gate not in gates:
+            continue
+        if gates[gate] != "pending":
+            moved.append(gate)
+        gates[gate] = "pending"
+
+        if gate not in records:
+            continue
+        record = _mapping(records.get(gate))
+        history = list(record.get("history", []))
+        if record.get("status") and record.get("status") != "pending":
+            history.append(
+                {
+                    "status": record.get("status"),
+                    "decision": record.get("decision"),
+                    "evidence": record.get("evidence"),
+                    "at": record.get("at"),
+                    "by": record.get("by"),
+                    "plan_revision": record.get("plan_revision"),
+                    "phase": closed_phase_id,
+                }
+            )
+        records[gate] = {
+            "status": "pending",
+            "decision": None,
+            "evidence": None,
+            "at": at,
+            "by": actor,
+            "plan_revision": revision,
+            "history": history,
+        }
+
+    state["gates"] = gates
+    state["gate_records"] = records
+    return moved
 
 
 def activation_issues(
@@ -280,6 +366,17 @@ def activate_phase(
     updated["status"] = landing
     updated["current_task"] = {"id": None, "status": None}
     updated["blocked_from"] = None
+
+    # After the seal is settled, so the pending records are stamped with the
+    # revision the activated phase actually starts on rather than the one the
+    # closed phase ended with.
+    reopen_phase_gates(
+        updated,
+        closed_phase_id=closed.get("id"),
+        revision=_mapping(updated.get("plan_revision")).get("version"),
+        at=utc_now(),
+        actor=actor,
+    )
 
     if landing == "planned":
         operation, target = "execute-task", None

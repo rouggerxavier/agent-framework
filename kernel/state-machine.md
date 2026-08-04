@@ -216,7 +216,22 @@ independent pass over a diff whose changes the first reviewer specified is what
 made a one-finding round cost two full reviews. `framework-next resolve-finding`
 records one finding as corrected against evidence of the correction — the
 targeted test run that proves it — and when every finding the round raised is
-resolved, `executing → verifying` opens. The finding is not erased: its summary,
+resolved, `executing → verifying` opens — and so does `reviewing → verifying`,
+for the round corrected without leaving review at all. Both guards read the
+round, not the verdict: `blocked` stays on the gate as the record of what the
+reviewer found, so refusing the move for it would leave a corrected round with
+no exit.
+
+The round is read narrowly, and each restriction is a way a correction could
+otherwise have spoken for work it never touched. A gate is answered only by the
+findings **it** raised — a corrected quality round says nothing about a blocked
+spec verdict. Only findings raised at the **current plan revision** count, for
+the reason `resolve-finding` gives when it refuses one: a finding carried over
+from an amended plan describes work that no longer exists as described. And a
+correction must post-date the **record now standing on the gate** — otherwise
+one closed round would excuse every later one, including a fresh `BLOCKED` that
+raised no blocker of its own, which a spec review may legitimately do when what
+it found is a missing requirement. The finding is not erased: its summary,
 severity, required change and originating review stay on the blocker, alongside
 `resolution`, `resolution_evidence` and who recorded it, and the blocking review
 itself stays in `gate_records[...].history`.
@@ -225,7 +240,13 @@ The lifecycle for a `standard` round with findings is therefore:
 
 ```text
 reviewing → executing → correction → findings resolved → verifying
+reviewing → correction → findings resolved → verifying
 ```
+
+The phase entering `verifying` never demotes a task that already reached
+`verified`: the last task of a phase is finished before the phase's own goal
+coverage is checked, and `TASK_STATUS_TRANSITIONS` gives `verified` no outgoing
+edge.
 
 A second review is owed again only when the correction stopped being a
 correction: it expanded the scope materially, a grave risk surfaced, or the

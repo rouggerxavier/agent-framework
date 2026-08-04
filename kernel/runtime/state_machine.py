@@ -794,6 +794,79 @@ def review_findings(
     ]
 
 
+#: The blocker source each review gate raises its findings under. A gate is
+#: answered by its own findings and by nobody else's.
+GATE_BLOCKER_SOURCES = {
+    "spec_compliance": "spec-compliance",
+    "code_quality": "code-quality",
+}
+
+
+def correction_closed_round(
+    state: Dict[str, Any], task_id: Any, gate: str
+) -> bool:
+    """Whether the verdict standing on ``gate`` was answered by corrections.
+
+    Below `critical` the correction closes the round it answers, and
+    `resolve-finding` deliberately leaves the halting verdict on the gate — it
+    is the record of what the reviewer found, and rewriting it would erase the
+    review. Reading the verdict alone therefore refuses a round that closed.
+    Reading "some finding of this task is resolved" excuses far more than the
+    round in question, so what is asked for is the round itself: the findings
+    *this* gate raised under the record *now* standing on it, all resolved, all
+    carrying the evidence of the correction.
+
+    Three things scope it, and each one is a door the loose reading left open:
+
+    ``source`` — a corrected quality round says nothing about a blocked spec
+    verdict. Lumping the two together let findings from one gate close the
+    other.
+
+    ``plan_revision`` — a finding raised against a plan that was since amended
+    describes work that no longer exists as described. It is the same reason
+    `resolve-finding` refuses to close one.
+
+    ``resolved_at`` — a correction cannot answer a verdict that had not been
+    recorded when the correction was made. Without it one closed round excused
+    every later one: a fresh `BLOCKED` raising no blocker of its own would pass
+    on the strength of an older round, and `validate_spec_review` permits
+    exactly that shape, since missing requirements or a blocked acceptance
+    criterion are blocking content in themselves. It is also what keeps a
+    reopened gate honest — `reopen_review_gates` restamps ``at``, so corrections
+    made before the reopening no longer speak for the round after it.
+    """
+
+    source = GATE_BLOCKER_SOURCES.get(gate)
+    if source is None:
+        return False
+
+    revision = _mapping(state.get("plan_revision")).get("version")
+    recorded_at = _mapping(_mapping(state.get("gate_records")).get(gate)).get("at")
+
+    findings = [
+        blocker
+        for blocker in _blockers(state)
+        if isinstance(blocker, dict)
+        and blocker.get("source") == source
+        and blocker.get("task_id") == task_id
+        # A blocker with no revision stamp predates the check and is left alone,
+        # the same conservative treatment `resolve-finding` gives it.
+        and blocker.get("plan_revision") in (None, revision)
+    ]
+    if not findings:
+        return False
+
+    for finding in findings:
+        if finding.get("status") != "resolved":
+            return False
+        if not finding.get("resolution_evidence"):
+            return False
+        resolved_at = finding.get("resolved_at")
+        if recorded_at and (not resolved_at or str(resolved_at) < str(recorded_at)):
+            return False
+    return True
+
+
 def _open_blockers(state: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         blocker
@@ -1165,7 +1238,25 @@ def validate_transition(
                     _issue("quality-review", "code quality review has not approved")
                 )
         else:
-            if reviews >= 1 and not (spec_approving or quality_approving):
+            # A halting verdict whose every finding carries a correction and the
+            # evidence of it is a round that closed, not a round that failed.
+            # `resolve-finding` deliberately leaves `blocked` on the gate — that
+            # is the record of what the reviewer found — so reading the verdict
+            # alone refused the very move `next_operation` had just named
+            # `verify-phase`, and the phase had no legal exit at all. Below
+            # `critical` the correction is what closes the round; `critical`
+            # keeps the strict reading because `resolve-finding` refuses it.
+            # Each gate is answered by its own round and by nothing else —
+            # `correction_closed_round` is where that is spelled out.
+            task_id = _mapping(state.get("current_task")).get("id")
+            spec_corrected = correction_closed_round(state, task_id, "spec_compliance")
+            quality_corrected = correction_closed_round(state, task_id, "code_quality")
+            if reviews >= 1 and not (
+                spec_approving
+                or quality_approving
+                or spec_corrected
+                or quality_corrected
+            ):
                 issues.append(
                     _issue(
                         "independent-review",
@@ -1173,11 +1264,11 @@ def validate_transition(
                         "self-review before verification",
                     )
                 )
-            if spec == "blocked":
+            if spec == "blocked" and not spec_corrected:
                 issues.append(
                     _issue("spec-review", "spec compliance review is blocked")
                 )
-            if quality == "changes_required":
+            if quality == "changes_required" and not quality_corrected:
                 issues.append(
                     _issue("quality-review", "code quality review requires changes")
                 )
@@ -1382,7 +1473,17 @@ def transition_state(
     elif target == "reviewing" and _mapping(updated.get("current_task")).get("id"):
         updated["current_task"]["status"] = "reviewing"
     elif target == "verifying" and _mapping(updated.get("current_task")).get("id"):
-        updated["current_task"]["status"] = "verifying"
+        # A task that is already finished is not demoted by the phase entering
+        # verification. `verifying` at the phase means the goal coverage of the
+        # phase is being checked, and the last task of a phase reaches
+        # `verified` before that check runs — writing `verifying` over it asked
+        # `TASK_STATUS_TRANSITIONS` for an edge `verified` deliberately does not
+        # have, and refused the phase transition for it.
+        if _mapping(updated["current_task"]).get("status") not in {
+            "verified",
+            "cancelled",
+        }:
+            updated["current_task"]["status"] = "verifying"
     elif target == "ready_to_ship" and _mapping(updated.get("current_task")).get("id"):
         updated["current_task"]["status"] = "verified"
 
