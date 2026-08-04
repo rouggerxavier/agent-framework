@@ -1165,7 +1165,26 @@ def validate_transition(
                     _issue("quality-review", "code quality review has not approved")
                 )
         else:
-            if reviews >= 1 and not (spec_approving or quality_approving):
+            # A halting verdict whose every finding carries a correction and the
+            # evidence of it is a round that closed, not a round that failed.
+            # `resolve-finding` deliberately leaves `blocked` on the gate — that
+            # is the record of what the reviewer found — so reading the verdict
+            # alone refused the very move `next_operation` had just named
+            # `verify-phase`, and the phase had no legal exit at all. Below
+            # `critical` the correction is what closes the round; `critical`
+            # keeps the strict reading because `resolve-finding` refuses it.
+            task_id = _mapping(state.get("current_task")).get("id")
+            round_findings = review_findings(
+                state, task_id, resolved=True
+            ) + review_findings(state, task_id, resolved=False)
+            corrected = bool(round_findings) and all(
+                finding.get("status") == "resolved"
+                and finding.get("resolution_evidence")
+                for finding in round_findings
+            )
+            if reviews >= 1 and not (
+                spec_approving or quality_approving or corrected
+            ):
                 issues.append(
                     _issue(
                         "independent-review",
@@ -1173,11 +1192,11 @@ def validate_transition(
                         "self-review before verification",
                     )
                 )
-            if spec == "blocked":
+            if spec == "blocked" and not corrected:
                 issues.append(
                     _issue("spec-review", "spec compliance review is blocked")
                 )
-            if quality == "changes_required":
+            if quality == "changes_required" and not corrected:
                 issues.append(
                     _issue("quality-review", "code quality review requires changes")
                 )
@@ -1382,7 +1401,17 @@ def transition_state(
     elif target == "reviewing" and _mapping(updated.get("current_task")).get("id"):
         updated["current_task"]["status"] = "reviewing"
     elif target == "verifying" and _mapping(updated.get("current_task")).get("id"):
-        updated["current_task"]["status"] = "verifying"
+        # A task that is already finished is not demoted by the phase entering
+        # verification. `verifying` at the phase means the goal coverage of the
+        # phase is being checked, and the last task of a phase reaches
+        # `verified` before that check runs — writing `verifying` over it asked
+        # `TASK_STATUS_TRANSITIONS` for an edge `verified` deliberately does not
+        # have, and refused the phase transition for it.
+        if _mapping(updated["current_task"]).get("status") not in {
+            "verified",
+            "cancelled",
+        }:
+            updated["current_task"]["status"] = "verifying"
     elif target == "ready_to_ship" and _mapping(updated.get("current_task")).get("id"):
         updated["current_task"]["status"] = "verified"
 

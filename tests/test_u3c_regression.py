@@ -336,6 +336,56 @@ class NextOperationReadsTheRoundAndNotOnlyTheVerdict(unittest.TestCase):
             self.assertEqual([], decision["stale_next_action"])
             self.assertEqual([], decision["blocking_conditions"])
 
+            # …and the operation it names must actually be legal. Reading the
+            # verdict alone, the `reviewing -> verifying` guard refused the move
+            # `next_operation` had just recommended, which left the phase with
+            # no legal exit at all: the correction path was closed because the
+            # task was already `verified`, and the only other door was a second
+            # review the mode does not owe.
+            self.assertEqual([], validate_transition(state, "verifying", root))
+            self.assertEqual(
+                0,
+                main(
+                    [
+                        "--project", str(root), "transition", "--to", "verifying",
+                        "--actor", "workflow-runner",
+                        "--reason", "round closed by correction",
+                    ]
+                ),
+            )
+            state, _ = read_state(root)
+            self.assertEqual("verifying", state["status"])
+            # The verdict is history, not a rewrite: the gate still says what
+            # the reviewer found.
+            self.assertEqual("blocked", state["gates"]["spec_compliance"])
+
+    def test_one_open_finding_keeps_the_verifying_transition_shut(self) -> None:
+        """The guard the fix must not remove, at the transition itself."""
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            state = self._blocked_round(root)
+            evidence = _correction_evidence(root)
+            blocker_ids = [
+                b["id"] for b in state["blockers"] if b["source"] == "spec-compliance"
+            ]
+            for blocker_id in blocker_ids[:-1]:
+                _, issues, changed = resolve_review_finding(
+                    root,
+                    blocker_id=blocker_id,
+                    evidence=evidence,
+                    actor=EXECUTOR,
+                    note="fixed in {}".format(blocker_id),
+                )
+                self.assertEqual([], issues)
+                self.assertTrue(changed)
+
+            state, _ = read_state(root)
+            codes = _codes(validate_transition(state, "verifying", root))
+
+            self.assertIn("spec-review", codes)
+            self.assertIn("open-blockers", codes)
+
     def test_an_open_finding_still_sends_the_task_back_to_execution(self) -> None:
         """The guard the fix must not remove: one finding open is a round open."""
 
