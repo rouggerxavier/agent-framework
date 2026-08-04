@@ -12,7 +12,12 @@ from .execution_modes import (
     state_execution_mode,
     validate_lightweight_state,
 )
-from .state_machine import REVIEW_BLOCKER_SOURCES, execution_binding, validate_state
+from .state_machine import (
+    REVIEW_BLOCKER_SOURCES,
+    advance_would_resolve,
+    execution_binding,
+    validate_state,
+)
 
 
 #: Validation codes that mean "the checkout moved", not "the state is wrong".
@@ -54,6 +59,7 @@ def _decision(
     blockers: List[str],
     execution_mode: Any = None,
     stale_next_action: Optional[List[str]] = None,
+    advance_resolvable: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     return {
         "current_state": state,
@@ -69,6 +75,15 @@ def _decision(
         # are about to rewrite `next_action` anyway may proceed past these;
         # nothing may proceed past the rest.
         "stale_next_action": list(stale_next_action or []),
+        # The subset of `inconsistencies` that starting the next task
+        # overwrites: a `phase.status` the advance rewrites, and gate records
+        # left behind by a task or a plan revision the phase has passed. Like
+        # the stale cursor above, these are reported rather than hidden — they
+        # are real disagreements — but they name work this kernel is one
+        # operation away from doing correctly, so `start-task` may proceed past
+        # them. Nothing else may, and no other caller should read this as
+        # permission to write.
+        "advance_resolvable": list(advance_resolvable or []),
         "next_operation": {"operation": operation, "target": target},
         "required_asset": ASSET_BY_OPERATION.get(operation),
         "blocking_conditions": blockers,
@@ -216,6 +231,7 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
 
     issues = validate_state(state, project_root)
     errors = [item["message"] for item in issues if item["severity"] == "error"]
+    resolvable: List[str] = []
     if errors:
         # A binding mismatch is not a broken state — the state is right and the
         # checkout is wrong. Recommending `repair-state` here would point at
@@ -235,14 +251,27 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
                 blockers=errors,
                 execution_mode=execution_mode,
             )
-        return _decision(
-            state=status,
-            evidence=evidence,
-            inconsistencies=errors,
-            operation="repair-state",
-            target=".agent/STATE.md",
-            blockers=errors,
-            execution_mode=execution_mode,
+        # A phase whose only faults are the ones its next task's start writes
+        # over is not a state to repair by hand. Pointing at `repair-state`
+        # here is what forced an operator to edit STATE.md to satisfy a
+        # precondition the advance satisfies correctly on its own, so the
+        # derivation continues to the task and reports the divergences beside
+        # it. Anything the advance would not resolve still lands here.
+        resolvable = advance_would_resolve(state, issues)
+        if not set(errors) <= set(resolvable):
+            return _decision(
+                state=status,
+                evidence=evidence,
+                inconsistencies=errors,
+                operation="repair-state",
+                target=".agent/STATE.md",
+                blockers=errors,
+                execution_mode=execution_mode,
+            )
+        evidence.append(
+            "state faults limited to what starting the next task rewrites: {}".format(
+                len(resolvable)
+            )
         )
 
     mapping = {
@@ -373,10 +402,11 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
     return _decision(
         state=status,
         evidence=evidence,
-        inconsistencies=list(staleness),
+        inconsistencies=resolvable + list(staleness),
         operation=operation,
         target=target,
         blockers=[],
         execution_mode=execution_mode,
         stale_next_action=staleness,
+        advance_resolvable=resolvable,
     )

@@ -7,7 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 from .contracts import (
     dependency_issues,
@@ -661,15 +661,97 @@ def _gate_record_issues(state: Dict[str, Any]) -> List[Dict[str, str]]:
         if name not in gates:
             continue
         if record.get("status") != gates.get(name):
-            issues.append(
-                _issue(
-                    "gate-record-divergence",
-                    "gate {} holds {!r} but its record says {!r}".format(
-                        name, gates.get(name), record.get("status")
-                    ),
-                )
+            issue = _issue(
+                "gate-record-divergence",
+                "gate {} holds {!r} but its record says {!r}".format(
+                    name, gates.get(name), record.get("status")
+                ),
             )
+            # The gate travels with the issue so a reader can ask whose
+            # judgement diverged without parsing the sentence back apart.
+            issue["gate"] = name
+            issues.append(issue)
     return issues
+
+
+def superseded_gate_records(state: Dict[str, Any]) -> Set[str]:
+    """Gates whose divergent record was granted for work the phase has passed.
+
+    A record carries the task and the plan revision it was granted under. When
+    either names something already behind the phase — another task, or a
+    revision the current plan supersedes — the record is a leftover, and the
+    value beside it in ``gates`` is what the last reopen wrote. Starting the
+    next task reopens map and record together, so that particular drift is
+    about to be overwritten by the very operation being asked for.
+
+    A record stamped with the *current* task at the *current* revision is the
+    opposite case: it describes live work, its disagreement is about a
+    judgement someone is still relying on, and nothing here forgives it. So is
+    a record the comparison cannot place — an absent revision on either side
+    leaves no ground to call anything superseded, and ambiguity refuses.
+    """
+
+    gates = _mapping(state.get("gates"))
+    records = _mapping(state.get("gate_records"))
+    current_revision = _mapping(state.get("plan_revision")).get("version")
+    current_task = _mapping(state.get("current_task")).get("id")
+
+    superseded: Set[str] = set()
+    for name, record in records.items():
+        record = _mapping(record)
+        revision = record.get("plan_revision")
+        if revision is None or name not in gates:
+            continue
+        if record.get("status") == gates.get(name):
+            continue
+        task_id = record.get("task_id")
+        other_task = bool(task_id) and bool(current_task) and task_id != current_task
+        earlier_revision = (
+            isinstance(revision, int)
+            and isinstance(current_revision, int)
+            and revision < current_revision
+        )
+        if other_task or earlier_revision:
+            superseded.add(name)
+    return superseded
+
+
+def advance_would_resolve(
+    state: Dict[str, Any], issues: List[Dict[str, str]]
+) -> List[str]:
+    """The state errors that starting the next task rewrites on its way through.
+
+    An advance writes ``status`` and ``phase.status`` together and reopens the
+    review gates beside their records. A phase whose only faults are those same
+    fields is not describing damage anyone has to repair — it is describing the
+    write that is one operation away. Refusing over them would send an operator
+    to edit ``STATE.md`` by hand to satisfy a precondition the kernel is about
+    to satisfy correctly, which is the failure the formal writers exist to
+    prevent.
+
+    This is deliberately not a general repair. The shape is checked first —
+    only a ``verifying`` phase whose current task the state itself calls
+    ``verified`` can advance — and only divergences belonging to finished work
+    qualify. Every issue this does not name still stops the start, including a
+    record that disagrees about the current task at the current revision.
+    """
+
+    if state.get("status") != "verifying":
+        return []
+    if _mapping(state.get("current_task")).get("status") != "verified":
+        return []
+
+    superseded = superseded_gate_records(state)
+    resolved: List[str] = []
+    for item in issues:
+        if item.get("severity") != "error":
+            continue
+        code = item.get("code")
+        if code == "phase-state-mismatch":
+            resolved.append(item["message"])
+        elif code == "gate-record-divergence" and item.get("gate") in superseded:
+            resolved.append(item["message"])
+    return resolved
 
 
 def _gate(state: Dict[str, Any], name: str) -> Optional[str]:
@@ -1144,7 +1226,9 @@ def validate_transition(
 
     if current == "verifying" and target in {"executing", "reviewing"}:
         verification_gate = _gate(state, "verification")
-        selecting_next = target == "executing" and verification_gate == "passed"
+        selecting_next = target == "executing" and (
+            verification_gate == "passed" or _advance_selected(state, root)
+        )
         if selecting_next:
             if blockers:
                 issues.append(
@@ -1206,6 +1290,42 @@ def validate_transition(
     return issues
 
 
+def _advance_selected(state: Dict[str, Any], root: Path) -> bool:
+    """Whether a freshly selected next task sits behind one the index calls done.
+
+    Read from facts the task index owns rather than from ``gates``: the task
+    the selection displaced — recorded in ``git.last_execution`` as the binding
+    was released — is ``verified`` there, and the task now current is a
+    different one, still ``pending``.
+
+    The gate map answers the same question only while it still belongs to the
+    revision the finished task was judged under. A plan amendment reopens it,
+    and from then on a phase that genuinely verified a task reads as one that
+    never verified anything — which is how a finished phase ends up unable to
+    start its next task. The index does not have that problem: a task is
+    ``verified`` there until something re-opens the task itself.
+
+    Every other shape is left to the gate. A rework returning to execution
+    keeps its own ``current_task``, so nothing here matches it.
+    """
+
+    task = _mapping(state.get("current_task"))
+    if task.get("status") != "pending" or not task.get("id"):
+        return False
+    previous = _mapping(_mapping(state.get("git")).get("last_execution")).get("task_id")
+    if not previous or previous == task.get("id"):
+        return False
+    task_path = _artifact_path(state, root, "tasks")
+    if not task_path or not task_path.is_file():
+        return False
+    try:
+        index, _ = load_task_index(task_path)
+    except DocumentError:
+        return False
+    finished = task_by_id(index["tasks"], previous)
+    return bool(finished) and finished.get("status") == "verified"
+
+
 def transition_state(
     state: Dict[str, Any],
     target: str,
@@ -1213,8 +1333,22 @@ def transition_state(
     *,
     actor: str,
     reason: str,
+    resolves: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
-    state_issues = validate_state(state, root)
+    """Move the lifecycle to ``target``, or raise with what stopped it.
+
+    ``resolves`` names state errors this transition has already been
+    established to overwrite. It exists for the task advance, whose own write
+    corrects the fields in question, and the entries are adjudicated by
+    ``advance_would_resolve`` — never composed by a caller deciding for itself
+    what it may ignore. An issue absent from that set refuses the transition
+    exactly as before.
+    """
+
+    forgiven = set(resolves or ())
+    state_issues = [
+        item for item in validate_state(state, root) if item["message"] not in forgiven
+    ]
     if state_issues:
         raise DocumentError(
             "state invalid: {}".format(
