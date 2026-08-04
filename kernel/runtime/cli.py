@@ -12,7 +12,7 @@ from .documents import (
     DocumentError,
     load_frontmatter,
     resolve_project_root,
-    write_frontmatter,
+    write_state,
 )
 from .contracts import (
     load_contract,
@@ -516,7 +516,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
             state["updated_at"] = utc_now()
             state["updated_by"] = args.actor
-            write_frontmatter(state_path, state, body)
+            write_state(state_path, state, body)
             print("plan sealed: version={} {}".format(args.version, state["plan_revision"]["fingerprint"]))
             return 0
         if args.command == "reconcile-phase":
@@ -677,7 +677,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         task_path, task_id, target_task_status
                     )
             try:
-                write_frontmatter(state_path, updated, body)
+                write_state(state_path, updated, body)
             except Exception:
                 if task_path and previous_task_status:
                     restore_task_status(task_path, task_id, previous_task_status)
@@ -799,7 +799,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
             state["updated_at"] = utc_now()
             try:
-                write_frontmatter(state_path, state, body)
+                write_state(state_path, state, body)
             except Exception:
                 restore_task_status(task_path, args.task_id, previous)
                 raise

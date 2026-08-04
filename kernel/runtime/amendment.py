@@ -60,6 +60,7 @@ from .documents import (
     safe_project_path,
     utc_now,
     write_frontmatter,
+    write_state,
 )
 from .evidence import append_evidence_event
 from .state_machine import (
@@ -661,7 +662,7 @@ def amend_plan(
             },
         )
         _write_task_status(tasks_path, str(task_id), "executing")
-        write_frontmatter(state_path, updated, body)
+        write_state(state_path, updated, body)
     except Exception:
         ledger_path.write_bytes(ledger_before)
         tasks_path.write_bytes(tasks_before)

@@ -34,7 +34,7 @@ from .documents import (
     load_frontmatter,
     safe_project_path,
     utc_now,
-    write_frontmatter,
+    write_state,
 )
 from .state_machine import REVIEW_GATES, compute_plan_fingerprint
 
@@ -405,5 +405,5 @@ def activate_phase(
     updated["updated_at"] = moment
     updated["updated_by"] = actor
 
-    write_frontmatter(state_path, updated, body)
+    write_state(state_path, updated, body)
     return updated, []

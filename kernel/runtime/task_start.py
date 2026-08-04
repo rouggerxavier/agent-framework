@@ -56,7 +56,7 @@ from .documents import (
     git_snapshot,
     load_frontmatter,
     safe_project_path,
-    write_frontmatter,
+    write_state,
 )
 from .evidence import append_evidence_event
 from .next_operation import determine_next_operation
@@ -430,7 +430,7 @@ def start_task(
 
     try:
         update_task_status(tasks_path, target, "executing")
-        write_frontmatter(state_path, updated, body)
+        write_state(state_path, updated, body)
         binding = execution_binding(updated)
         append_evidence_event(
             _ledger_path(updated, project_root),

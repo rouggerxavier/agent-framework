@@ -842,7 +842,7 @@ class Atomicity(unittest.TestCase):
             self.assertEqual("reviewing", _statuses(root)["U3A"])
 
     def test_a_failed_state_write_leaves_nothing_behind(self) -> None:
-        self._fails_at("write_frontmatter")
+        self._fails_at("write_state")
 
     def test_a_state_that_would_not_validate_is_rolled_back(self) -> None:
         """The authoritative pass runs after every document has moved."""

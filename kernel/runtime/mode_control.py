@@ -28,7 +28,7 @@ from .documents import (
     load_frontmatter,
     safe_project_path,
     utc_now,
-    write_frontmatter,
+    write_state,
 )
 from .evidence import append_evidence_event
 from .execution_modes import (
@@ -268,7 +268,7 @@ def set_execution_mode(
                     "recorded_at": recorded_at,
                 },
             )
-        write_frontmatter(state_path, updated, body)
+        write_state(state_path, updated, body)
     except Exception:
         if ledger_path is not None:
             ledger_path.write_bytes(ledger_before)

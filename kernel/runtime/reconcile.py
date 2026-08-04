@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from .contracts import load_task_index
-from .documents import DocumentError, git_snapshot, load_frontmatter, utc_now, write_frontmatter
+from .documents import DocumentError, git_snapshot, load_frontmatter, utc_now, write_state
 from .state_machine import compute_plan_fingerprint
 
 
@@ -206,5 +206,5 @@ def reconcile_phase(
     }
     state["updated_at"] = utc_now()
     state["updated_by"] = actor
-    write_frontmatter(state_path, state, body)
+    write_state(state_path, state, body)
     return state, []

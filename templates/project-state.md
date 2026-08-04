@@ -92,6 +92,30 @@ The frontmatter is the compact source of lifecycle state. Keep detailed
 requirements, plans, decisions, evidence, and handoff prose in their referenced
 artifacts.
 
+## The body below the frontmatter is generated
+
+Everything after the frontmatter is a **projection of it**, rewritten by every
+formal state write. It is never authored and never read back: no kernel decision
+consults it, and the plan fingerprint covers `PLAN.md` and `TASKS.md` alone, so
+regenerating it cannot change a decision or break a seal.
+
+It works this way because the two halves used to drift. Each operation updated
+the frontmatter and carried the prose through untouched, so the moment a phase
+closed, the part written for humans still named the phase before it — by name,
+with its branch and its task list — while the machine-readable half above had
+already moved on. The first thing a person read was the stale half.
+
+Prose that is genuinely *not* a mirror of state survives, if you fence it:
+
+```markdown
+<!-- kernel:preserve -->
+Anything here is carried forward verbatim by every write, forever.
+<!-- /kernel:preserve -->
+```
+
+Anything outside a fence is replaced. There is no repair command and none is
+needed: the next formal operation regenerates the body on its own.
+
 Required in `critical`; optional in `standard`; do not instantiate in `fast`.
 States created before `execution_mode` default safely to `critical`.
 

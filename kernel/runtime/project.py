@@ -10,7 +10,13 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict
 
-from .documents import DocumentError, git_snapshot, load_frontmatter, utc_now, write_frontmatter
+from .documents import (
+    DocumentError,
+    git_snapshot,
+    load_frontmatter,
+    utc_now,
+    write_state,
+)
 from .execution_modes import is_persistent_state, normalize_mode
 
 
@@ -187,11 +193,10 @@ def initialize_project(
             (temporary / "PLAN.md").write_text(
                 short_plan.read_text(encoding="utf-8"), encoding="utf-8"
             )
-            write_frontmatter(
+            write_state(
                 temporary / "STATE.md",
                 _initial_standard_state(project_name, mode, snapshot, timestamp),
-                "# Standard Execution State\n\n"
-                "Lightweight resume state; no formal kernel lifecycle.\n",
+                "",
             )
             os.replace(str(temporary), str(agent_dir))
         except Exception:
@@ -222,7 +227,7 @@ def initialize_project(
         for destination, template in required_templates.items():
             rendered = _render_template(templates / template, values)
             (temporary / destination).write_text(rendered, encoding="utf-8")
-        write_frontmatter(
+        write_state(
             temporary / "STATE.md",
             _initial_state(
                 project_name,
@@ -231,7 +236,7 @@ def initialize_project(
                 timestamp,
                 execution_mode=execution_mode,
             ),
-            "# Project State\n\nThis file is managed by the Agent Framework kernel.\n",
+            "",
         )
         os.replace(str(temporary), str(agent_dir))
     except Exception:
@@ -309,7 +314,7 @@ def initialize_phase(
         state["next_action"] = {"operation": "continue-discussion", "target": phase_id}
         state["updated_at"] = utc_now()
         state["updated_by"] = actor
-        write_frontmatter(state_path, state, body)
+        write_state(state_path, state, body)
     except Exception:
         shutil.rmtree(str(phase_dir), ignore_errors=True)
         raise
