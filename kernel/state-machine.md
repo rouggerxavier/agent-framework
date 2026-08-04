@@ -1,8 +1,58 @@
 # Kernel State Machine
 
-`STATE.md.status` is the canonical lifecycle value. When a phase is active,
-`phase.status` mirrors it. The runtime in `kernel/runtime/state_machine.py`
-enforces this table and the guards below.
+`STATE.md.status` is the canonical lifecycle value. The runtime in
+`kernel/runtime/state_machine.py` records the table and the guards below, and
+**enforces them under `critical` only**.
+
+## What "enforced" means, per mode
+
+This is the single most important distinction in the kernel, and everything
+below is read through it.
+
+Under **`critical`**, the lifecycle is the deliverable. Every edge in the
+transition table, every gate, the plan seal and the mirrors between `gates`,
+`gate_records`, `current_task` and `phase.status` are preconditions: the
+lifecycle does not move until they hold.
+
+Outside `critical` — which is where ordinary development lives — the same
+records are still written, and reading them back is *reporting*. `validate`
+grades its findings, and only these come back as errors:
+
+| Refusal | Why it is not bookkeeping |
+| --- | --- |
+| a document that cannot be read or parsed | nothing downstream can proceed on a file it cannot open |
+| a declared artifact that points at a missing file | the same, one step earlier |
+| a `current_task` with no contract in the index | the work being described does not exist |
+| an open blocker naming the task in hand | somebody wrote down that this task must not proceed |
+| starting a task the index calls `verified` or `cancelled` | the work is over |
+| a declared `depends_on` that has not landed | the task itself said it needed this first |
+| a checkout on a branch the execution is not bound to | the diff would land where nobody is looking |
+| structural corruption of `STATE.md` | the state cannot be read at all |
+
+Everything else — a stale `next_action`, a `phase.status` that lags, a gate
+nobody recorded, a plan edited after it was sealed, a missing REVIEW.md — is a
+**warning**. It is printed, it is never a stop. A framework that blocks the
+implementation of a feature to protect the tidiness of its own notes has
+inverted the reason for keeping notes.
+
+The minimal loop outside `critical` is therefore two operations and the work
+between them:
+
+```
+start-task → implementation → targeted tests → (optional review) → finish-task
+```
+
+Phases are groupers. They can be activated and closed without paying a gate,
+`completed_phases` is appended automatically on rotation, and no phase owes
+`specification`, `plan_quality`, `acceptance`, `verification` or `release` to
+let an eligible task start.
+
+`critical` is never inferred. It is selected — by `--critical`, by
+`init --mode critical`, by a phase's `default_execution_mode`, or by a task's
+own `execution_mode`. A sensitive area (auth, payments, migrations, tenancy)
+rules out `fast` and stops at `standard`; a recognised grave-damage phrase is
+*reported* in the routing decision and recommends `--critical` without
+selecting it.
 
 ## States
 
@@ -22,6 +72,12 @@ enforces this table and the guards below.
 | `superseded` | A newer milestone, phase, or decision replaced this work. |
 
 ## Allowed transitions
+
+This table is `critical`'s. Outside it the only prohibited move is out of a
+closed status — `shipped`, `cancelled` and `superseded` may go to `superseded`
+and nowhere else — because a phase status is a label on a grouper, and refusing
+a transition because the label is in the wrong box stops product work to satisfy
+bookkeeping.
 
 | From | Allowed destinations |
 | --- | --- |
@@ -44,6 +100,11 @@ verifier alone requests `ready_to_ship`; shipping skills request `shipped`.
 
 ## Transition preconditions and evidence
 
+Also `critical`'s. Outside it the preconditions on any transition are the
+refusals listed at the top of this document, and nothing else: into `executing`,
+that the task exists, is not finished, is not blocked and has its dependencies;
+into anything that advances, that the task is not blocked.
+
 | Transition | Required preconditions and evidence | Responsible role |
 | --- | --- | --- |
 | `proposed → discussing` | project initialized; grounding started or unknowns recorded | planner |
@@ -53,7 +114,7 @@ verifier alone requests `ready_to_ship`; shipping skills request `shipped`.
 | `executing → reviewing` | result is `implementation_complete`; required tests/waiver and acceptance evidence exist; self-review passed | runner |
 | `reviewing → executing` | spec is `BLOCKED` or quality is `CHANGES_REQUIRED`; blocker contains direct evidence | reviewer + runner |
 | `reviewing → verifying` | spec is `PASS`/`PASS_WITH_NOTES`; quality is `APPROVED`/`APPROVED_WITH_NOTES`; no blocker | runner |
-| `executing → verifying` | below `critical` only: a review round was held, every finding it raised is `resolved` with evidence of the correction, no blocker is open, result is `implementation_complete`, self-review passed | runner |
+| `executing → verifying` | refused under `critical`: a correction is closed by a new independent review, so the task returns through `reviewing`. Outside `critical` this is what `finish-task` performs | runner |
 | `verifying → executing` | verification failed with evidence, or current task is verified and the next eligible contract/dependencies are valid | verifier + runner |
 | `verifying → reviewing` | review/evidence defect recorded; affected review invalidated | verifier + runner |
 | `verifying → ready_to_ship` | every acceptance criterion has evidence; required verification passed; blockers resolved; waivers reviewed | verifier |
@@ -289,14 +350,14 @@ accepted change is appended to the phase's existing evidence ledger.
 `gates` is the map a guard reads; `gate_records` is the ledger index behind it.
 They used to drift: re-entering `executing` reset the map and left the records
 alone, so a state could hold `acceptance: pending` beside a record still saying
-`passed`, and which one answered the question depended on which code path
-looked. Both now move together, in the transition and in `amend-plan` alike.
+`passed`. Both now move together, in the transition and in `amend-plan` alike,
+and every record carries the `plan_revision` the judgement was made against.
 
-Every record written since carries a `plan_revision` stamp — the revision the
-judgement was made against, because a gate approves a contract and contracts are
-versioned. `validate` reports `gate-record-divergence` when a **stamped** record
-disagrees with the map. Records written before the stamp existed are left alone:
-their absence identifies them, and no project needs migrating.
+Keeping them together is a property of the writers. It is **not** validated:
+requiring two copies of the same fact to agree meant a state could be correct
+about the work and still refused over its own bookkeeping — and it needed a
+second mechanism, adjudicating which divergences the next operation was about to
+overwrite, just to stay usable. Both are gone.
 
 ### What `shipped` means
 
@@ -340,6 +401,25 @@ happens, and they are the same operation:
 | --- | --- | --- |
 | the phase's first task | `planned` | the plan gate, and an eligible contract |
 | the phase's next task | `verifying` | `current_task` already `verified`, in both `STATE.md` and the index, and another eligible contract |
+
+Both rows are `critical`'s. Outside it a task may be started from any status
+that is not closed, because "is there work ready" is a question the task index
+answers — a phase still labelled `specified` whose TASKS.md holds an eligible
+contract has work ready, and `build-plan` is the wrong thing to recommend to
+someone whose plan already exists.
+
+## Finishing a task
+
+`finish-task` is the other half of `start-task`, and it exists for the same
+reason: without it a task begun outside `critical` could only be closed by
+walking the gated lifecycle that `critical` is for, or by hand-editing
+`STATE.md` and `TASKS.md` — the first charges the price of `critical` without
+buying anything, the second forges the record the kernel exists to keep.
+
+It marks the task `verified` in the index, moves the phase to `verifying`,
+releases the execution binding and appends to the evidence ledger when the phase
+keeps one. It refuses an open blocker naming the task, a task already finished,
+and `critical` outright — there a task is closed by its reviews and its gates.
 
 The second context was documented as legal — `verifying → executing` "may select
 the next eligible task" — and had no writer. The derivation computed

@@ -46,15 +46,25 @@ class AdaptiveRoutingTests(unittest.TestCase):
         self.assertFalse(decision["policy"]["plan_seal"])
         self.assertFalse(decision["policy"]["independent_reviews"])
 
-    def test_destructive_migration_routes_to_critical_full_kernel(self) -> None:
+    def test_explicit_critical_routes_to_the_full_kernel(self) -> None:
         decision = route_execution(
-            "Faça uma migration destrutiva com backfill e rollback complexo."
+            "--critical Faça uma migration destrutiva com backfill e rollback complexo."
         )
         self.assertEqual("critical", decision["selected_mode"])
         self.assertTrue(decision["policy"]["task_contract"])
         self.assertTrue(decision["policy"]["evidence_ledger"])
         self.assertEqual("split", decision["policy"]["review_strategy"])
         self.assertIn("skills/framework-next/SKILL.md", decision["assets_selected"])
+
+    def test_a_detected_grave_damage_path_recommends_rather_than_escalates(
+        self,
+    ) -> None:
+        decision = route_execution(
+            "Faça uma migration destrutiva com backfill e rollback complexo."
+        )
+        self.assertEqual("standard", decision["selected_mode"])
+        self.assertIn("destructive_migration", decision["risk_factors"])
+        self.assertIn("--critical", decision["reason"])
 
     def test_simple_backend_change_is_not_automatically_critical(self) -> None:
         decision = route_execution(
@@ -77,13 +87,21 @@ class AdaptiveRoutingTests(unittest.TestCase):
             route_execution("--critical corrija o typo")["selected_mode"],
         )
 
-    def test_explicit_fast_escalates_only_for_grave_damage_with_reason(self) -> None:
+    def test_explicit_fast_never_escalates_past_standard(self) -> None:
+        """An explicit mode is honoured; the harm is reported beside it.
+
+        The floor is real — a sensitive area rules out `fast` — but the ceiling
+        is the user's. Routing a request into `critical` on the strength of a
+        phrase is what made an ordinary feature pay the heaviest lifecycle in
+        the framework because its description contained the word `auth`.
+        """
+
         decision = route_execution(
             "--fast troque o núcleo de autenticação e o core de sessões"
         )
-        self.assertEqual("critical", decision["selected_mode"])
-        self.assertTrue(decision["escalated"])
-        self.assertIn("grave damage", decision["reason"])
+        self.assertEqual("standard", decision["selected_mode"])
+        self.assertIn("auth_core_breakage", decision["risk_factors"])
+        self.assertIn("--critical", decision["reason"])
 
     def test_touching_a_sensitive_area_blocks_fast_but_not_critical(self) -> None:
         decision = route_execution(
@@ -238,12 +256,12 @@ class AdaptivePolicyTests(unittest.TestCase):
             set(package),
         )
 
-    def test_legacy_persistent_state_defaults_safely_to_critical(self) -> None:
+    def test_legacy_persistent_state_defaults_to_standard(self) -> None:
         old_state = {"schema_version": 1, "project": {"mode": "full"}}
-        self.assertEqual("critical", state_execution_mode(old_state))
+        self.assertEqual("standard", state_execution_mode(old_state))
         migrated, changed = migrate_state_execution_mode(old_state)
         self.assertTrue(changed)
-        self.assertEqual("critical", migrated["execution_mode"])
+        self.assertEqual("standard", migrated["execution_mode"])
         self.assertNotIn("execution_mode", old_state)
 
     def test_invalid_persisted_execution_mode_is_rejected(self) -> None:

@@ -27,6 +27,9 @@ TASK_STATUSES = {
     "cancelled",
 }
 
+#: Statuses that mean the task is over. Nothing moves out of these.
+FINISHED_TASK_STATES = {"verified", "cancelled"}
+
 TASK_STATUS_TRANSITIONS = {
     "pending": {"executing", "blocked", "cancelled"},
     "executing": {"implementation_complete", "blocked", "cancelled"},
@@ -214,13 +217,31 @@ def load_contract(path: Path, task_id: Optional[str] = None) -> Dict[str, Any]:
     return data
 
 
-def update_task_status(path: Path, task_id: str, target: str) -> str:
+def update_task_status(
+    path: Path, task_id: str, target: str, *, strict: bool = True
+) -> str:
+    """Move one task's status in the index, returning the status it left.
+
+    ``strict`` walks ``TASK_STATUS_TRANSITIONS`` edge by edge, which is what
+    `critical` is for: every step of the task's life is a step somebody took
+    deliberately. Outside it the graph is relaxed to the one rule that is not
+    bookkeeping — work that is over stays over — so the ordinary shape of a
+    task (start it, implement it, finish it) does not have to be spelled as
+    four separate transitions through statuses nobody looked at.
+    """
+
     data, body = load_task_index(path)
     task = task_by_id(data["tasks"], task_id)
     if task is None:
         raise DocumentError("{} not found in {}".format(task_id, path))
     current = task.get("status")
-    if target not in TASK_STATUS_TRANSITIONS.get(current, set()):
+    if strict:
+        allowed = TASK_STATUS_TRANSITIONS.get(current, set())
+    elif target not in TASK_STATUSES:
+        raise DocumentError("unknown task status {!r}".format(target))
+    else:
+        allowed = set() if current in FINISHED_TASK_STATES else TASK_STATUSES
+    if target not in allowed:
         raise DocumentError(
             "task transition {} -> {} is forbidden".format(current, target)
         )
@@ -356,9 +377,9 @@ def validate_task_contract(
     except (DocumentError, ValueError) as exc:
         issues.append(_issue("contract-shape", str(exc)))
         declared = None
-    selected = normalize_mode(mode or declared or "critical", default="critical")
+    selected = normalize_mode(mode or declared or DEFAULT_EXECUTION_MODE, default=DEFAULT_EXECUTION_MODE)
     if selected == "auto":
-        selected = "critical"
+        selected = DEFAULT_EXECUTION_MODE
 
     for field in sorted(CONTRACT_FIELDS_BY_MODE[selected] - set(contract)):
         issues.append(_issue("contract-field", "missing contract field {}".format(field)))
@@ -752,9 +773,9 @@ def validate_execution_result(
         declared = task_execution_mode(contract)
     except (DocumentError, ValueError):
         declared = None
-    selected = normalize_mode(mode or declared or "critical", default="critical")
+    selected = normalize_mode(mode or declared or DEFAULT_EXECUTION_MODE, default=DEFAULT_EXECUTION_MODE)
     if selected == "auto":
-        selected = "critical"
+        selected = DEFAULT_EXECUTION_MODE
     task_result = result.get("task", {})
     if not isinstance(task_result, dict) or task_result.get("id") != contract.get("id"):
         issues.append(_issue("result-task", "result task id must match contract"))

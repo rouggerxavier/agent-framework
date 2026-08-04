@@ -34,14 +34,19 @@ completa em `critical`.
 1. Confirme o `execution_mode` do router ou de `STATE.md`.
 2. Em `standard`, coordene os passos do plano curto, use `task-runner` sem
    contrato formal quando adequado, registre resultados no proprio plano/retorno
-   e finalize com uma revisao integrada.
-3. Em `standard`, nao aplique plan seal, ledger completo, transicoes formais ou
-   reviewers separados.
-4. Em `critical`, use `framework-next`, valide estado/Git/contratos, selecione a
+   e finalize com uma revisao integrada quando ela agregar valor.
+3. Em `standard` com kernel persistente, o ciclo e `start-task` -> implementacao
+   -> testes direcionados -> review opcional -> `finish-task`. Fases sao
+   agrupadores: ativam e fecham sem gate obrigatorio, e `completed_phases` e
+   atualizado sozinho na rotacao.
+4. Em `standard`, nao aplique plan seal, ledger completo ou reviewers separados,
+   e nao trate divergencia de espelho ou `next_action` desatualizado como
+   bloqueio.
+5. Em `critical`, use `framework-next`, valide estado/Git/contratos, selecione a
    tarefa elegivel, acione `task-runner` e registre resultado no ledger.
-5. Em `critical`, preserve self-review → spec compliance → code quality →
+6. Em `critical`, preserve self-review → spec compliance → code quality →
    goal coverage/runtime, com transicoes guardadas e plan revision formal.
-6. Depois de correcao localizada, revise apenas novo diff, criterios afetados e
+7. Depois de correcao localizada, revise apenas novo diff, criterios afetados e
    regressoes relacionadas, salvo mudanca material de escopo.
 
 ## Saida obrigatoria

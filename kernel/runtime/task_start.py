@@ -59,9 +59,12 @@ from .documents import (
     write_state,
 )
 from .evidence import append_evidence_event
+from .execution_modes import strict_lifecycle
 from .next_operation import determine_next_operation
 from .state_machine import (
+    FINISHED_TASK_STATES,
     bind_execution,
+    effective_task_mode,
     execution_binding,
     release_execution_binding,
     transition_state,
@@ -76,8 +79,15 @@ START_FROM = "planned"
 #: this operation is only ever about starting a task that has not run.
 ADVANCE_FROM = "verifying"
 
-#: Every status a task may be started from.
+#: Every status a task may be started from under `critical`, where walking the
+#: phase lifecycle in order is part of what the mode is bought for.
 START_STATES = (START_FROM, ADVANCE_FROM)
+
+#: Statuses that are over. Outside `critical` these are the only ones a task
+#: cannot be started from: a phase is a grouper, an eligible task is work that
+#: is ready, and how far the *phase* has walked its own lifecycle says nothing
+#: about whether that work may begin.
+CLOSED_PHASE_STATES = {"shipped", "cancelled", "superseded"}
 
 #: Task states that prove some other task is already under way.
 ACTIVE_TASK_STATES = {"executing", "reviewing", "verifying"}
@@ -87,14 +97,21 @@ def _mapping(value: Any) -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
-def _ledger_path(state: Dict[str, Any], root: Path) -> Path:
+def ledger_path(state: Dict[str, Any], root: Path) -> Optional[Path]:
+    """The evidence ledger to append to, or ``None`` when the phase has none.
+
+    A phase outside `critical` may keep a lightweight ledger or no ledger at
+    all, so its absence is a shape, not a fault. Refusing the whole operation
+    over a missing EVIDENCE.md made "record what happened" a precondition for
+    doing anything — which is how the trail ended up mattering more than the
+    work it was supposed to describe.
+    """
+
     relative = _mapping(state.get("artifacts")).get("evidence")
     if not relative:
-        raise DocumentError("state has no evidence ledger to record the start in")
+        return None
     path = safe_project_path(root, relative)
-    if not path.is_file():
-        raise DocumentError("evidence ledger is missing: {}".format(relative))
-    return path
+    return path if path.is_file() else None
 
 
 def selected_target(decision: Dict[str, Any]) -> Optional[str]:
@@ -135,6 +152,7 @@ def start_issues(
     decision: Dict[str, Any],
     *,
     requested_task_id: Optional[str],
+    strict: bool,
 ) -> Tuple[List[str], Optional[str]]:
     """Everything that stops the start, plus the target when there is one."""
 
@@ -142,45 +160,34 @@ def start_issues(
 
     status = state.get("status")
     advancing = advancing_from_verified(state)
-    if status == ADVANCE_FROM and not advancing:
-        issues.append(
-            "starting the next task requires the current one to be verified; "
-            "{} is {!r}".format(
-                _mapping(state.get("current_task")).get("id") or "current_task",
-                _mapping(state.get("current_task")).get("status"),
+    if strict:
+        if status == ADVANCE_FROM and not advancing:
+            issues.append(
+                "starting the next task requires the current one to be verified; "
+                "{} is {!r}".format(
+                    _mapping(state.get("current_task")).get("id") or "current_task",
+                    _mapping(state.get("current_task")).get("status"),
+                )
             )
-        )
-    elif status not in START_STATES:
-        issues.append(
-            "starting a task requires a {!r} or {!r} phase; status is {!r}".format(
-                START_FROM, ADVANCE_FROM, status
+        elif status not in START_STATES:
+            issues.append(
+                "starting a task requires a {!r} or {!r} phase; status is {!r}".format(
+                    START_FROM, ADVANCE_FROM, status
+                )
             )
+    elif status in CLOSED_PHASE_STATES:
+        issues.append(
+            "phase is {!r}; activate a phase before starting a task".format(status)
         )
 
-    # A persisted `next_action` that lags the state is not a state defect, and
-    # it is the normal shape of an advance: the cursor still names the phase
-    # verification that has just been recorded. This operation rewrites the
-    # field, so refusing over it would demand a repair of the very value the
-    # write is about to correct. Every other inconsistency still stops the
-    # start.
-    stale = set(decision.get("stale_next_action") or [])
-    # The same forgiveness, for the same reason, extended to the divergences
-    # this operation's own write corrects: the `phase.status` it rewrites, and
-    # the gate records left by a task or plan revision the phase has passed,
-    # which its reopen replaces. The derivation decides which qualify — nothing
-    # here judges — and only an advance may spend them, because only an advance
-    # performs the write that makes them true.
-    resolvable = (
-        set(decision.get("advance_resolvable") or []) if advancing else set()
-    )
-    forgiven = stale | resolvable
-    inconsistencies = [
-        item for item in decision.get("inconsistencies") or [] if item not in forgiven
-    ]
-    if inconsistencies:
-        issues.append(
-            "resolve state inconsistencies first: {}".format("; ".join(inconsistencies))
-        )
+    # `inconsistencies` is reporting. What stops an operation is
+    # `blocking_conditions`, which the derivation fills from the state errors
+    # alone — a missing document, a task that does not exist, an open blocker,
+    # a checkout standing somewhere else. Refusing over the rest is what made a
+    # lagging `phase.status` cost an operator a hand edit of STATE.md.
+    blocking = decision.get("blocking_conditions") or []
+    if blocking:
+        issues.append("resolve state errors first: {}".format("; ".join(blocking)))
 
     target = selected_target(decision)
     if target is None:
@@ -190,23 +197,6 @@ def start_issues(
             "{!r}".format(operation)
         )
 
-    # A persisted target is advisory: transitions record `execute-task` without
-    # resolving which task, so `None` here is normal. What is not normal is a
-    # persisted target that disagrees with the one the kernel computes — unless
-    # the disagreement *is* the staleness above, already accounted for.
-    persisted = _mapping(state.get("next_action")).get("target")
-    if (
-        not stale
-        and target
-        and isinstance(persisted, str)
-        and persisted
-        and persisted != target
-    ):
-        issues.append(
-            "persisted next_action target {} disagrees with the eligible task "
-            "{}".format(persisted, target)
-        )
-
     if requested_task_id and target and requested_task_id != target:
         issues.append(
             "task {} is not the task the kernel selected ({}); the target is not "
@@ -214,21 +204,35 @@ def start_issues(
         )
 
     current = _mapping(state.get("current_task"))
-    if current.get("id") and current.get("id") != target and not advancing:
+    if (
+        current.get("id")
+        and current.get("id") != target
+        and not advancing
+        and current.get("status") not in FINISHED_TASK_STATES
+    ):
         issues.append(
             "current_task already holds {}; finish or cancel it first".format(
                 current.get("id")
             )
         )
 
-    # `transition` refuses an advance with blockers too, by raising. Answering
-    # it here as well means the operator reads which blocker, not a translated
-    # transition failure.
-    blockers = _open_blockers(state)
-    if advancing and blockers:
+    # A blocker raised against the task being started is the one blocker that
+    # stops it. Phase-wide blockers and blockers naming other tasks are
+    # reported by `validate`, and holding an eligible task hostage to them is
+    # what turned an open question in one corner of a phase into a stop-work
+    # order over all of it.
+    blocking_the_target = [
+        str(blocker.get("id") or blocker.get("summary") or "unnamed")
+        for blocker in state.get("blockers") or []
+        if isinstance(blocker, dict)
+        and blocker.get("status", "open") != "resolved"
+        and target
+        and blocker.get("task_id") == target
+    ]
+    if blocking_the_target:
         issues.append(
-            "the next task cannot start with open blockers: {}".format(
-                ", ".join(blockers)
+            "task {} has open blockers: {}".format(
+                target, ", ".join(blocking_the_target)
             )
         )
 
@@ -268,7 +272,7 @@ def start_issues(
             )
         )
 
-    if advancing:
+    if advancing and strict:
         # The state calling the previous task verified is not enough — the index
         # is what every other reader consults, and a task the two disagree about
         # is not finished.
@@ -372,9 +376,10 @@ def start_task(
     if repeated:
         return state, [], False
 
+    strict = strict_lifecycle(effective_task_mode(state, project_root))
     decision = determine_next_operation(project_root)
     issues, target = start_issues(
-        state, project_root, decision, requested_task_id=task_id
+        state, project_root, decision, requested_task_id=task_id, strict=strict
     )
     if issues:
         return state, issues, False
@@ -382,29 +387,29 @@ def start_task(
     tasks_path = safe_project_path(project_root, state["artifacts"]["tasks"])
     state_before = state_path.read_bytes()
     tasks_before = tasks_path.read_bytes()
+    previous_status = state.get("status")
 
     # The selection is made here, in memory, and immediately spent: the very
     # next call is the guarded transition, which refuses if anything about the
     # task, the plan, the branch or the worktree is wrong. There is no window
     # in which a selected-but-not-started task is persisted, because the
     # selection is never written on its own.
-    advancing = advancing_from_verified(state)
-    previous_task = _mapping(state.get("current_task")).get("id") if advancing else None
-    if advancing:
+    outgoing = _mapping(state.get("current_task")).get("id")
+    previous_task = outgoing if outgoing and outgoing != target else None
+    if previous_task:
         # The finished task's binding becomes history rather than being
         # overwritten in place, so the branch U3A ran on survives the start of
         # U3B1 and never speaks for it. This reads the *outgoing* current_task,
         # so it has to happen before the selection replaces it.
         release_execution_binding(state)
     state["current_task"] = {"id": target, "status": "pending"}
-    if advancing:
-        # `verifying` is execution-bound, and `transition_state` validates
-        # before it binds. A selected task with no binding would fall through
-        # to the legacy `git.working_branch` and report a mismatch against a
-        # branch nobody is standing on, so the capture happens before the
-        # validation that depends on it. The transition captures it again;
-        # both readings come from the same checkout.
-        bind_execution(state, project_root, actor=actor)
+    # The state being left may itself be execution-bound, and `transition_state`
+    # validates before it binds. A selected task with no binding would fall
+    # through to the legacy `git.working_branch` and report a mismatch against a
+    # branch nobody is standing on, so the capture happens before the validation
+    # that depends on it. The transition captures it again; both readings come
+    # from the same checkout.
+    bind_execution(state, project_root, actor=actor)
     try:
         updated = transition_state(
             state,
@@ -412,13 +417,6 @@ def start_task(
             project_root,
             actor=actor,
             reason=reason,
-            # Carried from the derivation that read the state before the
-            # selection replaced `current_task`, because the shape that
-            # adjudicates them — a verified task still current — is gone by the
-            # time the transition validates. The messages are stable across
-            # that mutation: neither `gates` nor `gate_records` is touched
-            # here, and the phase mismatch is the constant sentence.
-            resolves=decision.get("advance_resolvable") if advancing else None,
         )
     except DocumentError as exc:
         # The guarded transition owns the hard checks — plan seal, plan gate,
@@ -429,49 +427,49 @@ def start_task(
         return state, [str(exc)], False
 
     try:
-        update_task_status(tasks_path, target, "executing")
+        update_task_status(tasks_path, target, "executing", strict=strict)
         write_state(state_path, updated, body)
         binding = execution_binding(updated)
-        append_evidence_event(
-            _ledger_path(updated, project_root),
-            {
-                "schema_version": 1,
-                "task_id": target,
-                "kind": "task-start",
-                "actor": actor,
-                "status": "executing",
-                "summary": "Task {} started on branch {} under phase {}. {}".format(
-                    target,
-                    binding.get("branch"),
-                    _mapping(updated.get("phase")).get("id"),
-                    reason,
-                ),
-                "source": state["artifacts"]["tasks"],
-                "acceptance_criteria": [],
-                "details": {
+        ledger = ledger_path(updated, project_root)
+        if ledger is not None:
+            append_evidence_event(
+                ledger,
+                {
+                    "schema_version": 1,
                     "task_id": target,
-                    "selected_by": "kernel",
-                    "phase": _mapping(updated.get("phase")).get("id"),
-                    "phase_transition": "{} -> executing".format(
-                        ADVANCE_FROM if advancing else START_FROM
+                    "kind": "task-start",
+                    "actor": actor,
+                    "status": "executing",
+                    "summary": "Task {} started on branch {} under phase {}. {}".format(
+                        target,
+                        binding.get("branch"),
+                        _mapping(updated.get("phase")).get("id"),
+                        reason,
                     ),
-                    "task_transition": "pending -> executing",
-                    # Present only on an advance, and never a claim about the
-                    # finished task's own record: it says which task this start
-                    # followed, so the ledger reads as a sequence rather than a
-                    # set of unrelated first starts.
-                    "follows_task": previous_task,
-                    "released_execution": _mapping(updated.get("git")).get(
-                        "last_execution"
-                    )
-                    if advancing
-                    else None,
-                    "branch": binding.get("branch"),
-                    "worktree": binding.get("worktree"),
-                    "reason": reason,
+                    "source": state["artifacts"]["tasks"],
+                    "acceptance_criteria": [],
+                    "details": {
+                        "task_id": target,
+                        "selected_by": "kernel",
+                        "phase": _mapping(updated.get("phase")).get("id"),
+                        "phase_transition": "{} -> executing".format(previous_status),
+                        "task_transition": "pending -> executing",
+                        # Names which task this start followed, so the ledger
+                        # reads as a sequence rather than a set of unrelated
+                        # first starts. Never a claim about that task's own
+                        # record.
+                        "follows_task": previous_task,
+                        "released_execution": _mapping(updated.get("git")).get(
+                            "last_execution"
+                        )
+                        if previous_task
+                        else None,
+                        "branch": binding.get("branch"),
+                        "worktree": binding.get("worktree"),
+                        "reason": reason,
+                    },
                 },
-            },
-        )
+            )
     except Exception:
         state_path.write_bytes(state_before)
         tasks_path.write_bytes(tasks_before)

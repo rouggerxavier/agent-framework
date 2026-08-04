@@ -333,7 +333,6 @@ class NextOperationReadsTheRoundAndNotOnlyTheVerdict(unittest.TestCase):
             self.assertEqual("verify-phase", decision["next_operation"]["operation"])
             self.assertEqual("U3A", decision["next_operation"]["target"])
             self.assertEqual([], decision["inconsistencies"])
-            self.assertEqual([], decision["stale_next_action"])
             self.assertEqual([], decision["blocking_conditions"])
 
             # …and the operation it names must actually be legal. Reading the
@@ -360,7 +359,14 @@ class NextOperationReadsTheRoundAndNotOnlyTheVerdict(unittest.TestCase):
             self.assertEqual("blocked", state["gates"]["spec_compliance"])
 
     def test_one_open_finding_keeps_the_verifying_transition_shut(self) -> None:
-        """The guard the fix must not remove, at the transition itself."""
+        """The guard the simplification must not remove.
+
+        The gate verdict no longer holds a standard phase shut — the record of
+        what a reviewer found is history, not a lock. What does hold it shut is
+        the finding itself: a blocker raised against this task, still open. That
+        is the one refusal in the list, and it is answered by resolving the
+        finding rather than by running a second review over the same diff.
+        """
 
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -383,8 +389,7 @@ class NextOperationReadsTheRoundAndNotOnlyTheVerdict(unittest.TestCase):
             state, _ = read_state(root)
             codes = _codes(validate_transition(state, "verifying", root))
 
-            self.assertIn("spec-review", codes)
-            self.assertIn("open-blockers", codes)
+            self.assertIn("task-blocked", codes)
 
     def _corrected_round(self, root: Path):
         """A standard round blocked, then closed by correcting every finding."""
@@ -403,74 +408,24 @@ class NextOperationReadsTheRoundAndNotOnlyTheVerdict(unittest.TestCase):
             )
             self.assertEqual([], issues)
             self.assertTrue(changed)
-        state, body = read_state(root)
-        self.assertEqual([], validate_transition(state, "verifying", root))
-        return state, body
+        return read_state(root)
 
-    def test_a_closed_round_does_not_answer_a_later_blocking_review(self) -> None:
-        """One correction closes the round it answers, not every round after it.
+    def test_a_blocking_verdict_alone_no_longer_holds_the_phase(self) -> None:
+        """Every finding corrected: the verdict stays, the phase moves.
 
-        A correction that reads as "some finding of this task is resolved"
-        excuses far more than the round in question. ``validate_spec_review``
-        accepts a ``BLOCKED`` that raises no blocker of its own — missing
-        requirements are blocking content in themselves — so a second review
-        could land on the gate, raise nothing this check would see as open, and
-        be waved through on the strength of a round that closed before it was
-        ever written.
+        This is the whole shape the correction machinery used to adjudicate —
+        which round a correction answered, at which revision, against which
+        gate. None of that has to be decided any more, because the verdict was
+        never what should have been blocking: the findings were, and they are
+        resolved.
         """
 
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
-            state, body = self._corrected_round(root)
+            state, _ = self._corrected_round(root)
 
-            # The one thing a new review always moves: the record now standing
-            # on the gate was written after the corrections were made, so those
-            # corrections cannot be answering it.
-            state["gate_records"]["spec_compliance"]["at"] = "2099-01-01T00:00:00+00:00"
-            write_frontmatter(root / ".agent" / "STATE.md", state, body)
-
-            codes = _codes(validate_transition(state, "verifying", root))
-
-            self.assertIn("spec-review", codes)
-
-    def test_a_corrected_spec_round_does_not_answer_the_quality_gate(self) -> None:
-        """A gate is answered by its own findings and by nobody else's."""
-
-        with TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            state, body = self._corrected_round(root)
-
-            # The quality reviewer asks for changes. Not one of the corrections
-            # already recorded was made against what it found.
-            state["gates"]["code_quality"] = "changes_required"
-            write_frontmatter(root / ".agent" / "STATE.md", state, body)
-
-            codes = _codes(validate_transition(state, "verifying", root))
-
-            self.assertIn("quality-review", codes)
-            # …and the spec round it did close is still closed.
-            self.assertNotIn("spec-review", codes)
-
-    def test_a_finding_from_an_amended_revision_no_longer_closes_the_round(
-        self,
-    ) -> None:
-        """The reason ``resolve-finding`` refuses one, at the transition too.
-
-        A finding raised against a plan that was since amended describes work
-        that no longer exists as described.
-        """
-
-        with TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            state, body = self._corrected_round(root)
-
-            state["plan_revision"]["version"] = state["plan_revision"]["version"] + 1
-            write_frontmatter(root / ".agent" / "STATE.md", state, body)
-
-            codes = _codes(validate_transition(state, "verifying", root))
-
-            self.assertIn("spec-review", codes)
-            self.assertIn("independent-review", codes)
+            self.assertEqual("blocked", state["gates"]["spec_compliance"])
+            self.assertEqual([], validate_transition(state, "verifying", root))
 
     def test_an_open_finding_still_sends_the_task_back_to_execution(self) -> None:
         """The guard the fix must not remove: one finding open is a round open."""

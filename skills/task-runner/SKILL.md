@@ -19,7 +19,8 @@ proporcionais ao modo.
 ## Quando nao usar
 
 - Para alterar plano, spec, lifecycle ou arquivos fora de escopo.
-- Para marcar trabalho `reviewed`, `verified` ou concluido.
+- Para marcar trabalho `reviewed` ou `verified` em `critical`; la o fechamento
+  vem das reviews e dos gates.
 - Em `critical`, sem contrato completo ou com dependencia pendente.
 
 ## Entradas esperadas
@@ -36,8 +37,10 @@ proporcionais ao modo.
 4. Inspecione o diff e faca self-review integrado.
 5. Em `fast`, retorne arquivos, testes, resultado e riscos; nao crie contrato,
    spec, ledger ou task result formal.
-6. Em `standard`, use contrato/resultados leves somente se agregarem valor e
-   encaminhe uma revisao integrada.
+6. Em `standard`, o ciclo e `start-task` -> implementacao -> testes
+   direcionados -> review opcional -> `finish-task`. Use contrato/resultados
+   leves somente se agregarem valor; a revisao integrada e recomendada e nao e
+   pre-requisito para fechar a tarefa.
 7. Em `critical`, valide contrato, dependencias e contexto; limite
    `allowed_files`; preencha `task-result`, valide resultado, registre no ledger e
    retorne no maximo `implementation_complete`.
@@ -53,7 +56,10 @@ proporcionais ao modo.
 
 - Nenhuma expansao silenciosa e alguma evidencia antes de declarar sucesso.
 - `fast` exige teste direcionado e diff review, nao contrato.
-- `standard` exige testes e review integrado, nao reviewers separados.
+- `standard` exige testes direcionados; o review integrado e recomendado e nao
+  bloqueia `finish-task`. Um veredito `BLOCKED`/`CHANGES_REQUIRED` fica como
+  registro do que o reviewer achou: o que bloqueia e o finding em aberto, e ele
+  se fecha com `resolve-finding` depois da correcao.
 - `critical` preserva contrato, waiver, ledger e dois reviewers.
 
 ## Arquivos de apoio

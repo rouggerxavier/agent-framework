@@ -3,19 +3,18 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .contracts import eligible_tasks, load_task_index, task_by_id
 from .documents import DocumentError, git_snapshot, load_frontmatter, safe_project_path
 from .execution_modes import (
     is_persistent_state,
-    mode_requirements,
     state_execution_mode,
+    strict_lifecycle,
     validate_lightweight_state,
 )
 from .state_machine import (
     REVIEW_BLOCKER_SOURCES,
-    advance_would_resolve,
     effective_task_mode,
     execution_binding,
     validate_state,
@@ -27,6 +26,10 @@ BINDING_CODES = {
     "git-branch-mismatch",
     "git-detached-head",
 }
+
+#: Task statuses that mean somebody is already working. Mirrors the kernel's
+#: own set; a phase holding one of these has no second task to suggest.
+ACTIVE_TASK_STATES = {"executing", "reviewing", "verifying"}
 
 ASSET_BY_OPERATION = {
     "route-task": "skills/agent-framework-router/SKILL.md",
@@ -60,36 +63,42 @@ def _decision(
     target: Any,
     blockers: List[str],
     execution_mode: Any = None,
-    stale_next_action: Optional[List[str]] = None,
-    advance_resolvable: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     return {
         "current_state": state,
         "execution_mode": execution_mode,
         "detected_evidence": evidence,
+        # Everything worth reporting about the state that is not fatal: a
+        # `next_action` the state has outgrown, a mirror that lags, a gate
+        # nobody recorded. Informative by construction — what actually stops an
+        # operation is in `blocking_conditions`, and only that.
         "inconsistencies": inconsistencies,
-        # The subset of `inconsistencies` that is only the persisted
-        # `next_action` lagging behind what the state now implies. It is
-        # reported separately because a reader cannot tell the two apart by
-        # string, and the difference matters: a stale cursor describes a field
-        # this kernel rewrites on the next transition, while every other
-        # inconsistency describes a state someone has to repair. Callers that
-        # are about to rewrite `next_action` anyway may proceed past these;
-        # nothing may proceed past the rest.
-        "stale_next_action": list(stale_next_action or []),
-        # The subset of `inconsistencies` that starting the next task
-        # overwrites: a `phase.status` the advance rewrites, and gate records
-        # left behind by a task or a plan revision the phase has passed. Like
-        # the stale cursor above, these are reported rather than hidden — they
-        # are real disagreements — but they name work this kernel is one
-        # operation away from doing correctly, so `start-task` may proceed past
-        # them. Nothing else may, and no other caller should read this as
-        # permission to write.
-        "advance_resolvable": list(advance_resolvable or []),
         "next_operation": {"operation": operation, "target": target},
         "required_asset": ASSET_BY_OPERATION.get(operation),
         "blocking_conditions": blockers,
     }
+
+
+def _eligible_in_phase(
+    state: Dict[str, Any], project_root: Path
+) -> List[Dict[str, Any]]:
+    """Tasks in the active phase that are pending with dependencies satisfied.
+
+    Returns nothing when the index cannot be read or when some other task is
+    already under way — a second start is a conflict, not a suggestion.
+    """
+
+    relative = state.get("artifacts", {}).get("tasks")
+    if not relative:
+        return []
+    try:
+        index, _ = load_task_index(safe_project_path(project_root, relative))
+    except DocumentError:
+        return []
+    tasks = [task for task in index.get("tasks") or [] if isinstance(task, dict)]
+    if any(task.get("status") in ACTIVE_TASK_STATES for task in tasks):
+        return []
+    return eligible_tasks(tasks)
 
 
 def determine_next_operation(project_root: Path) -> Dict[str, Any]:
@@ -233,7 +242,7 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
 
     issues = validate_state(state, project_root)
     errors = [item["message"] for item in issues if item["severity"] == "error"]
-    resolvable: List[str] = []
+    warnings = [item["message"] for item in issues if item["severity"] != "error"]
     if errors:
         # A binding mismatch is not a broken state — the state is right and the
         # checkout is wrong. Recommending `repair-state` here would point at
@@ -247,33 +256,20 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
             return _decision(
                 state=status,
                 evidence=evidence,
-                inconsistencies=errors,
+                inconsistencies=errors + warnings,
                 operation="restore-execution-branch",
                 target=binding.get("branch"),
                 blockers=errors,
                 execution_mode=execution_mode,
             )
-        # A phase whose only faults are the ones its next task's start writes
-        # over is not a state to repair by hand. Pointing at `repair-state`
-        # here is what forced an operator to edit STATE.md to satisfy a
-        # precondition the advance satisfies correctly on its own, so the
-        # derivation continues to the task and reports the divergences beside
-        # it. Anything the advance would not resolve still lands here.
-        resolvable = advance_would_resolve(state, issues)
-        if not set(errors) <= set(resolvable):
-            return _decision(
-                state=status,
-                evidence=evidence,
-                inconsistencies=errors,
-                operation="repair-state",
-                target=".agent/STATE.md",
-                blockers=errors,
-                execution_mode=execution_mode,
-            )
-        evidence.append(
-            "state faults limited to what starting the next task rewrites: {}".format(
-                len(resolvable)
-            )
+        return _decision(
+            state=status,
+            evidence=evidence,
+            inconsistencies=errors + warnings,
+            operation="repair-state",
+            target=".agent/STATE.md",
+            blockers=errors,
+            execution_mode=execution_mode,
         )
 
     mapping = {
@@ -295,7 +291,22 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
         "superseded": ("none", None),
     }
 
-    if status == "planned":
+    strict = strict_lifecycle(effective_task_mode(state, project_root))
+
+    # Outside `critical` a phase is a grouper, and the question "what is there
+    # to do" is answered by the task index rather than by how far the phase has
+    # walked its lifecycle. A phase still labelled `specified` whose TASKS.md
+    # holds an eligible contract has work ready to start, and pointing at
+    # `build-plan` instead sent the operator to re-plan a plan that exists.
+    ready = (
+        _eligible_in_phase(state, project_root)
+        if not strict and status in {"proposed", "discussing", "specified", "planned"}
+        else []
+    )
+    if ready:
+        operation, target = "execute-task", ready[0]["id"]
+        evidence.append("eligible task: {}".format(target))
+    elif status == "planned":
         task_path = safe_project_path(project_root, state["artifacts"]["tasks"])
         index, _ = load_task_index(task_path)
         candidates = eligible_tasks(index["tasks"])
@@ -366,11 +377,8 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
         # `critical` closes a round through a second independent review and
         # through nothing else — `resolve-finding` refuses it outright — so its
         # halting verdict keeps meaning exactly what it always meant.
-        correction_closes_the_round = (
-            mode_requirements(effective_task_mode(state, project_root))[
-                "independent_reviews"
-            ]
-            < 2
+        correction_closes_the_round = not strict_lifecycle(
+            effective_task_mode(state, project_root)
         )
         # A halting verdict with no finding recorded against the task is not a
         # round closed by correction; it is a verdict with nothing behind it.
@@ -429,10 +437,10 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
     else:
         operation, target = mapping[status]
 
-    # Everything reachable here is the persisted cursor lagging the state, not
-    # a state defect: the real defects returned above, with `blocking_conditions`
-    # set. Keeping the two apart is what lets `start-task` advance a phase whose
-    # only fault is a `next_action` it is about to overwrite.
+    # The persisted cursor is a convenience, not a claim: this function derives
+    # the next operation from the state on every read, and the field is
+    # rewritten by whichever operation runs next. A disagreement is worth
+    # printing and worth nothing else.
     staleness: List[str] = []
     persisted_action = state.get("next_action", {})
     if isinstance(persisted_action, dict):
@@ -454,11 +462,9 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
     return _decision(
         state=status,
         evidence=evidence,
-        inconsistencies=resolvable + list(staleness),
+        inconsistencies=warnings + staleness,
         operation=operation,
         target=target,
         blockers=[],
         execution_mode=execution_mode,
-        stale_next_action=staleness,
-        advance_resolvable=resolvable,
     )

@@ -36,6 +36,7 @@ from .documents import (
     utc_now,
     write_state,
 )
+from .execution_modes import strict_lifecycle
 from .state_machine import REVIEW_GATES, compute_plan_fingerprint
 
 
@@ -177,9 +178,16 @@ def activation_issues(
     """Everything that stops the rotation, as operator-facing sentences."""
 
     issues: List[str] = []
+    strict = strict_lifecycle(state.get("execution_mode"))
 
     status = state.get("status")
-    if status not in ACTIVATABLE_FROM:
+    if strict and status not in ACTIVATABLE_FROM:
+        # Under `critical` a phase is left behind only once its ship decision
+        # has been made. Elsewhere a phase is a grouper: moving to the next one
+        # is a change of subject, and demanding the previous one first walk to
+        # `shipped` made the bookkeeping the reason the next feature could not
+        # start. The phase being left is recorded in `completed_phases` either
+        # way, so nothing is lost by not making it ceremonial.
         issues.append(
             "activation requires a closed phase; status is {!r}, expected one of "
             "{}".format(status, ", ".join(sorted(ACTIVATABLE_FROM)))
@@ -208,12 +216,18 @@ def activation_issues(
         )
         return issues
 
-    for name in sorted(PHASE_ARTIFACT_FILES.values()):
+    # TASKS.md is what a phase *is* — the rest are documents it may or may not
+    # keep. Requiring REVIEW.md and HANDOFF.md to exist before the phase starts
+    # demanded its closing paperwork as the price of opening it.
+    required_files = (
+        sorted(PHASE_ARTIFACT_FILES.values()) if strict else ["TASKS.md"]
+    )
+    for name in required_files:
         if not (phase_dir / name).is_file():
             issues.append("phase artifact is missing: {}/{}".format(slug, name))
 
     roadmap_relative = _mapping(state.get("artifacts")).get("roadmap")
-    if roadmap_relative:
+    if strict and roadmap_relative:
         try:
             roadmap = safe_project_path(root, roadmap_relative)
         except DocumentError as exc:
@@ -332,13 +346,21 @@ def activate_phase(
             )
         updated["completed_phases"] = completed
 
+    strict = strict_lifecycle(state.get("execution_mode"))
     updated["artifacts"] = dict(_mapping(state.get("artifacts")))
+    # Only point at documents that are there. A reference to a file that does
+    # not exist is an unreadable artifact, and validation is right to call that
+    # fatal — so a phase that keeps no REVIEW.md simply does not claim one.
     updated["artifacts"].update(
         {
             name: "{}/{}".format(relative, filename)
             for name, filename in PHASE_ARTIFACT_FILES.items()
+            if strict or (project_root / relative / filename).is_file()
         }
     )
+    for name, filename in PHASE_ARTIFACT_FILES.items():
+        if not strict and not (project_root / relative / filename).is_file():
+            updated["artifacts"][name] = None
 
     # The plan only counts as sealed when the stored fingerprint describes the
     # phase now being activated. Anything else is an unsealed plan, and the plan
@@ -353,7 +375,10 @@ def activate_phase(
         except (DocumentError, OSError):
             sealed = False
 
-    landing = "planned" if sealed else "specified"
+    # Outside `critical` a phase with contracts on disk is planned, seal or no
+    # seal: the seal is what `critical` buys, and landing on `specified` would
+    # send the operator to re-plan a plan that already exists.
+    landing = "planned" if sealed or not strict else "specified"
     if not sealed:
         updated["plan_revision"] = {
             "version": 0,
