@@ -501,6 +501,152 @@ class PhaseActivationTests(unittest.TestCase):
                 state.get("completed_phases"),
             )
 
+    def test_the_activated_phase_does_not_inherit_the_release_gate(self) -> None:
+        """The reported shape: P1 ships, P2 is activated already shipped.
+
+        ``release`` guards ``ready_to_ship -> shipped``, and the rotation was
+        carrying it over intact — so the activated phase started with the gate
+        paid, on a record whose evidence pointed inside the *closed* phase's
+        directory. It is the one gate whose inheritance is not merely untidy:
+        ``GATE_TRANSITIONS`` has no edge from ``passed`` to ``passed``, so the
+        activated phase could not have recorded its own verdict even if someone
+        had noticed.
+        """
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._shipped(root)
+
+            before, _ = read_state(root)
+            self.assertEqual(before["gates"]["release"], "passed")
+            self.assertEqual(
+                before["gate_records"]["release"]["evidence"],
+                ".agent/phases/{}/EVIDENCE.md#release".format(CLOSED_SLUG),
+            )
+
+            state, issues = self._activate(root)
+
+            self.assertEqual(issues, [])
+            self.assertEqual(state["gates"]["release"], "pending")
+            self.assertEqual(validate_state(state, root), [])
+
+            # A coherent record, not an absent one: it describes the phase now
+            # active, and carries nothing the closed phase paid for.
+            record = state["gate_records"]["release"]
+            self.assertEqual(record["status"], "pending")
+            self.assertIsNone(record["decision"])
+            self.assertIsNone(record["evidence"])
+            self.assertEqual(record["by"], "planner")
+            self.assertEqual(record["plan_revision"], state["plan_revision"]["version"])
+
+    def test_the_closed_phase_release_verdict_is_kept_as_history(self) -> None:
+        """Reopening is not erasing. What P1 paid for stays readable, as P1's."""
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._shipped(root)
+
+            state, issues = self._activate(root)
+
+            self.assertEqual(issues, [])
+            history = state["gate_records"]["release"]["history"]
+            self.assertEqual(1, len(history))
+            self.assertEqual(history[0]["status"], "passed")
+            self.assertEqual(history[0]["decision"], "DEC-RELEASE")
+            self.assertEqual(
+                history[0]["evidence"],
+                ".agent/phases/{}/EVIDENCE.md#release".format(CLOSED_SLUG),
+            )
+            # Stamped with the phase it judged, so the two verdicts on this gate
+            # can never be read as one.
+            self.assertEqual(history[0]["phase"], "P1")
+
+    def test_the_activated_phase_can_record_its_own_release(self) -> None:
+        """The dead end the inherited ``passed`` created, at its own door."""
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._shipped(root)
+            self._activate(root)
+
+            state, issues, changed = _pass_release(
+                root,
+                evidence=".agent/phases/{}/EVIDENCE.md#release".format(NEXT_SLUG),
+                actor="releaser",
+            )
+
+            self.assertEqual(issues, [])
+            self.assertTrue(changed)
+            self.assertEqual(state["gates"]["release"], "passed")
+            self.assertEqual(
+                state["gate_records"]["release"]["evidence"],
+                ".agent/phases/{}/EVIDENCE.md#release".format(NEXT_SLUG),
+            )
+            # And the closed phase's verdict is still underneath it, alongside
+            # the pending record this passage replaced.
+            history = state["gate_records"]["release"]["history"]
+            self.assertEqual(
+                [entry.get("phase") for entry in history], ["P1", None]
+            )
+            self.assertEqual(
+                [entry["status"] for entry in history], ["passed", "pending"]
+            )
+
+    def test_the_work_gates_of_the_activated_phase_start_pending(self) -> None:
+        """``release`` was the sharp end, not the only one.
+
+        The five review gates judge a contract and a diff. Inherited across a
+        rotation they approve a diff that does not exist yet.
+        """
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._shipped(root)
+
+            state, issues = self._activate(root)
+
+            self.assertEqual(issues, [])
+            self.assertEqual(
+                {
+                    gate: state["gates"][gate]
+                    for gate in (
+                        "self_review",
+                        "spec_compliance",
+                        "code_quality",
+                        "acceptance",
+                        "verification",
+                    )
+                },
+                {
+                    "self_review": "pending",
+                    "spec_compliance": "pending",
+                    "code_quality": "pending",
+                    "acceptance": "pending",
+                    "verification": "pending",
+                },
+            )
+
+    def test_activation_records_the_closed_phase_in_completed_phases(self) -> None:
+        """Rotation is what advances the register; nobody edits it by hand."""
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self._shipped(root)
+            before, _ = read_state(root)
+            self.assertEqual(before.get("completed_phases", []), [])
+
+            state, issues = self._activate(root)
+
+            self.assertEqual(issues, [])
+            self.assertEqual(1, len(state["completed_phases"]))
+            entry = state["completed_phases"][0]
+            self.assertEqual(entry["id"], "P1")
+            self.assertEqual(entry["status"], "shipped")
+            self.assertEqual(
+                entry["artifacts"], ".agent/phases/{}/TASKS.md".format(CLOSED_SLUG)
+            )
+            self.assertTrue(entry["closed_at"])
+
     def test_no_task_of_the_activated_phase_is_marked_executed(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

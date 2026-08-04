@@ -220,7 +220,18 @@ resolved, `executing → verifying` opens — and so does `reviewing → verifyi
 for the round corrected without leaving review at all. Both guards read the
 round, not the verdict: `blocked` stays on the gate as the record of what the
 reviewer found, so refusing the move for it would leave a corrected round with
-no exit. The finding is not erased: its summary,
+no exit.
+
+The round is read narrowly, and each restriction is a way a correction could
+otherwise have spoken for work it never touched. A gate is answered only by the
+findings **it** raised — a corrected quality round says nothing about a blocked
+spec verdict. Only findings raised at the **current plan revision** count, for
+the reason `resolve-finding` gives when it refuses one: a finding carried over
+from an amended plan describes work that no longer exists as described. And a
+correction must post-date the **record now standing on the gate** — otherwise
+one closed round would excuse every later one, including a fresh `BLOCKED` that
+raised no blocker of its own, which a spec review may legitimately do when what
+it found is a missing requirement. The finding is not erased: its summary,
 severity, required change and originating review stay on the blocker, alongside
 `resolution`, `resolution_evidence` and who recorded it, and the blocking review
 itself stays in `gate_records[...].history`.
