@@ -164,8 +164,18 @@ def start_issues(
     # write is about to correct. Every other inconsistency still stops the
     # start.
     stale = set(decision.get("stale_next_action") or [])
+    # The same forgiveness, for the same reason, extended to the divergences
+    # this operation's own write corrects: the `phase.status` it rewrites, and
+    # the gate records left by a task or plan revision the phase has passed,
+    # which its reopen replaces. The derivation decides which qualify — nothing
+    # here judges — and only an advance may spend them, because only an advance
+    # performs the write that makes them true.
+    resolvable = (
+        set(decision.get("advance_resolvable") or []) if advancing else set()
+    )
+    forgiven = stale | resolvable
     inconsistencies = [
-        item for item in decision.get("inconsistencies") or [] if item not in stale
+        item for item in decision.get("inconsistencies") or [] if item not in forgiven
     ]
     if inconsistencies:
         issues.append(
@@ -397,7 +407,18 @@ def start_task(
         bind_execution(state, project_root, actor=actor)
     try:
         updated = transition_state(
-            state, "executing", project_root, actor=actor, reason=reason
+            state,
+            "executing",
+            project_root,
+            actor=actor,
+            reason=reason,
+            # Carried from the derivation that read the state before the
+            # selection replaced `current_task`, because the shape that
+            # adjudicates them — a verified task still current — is gone by the
+            # time the transition validates. The messages are stable across
+            # that mutation: neither `gates` nor `gate_records` is touched
+            # here, and the phase mismatch is the constant sentence.
+            resolves=decision.get("advance_resolvable") if advancing else None,
         )
     except DocumentError as exc:
         # The guarded transition owns the hard checks — plan seal, plan gate,
