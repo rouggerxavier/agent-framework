@@ -28,6 +28,7 @@ VALID_EVIDENCE_KINDS = {
     "correction",
     "commit",
     "task-start",
+    "task-finish",
     "gate",
     "plan-amendment",
     "classification",

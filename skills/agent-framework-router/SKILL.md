@@ -1,6 +1,6 @@
 ---
 name: agent-framework-router
-description: Use primeiro para selecionar fast, standard ou critical e escolher poucos assets proporcionais, com standard como padrão e critical apenas para dano grave.
+description: Use primeiro para selecionar fast, standard ou critical e escolher poucos assets proporcionais, com standard como padrão e critical apenas por escolha explícita.
 ---
 
 # Agent Framework Router
@@ -26,7 +26,9 @@ apontar rapidamente os assets certos. Dispatcher leve, nao executor.
 3. Escolha `fast` apenas com evidencia positiva de trabalho curto e contido:
    ~10 minutos, poucos arquivos, comportamento previsivel, baixo impacto, facil
    reversao, sem decisao arquitetural.
-4. Escolha `critical` apenas quando um defeito causar dano grave: quebrar o
+4. `critical` e sempre uma escolha explicita: so selecione com `--critical` ou
+   com pedido claro do usuario. Recomende-o — nomeando o dano — quando um
+   defeito causar dano grave: quebrar o
    nucleo de auth/sessoes, invasao ou escalada de privilegio, vazamento entre
    tenants, perda/corrupcao seria de dados, movimentar dinheiro, gateway de
    pagamento, criptografia/segredos, recuperacao de conta, migration destrutiva
@@ -35,8 +37,10 @@ apontar rapidamente os assets certos. Dispatcher leve, nao executor.
 5. Nao escale por area nem por tamanho. Tocar auth, ter migration, mexer em
    permissoes, envolver dados financeiros, exigir muitos testes ou alterar
    varios arquivos **nao** torna a tarefa `critical`.
-6. Respeite a flag do usuario. Escale `--fast`/`--standard` apenas diante de um
-   caminho de dano grave nomeado, e explique a evidencia.
+6. Respeite a flag do usuario. Nunca eleve `--fast`/`--standard` para
+   `critical` por conta propria: relate o dano detectado, recomende
+   `--critical` e siga no modo pedido. A unica correcao automatica e o piso:
+   area sensivel derruba `fast` para `standard`.
 7. Se for retomada ou `critical`, e `.agent/STATE.md` existir, encaminhe para
    `framework-next`. A mera existencia de `.agent/` nao obriga uma nova tarefa a
    usar o kernel.
@@ -154,7 +158,8 @@ saida pode ainda indicar intencao e primeiro asset.
 ## Criterios de aceite
 - `standard` e o default quando nada argumenta em contrario.
 - `fast` exige evidencia positiva de escopo curto e contido, sem area sensivel.
-- `critical` exige um caminho de dano grave nomeado.
+- `critical` nunca e inferido: exige selecao explicita. Um caminho de dano
+  grave detectado vira recomendacao, com o dano nomeado.
 - Area sensivel (auth, migration, financeiro, tenant) impede `fast` (piso
   `standard`) mas nunca escala sozinha para `critical`.
 - No maximo 4 assets; sem listar tudo.

@@ -109,7 +109,9 @@ class InitializationTests(unittest.TestCase):
     def test_phase_initialization_creates_all_phase_artifacts(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
-            initialize_project(root, FRAMEWORK_ROOT, project_name="example")
+            initialize_project(
+                root, FRAMEWORK_ROOT, project_name="example", persistent=True
+            )
             phase = initialize_phase(
                 root,
                 FRAMEWORK_ROOT,
@@ -138,6 +140,11 @@ class InitializationTests(unittest.TestCase):
                     str(root),
                     "--name",
                     "cli-project",
+                    # `standard` is the default mode now, and its default shape
+                    # is the resume-only state. Phases, contracts and gates are
+                    # asked for; they are no longer the price of not saying
+                    # `--fast`.
+                    "--persistent",
                 ],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,

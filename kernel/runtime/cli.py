@@ -42,6 +42,7 @@ from .review_application import (
     apply_spec_review,
     resolve_review_finding,
 )
+from .task_finish import finish_task
 from .task_start import start_task
 from .state_machine import (
     REVIEW_GATES,
@@ -117,10 +118,11 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--name", required=True)
     init.add_argument(
         "--mode",
-        default="critical",
+        default="standard",
         choices=("fast", "standard", "critical", "quick", "full", "audit"),
-        help="default execution mode for the project's tasks; quick/full/audit "
-        "remain accepted as legacy aliases",
+        help="default execution mode for the project's tasks; critical is never "
+        "the default and has to be asked for. quick/full/audit remain accepted "
+        "as legacy aliases",
     )
     init.add_argument(
         "--persistent",
@@ -278,6 +280,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     start.add_argument("--actor", required=True)
     start.add_argument("--reason", required=True)
+
+    finish = subparsers.add_parser(
+        "finish-task",
+        help=(
+            "close the task under way: marks it verified in the index, moves "
+            "the phase to verifying and releases the branch binding. The other "
+            "half of start-task, and the end of the ordinary loop. critical "
+            "refuses it — there a task is closed by its reviews and gates"
+        ),
+    )
+    finish.add_argument("--project", dest="finish_project")
+    finish.add_argument(
+        "--task-id",
+        help="optional confirmation; must equal the task under way",
+    )
+    finish.add_argument("--actor", required=True)
+    finish.add_argument("--reason", required=True)
 
     task_status = subparsers.add_parser(
         "task-status", help="apply a guarded task status transition"
@@ -714,6 +733,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     state["phase"].get("id"),
                     binding.get("branch"),
                     binding.get("worktree"),
+                    action["operation"],
+                    " {}".format(action["target"]) if action.get("target") else "",
+                )
+            )
+            return 0
+        if args.command == "finish-task":
+            root = _project(args.finish_project or args.project)
+            state, issues, changed = finish_task(
+                root,
+                actor=args.actor,
+                reason=args.reason,
+                task_id=args.task_id,
+            )
+            if issues:
+                return _emit_issues(
+                    [{"code": "task-finish", "message": message} for message in issues],
+                    "finish-task",
+                )
+            task = state["current_task"]
+            action = state["next_action"]
+            print(
+                "task finished: {} -> verified; phase {} -> verifying; next {}{}".format(
+                    task["id"],
+                    state["phase"].get("id"),
                     action["operation"],
                     " {}".format(action["target"]) if action.get("target") else "",
                 )

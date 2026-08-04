@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import shutil
@@ -17,7 +16,12 @@ from .documents import (
     utc_now,
     write_state,
 )
-from .execution_modes import is_persistent_state, normalize_mode
+from .execution_modes import (
+    DEFAULT_EXECUTION_MODE,
+    is_persistent_state,
+    normalize_mode,
+    strict_lifecycle,
+)
 
 
 PHASE_SLUG = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -36,7 +40,7 @@ def _initial_state(
     snapshot: Dict[str, Any],
     timestamp: str,
     *,
-    execution_mode: str = "critical",
+    execution_mode: str = DEFAULT_EXECUTION_MODE,
 ) -> Dict[str, Any]:
     return {
         "schema_version": 1,
@@ -141,7 +145,7 @@ def initialize_project(
     framework_root: Path,
     *,
     project_name: str,
-    mode: str = "full",
+    mode: str = DEFAULT_EXECUTION_MODE,
     persistent: bool = False,
 ) -> Path:
     """Create ``.agent`` for a project.
@@ -171,9 +175,9 @@ def initialize_project(
         "audit",
     }:
         raise DocumentError("invalid project mode: {}".format(mode))
-    execution_mode = normalize_mode(mode, default="critical")
+    execution_mode = normalize_mode(mode, default=DEFAULT_EXECUTION_MODE)
     if execution_mode == "auto":
-        execution_mode = "critical"
+        execution_mode = DEFAULT_EXECUTION_MODE
     if execution_mode == "fast":
         raise DocumentError(
             "fast mode does not initialize .agent; use agent-framework-router"
@@ -262,7 +266,17 @@ def initialize_phase(
             "phase artifacts require the persistent kernel; this project holds the "
             "resume-only state"
         )
-    if state.get("status") not in {"proposed", "discussing", "specified"}:
+    # A phase is a grouper of tasks. Under `critical` creating one is part of
+    # walking the lifecycle in order, so it happens before the work does;
+    # everywhere else the only position that forbids it is a project that is
+    # over.
+    forbidden = (
+        {"executing", "reviewing", "verifying", "ready_to_ship", "shipped",
+         "cancelled", "superseded", "planned", "blocked"}
+        if strict_lifecycle(state.get("execution_mode"))
+        else {"shipped", "cancelled", "superseded"}
+    )
+    if state.get("status") in forbidden:
         raise DocumentError("cannot initialize a phase from {}".format(state.get("status")))
     if not PHASE_SLUG.match(slug):
         raise DocumentError("phase slug must be kebab-case")

@@ -7,9 +7,10 @@ import hashlib
 import json
 from pathlib import Path
 import re
-from typing import Any, Dict, Iterable, List, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional
 
 from .contracts import (
+    FINISHED_TASK_STATES,
     dependency_issues,
     load_task_index,
     load_test_policy,
@@ -21,9 +22,9 @@ from .contracts import (
 )
 from .documents import DocumentError, git_snapshot, safe_project_path, utc_now
 from .execution_modes import (
-    mode_requirements,
     resolve_execution_mode,
     state_execution_mode,
+    strict_lifecycle,
 )
 from .worktree import resolve_worktree
 
@@ -43,6 +44,8 @@ STATES = {
     "superseded",
 }
 
+#: The lifecycle graph `critical` is held to. Every edge is a step someone has
+#: to justify, which is what makes the record worth reading afterwards.
 ALLOWED_TRANSITIONS = {
     "proposed": {"discussing", "blocked", "cancelled", "superseded"},
     "discussing": {"specified", "blocked", "cancelled", "superseded"},
@@ -75,6 +78,12 @@ ALLOWED_TRANSITIONS = {
     "superseded": set(),
 }
 
+#: Statuses nothing may leave. Outside `critical` this is the whole graph: a
+#: phase status is a label on a grouper, and refusing a transition because the
+#: label is in the wrong box stops product work to satisfy bookkeeping. What
+#: still cannot happen is resurrecting work that is over.
+TERMINAL_STATES = {"shipped", "cancelled", "superseded"}
+
 ACTIVE_TASK_STATES = {"executing", "reviewing", "verifying"}
 
 #: States where a task is genuinely being worked on, and the branch and worktree
@@ -89,6 +98,7 @@ EXECUTION_BOUND_STATES = {"executing", "reviewing", "verifying"}
 #: here rather than imported from ``review_application`` because that module
 #: imports this one; it owns the writing, this one owns reading them back.
 REVIEW_BLOCKER_SOURCES = frozenset({"spec-compliance", "code-quality"})
+PROJECT_ARTIFACTS = ("project", "roadmap", "context", "requirements", "decisions")
 PHASE_ARTIFACTS = ("spec", "plan", "tasks", "evidence", "review", "handoff")
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[2]
 
@@ -261,16 +271,19 @@ def phase_requires_seal(
     The seal freezes PLAN.md and TASKS.md so nothing can be quietly rewritten
     under an approval. That is worth its cost when a defect is catastrophic, and
     it is pure overhead on a phase of ordinary features — where the plan is meant
-    to be adjusted as the work teaches you something.
+    to be adjusted as the work teaches you something, and a fingerprint turns
+    every such adjustment into a re-seal ceremony.
     """
 
     if index is None:
         index = _task_index(state, root)
-    if index is None:
-        return True
-    tasks = [task for task in index.get("tasks", []) if isinstance(task, dict)]
+    tasks = (
+        [task for task in index.get("tasks", []) if isinstance(task, dict)]
+        if index is not None
+        else []
+    )
     if not tasks:
-        return True
+        return strict_lifecycle(effective_task_mode(state, root, index=index))
     return any(
         effective_task_mode(state, root, task_id=task.get("id"), index=index)
         == "critical"
@@ -383,23 +396,52 @@ def validate_state(
     check_files: bool = True,
     check_git: bool = True,
 ) -> List[Dict[str, str]]:
+    """Report what is wrong with the state, and how much of it is fatal.
+
+    Two kinds of finding come back, and the ``severity`` tells them apart.
+
+    An **error** is something no reader can work around: a document that cannot
+    be read or parsed, a `current_task` with no contract, or a checkout standing
+    somewhere other than where the execution is bound. Those are the same in
+    every mode. (An open blocker is fatal too, but at the doors into work rather
+    than here — see the comment beside the task index below.)
+
+    Everything else is a **warning** outside `critical`: a `next_action` the
+    state has outgrown, a `phase.status` that lags, a gate nobody recorded, a
+    plan edited after it was sealed. Each of those describes bookkeeping, and
+    bookkeeping that blocks the implementation of a feature has inverted the
+    point of keeping books. `critical` still reads them as errors, because
+    there the record *is* the deliverable.
+    """
+
     issues: List[Dict[str, str]] = []
+    strict = strict_lifecycle(effective_task_mode(state, root))
+
+    def report(code: str, message: str, *, fatal: bool = False) -> None:
+        """Record a finding, fatal in every mode or only under `critical`."""
+
+        issues.append(_issue(code, message, "error" if fatal or strict else "warning"))
+
     if state.get("schema_version") != 1:
-        issues.append(_issue("schema-version", "schema_version must equal 1"))
+        report("schema-version", "schema_version must equal 1", fatal=True)
     try:
         state_execution_mode(state)
     except ValueError as exc:
-        issues.append(_issue("execution-mode", str(exc)))
+        report("execution-mode", str(exc), fatal=True)
 
     status = state.get("status")
     if status not in STATES:
-        issues.append(_issue("invalid-state", "unknown lifecycle status: {!r}".format(status)))
+        report(
+            "invalid-state",
+            "unknown lifecycle status: {!r}".format(status),
+            fatal=True,
+        )
 
     next_action = state.get("next_action")
     if not isinstance(next_action, dict) or not next_action.get("operation"):
-        issues.append(
-            _issue("next-action", "next_action.operation must be explicit structured data")
-        )
+        # Informative outside `critical`. The kernel derives the next operation
+        # from the state on every read; the persisted copy is a convenience.
+        report("next-action", "next_action.operation must be explicit structured data")
 
     for key in (
         "project",
@@ -415,71 +457,81 @@ def validate_state(
         "plan_revision",
     ):
         if not isinstance(state.get(key), dict):
-            issues.append(_issue("invalid-section", "{} must be an object".format(key)))
+            report(
+                "invalid-section", "{} must be an object".format(key), fatal=True
+            )
 
     blockers = state.get("blockers")
     if not isinstance(blockers, list):
-        issues.append(_issue("invalid-blockers", "blockers must be an array"))
-        blockers = []
-    if status == "blocked" and not blockers:
-        issues.append(_issue("blocked-without-blocker", "blocked state requires a blocker"))
-    open_blockers = _open_blockers(state)
-    if status in {"ready_to_ship", "shipped"} and open_blockers:
-        issues.append(
-            _issue("shipping-with-blocker", "{} cannot contain open blockers".format(status))
+        report("invalid-blockers", "blockers must be an array", fatal=True)
+    if status == "blocked" and not _blockers(state):
+        report("blocked-without-blocker", "blocked state requires a blocker")
+    if status in {"ready_to_ship", "shipped"} and _open_blockers(state):
+        report(
+            "shipping-with-blocker",
+            "{} cannot contain open blockers".format(status),
         )
 
     artifacts = _mapping(state.get("artifacts"))
-    required = ["project", "roadmap", "context", "requirements", "decisions"]
-    if _mapping(state.get("phase")).get("id"):
-        required.extend(PHASE_ARTIFACTS)
-    for name in required:
+    # Every declared reference is checked; only some of them are *owed*. Outside
+    # `critical` a phase owes only the project-level documents — demanding
+    # REVIEW.md and HANDOFF.md up front made starting a task depend on paperwork
+    # that belongs at the end of it, if at all.
+    required = set(PROJECT_ARTIFACTS)
+    if strict and _mapping(state.get("phase")).get("id"):
+        required.update(PHASE_ARTIFACTS)
+    for name in PROJECT_ARTIFACTS + PHASE_ARTIFACTS:
         relative = artifacts.get(name)
         if not relative:
-            issues.append(
-                _issue("missing-artifact-reference", "artifacts.{} is required".format(name))
-            )
+            if name in required:
+                report(
+                    "missing-artifact-reference",
+                    "artifacts.{} is required".format(name),
+                )
             continue
         try:
             path = safe_project_path(root, relative)
         except DocumentError as exc:
-            issues.append(_issue("unsafe-artifact-reference", str(exc)))
+            report("unsafe-artifact-reference", str(exc), fatal=True)
             continue
         if check_files and not path.is_file():
-            issues.append(
-                _issue(
-                    "missing-artifact",
-                    "artifacts.{} points to missing file {}".format(name, relative),
-                )
+            # A declared reference that points nowhere is an unreadable file,
+            # not a missing formality.
+            report(
+                "missing-artifact",
+                "artifacts.{} points to missing file {}".format(name, relative),
+                fatal=True,
             )
 
     current_task = _mapping(state.get("current_task"))
     if status in ACTIVE_TASK_STATES and not current_task.get("id"):
-        issues.append(
-            _issue("active-task-missing", "{} requires current_task.id".format(status))
-        )
+        report("active-task-missing", "{} requires current_task.id".format(status))
 
-    if current_task.get("id") and artifacts.get("tasks") and check_files:
+    # The index is read whenever the phase declares one, not only when a task is
+    # current. An index that will not parse is the corruption case, and a phase
+    # between tasks is exactly when nobody would otherwise notice.
+    if artifacts.get("tasks") and check_files:
         try:
             task_path = safe_project_path(root, artifacts["tasks"])
             index, _ = load_task_index(task_path)
-            task = task_by_id(index["tasks"], current_task["id"])
-            if task is None:
-                issues.append(
-                    _issue(
-                        "task-contract-missing",
-                        "current task {} has no contract in {}".format(
-                            current_task["id"], artifacts["tasks"]
-                        ),
-                    )
+            task = (
+                task_by_id(index["tasks"], current_task["id"])
+                if current_task.get("id")
+                else None
+            )
+            if current_task.get("id") and task is None:
+                report(
+                    "task-contract-missing",
+                    "current task {} has no contract in {}".format(
+                        current_task["id"], artifacts["tasks"]
+                    ),
+                    fatal=True,
                 )
-            else:
+            elif task is not None:
                 if current_task.get("status") != task.get("status"):
-                    issues.append(
-                        _issue(
-                            "task-state-mismatch",
-                            "current_task.status must match the task contract index",
-                        )
+                    report(
+                        "task-state-mismatch",
+                        "current_task.status must match the task contract index",
                     )
                 for contract_issue in validate_task_contract(
                     task,
@@ -488,20 +540,24 @@ def validate_state(
                         state, root, task_id=current_task["id"], index=index
                     ),
                 ):
-                    issues.append(
-                        _issue(
-                            "task-contract-invalid",
-                            contract_issue["message"],
-                        )
-                    )
+                    report("task-contract-invalid", contract_issue["message"])
         except DocumentError as exc:
-            issues.append(_issue("task-index-invalid", str(exc)))
+            # An index that will not parse is the corruption case: nothing
+            # downstream can read the task it is being asked about.
+            report("task-index-invalid", str(exc), fatal=True)
+
+    # An open blocker naming the current task is deliberately *not* reported
+    # here. Raising one is how a review records what it found, so a state
+    # holding one is a normal state, not a broken one — calling it invalid made
+    # `framework-next` answer a live review round with `repair-state`, and made
+    # a round of four findings unclosable, since no single resolution could
+    # leave the state clean. The blocker is enforced where it means something:
+    # at the doors into work, in `_execution_conflicts`, `start-task` and
+    # `finish-task`.
 
     phase = _mapping(state.get("phase"))
     if phase.get("id") and phase.get("status") != status:
-        issues.append(
-            _issue("phase-state-mismatch", "phase.status must mirror canonical status")
-        )
+        report("phase-state-mismatch", "phase.status must mirror canonical status")
 
     if status in {
         "planned",
@@ -515,15 +571,14 @@ def validate_state(
         and state.get("blocked_from")
         in {"planned", "executing", "reviewing", "verifying", "ready_to_ship"}
     ):
-        issues.extend(
-            _plan_seal_issues(state, root, required=phase_requires_seal(state, root))
-        )
-
-    issues.extend(_gate_record_issues(state))
+        for item in _plan_seal_issues(
+            state, root, required=phase_requires_seal(state, root)
+        ):
+            report(item["code"], item["message"])
 
     risk_level = _mapping(state.get("risk")).get("level")
     if risk_level not in {"unclassified", "low", "medium", "high", "critical"}:
-        issues.append(_issue("invalid-risk", "risk.level is invalid"))
+        report("invalid-risk", "risk.level is invalid")
 
     if check_git:
         snapshot = git_snapshot(root)
@@ -536,16 +591,17 @@ def validate_state(
             and snapshot["commit"] != source_commit
             and status in {"planned", "executing", "reviewing", "verifying"}
         ):
-            issues.append(
-                _issue(
-                    "stale-context",
-                    "context commit {} differs from current {}; revalidate grounding".format(
-                        source_commit, snapshot["commit"]
-                    ),
-                )
+            report(
+                "stale-context",
+                "context commit {} differs from current {}; revalidate grounding".format(
+                    source_commit, snapshot["commit"]
+                ),
             )
         if status in EXECUTION_BOUND_STATES and not _task_is_finished(state):
-            issues.extend(_binding_issues(state, snapshot))
+            # A branch or worktree the execution is not standing on is a real
+            # conflict: the diff would land somewhere nobody is looking.
+            for item in _binding_issues(state, snapshot):
+                report(item["code"], item["message"], fatal=True)
         resolution = resolve_worktree(git_state.get("worktree"), root)
         if resolution.code:
             issues.append(
@@ -635,125 +691,6 @@ def reopen_review_gates(
     return moved
 
 
-def _gate_record_issues(state: Dict[str, Any]) -> List[Dict[str, str]]:
-    """The gates map and its ledger index must tell the same story.
-
-    They can drift: ``transition --to executing`` resets the five review gates in
-    ``gates`` and leaves ``gate_records`` untouched, so a state can hold
-    ``acceptance: pending`` beside a record that still says ``passed``. Reading
-    one or the other then answers the same question differently, and which one
-    is authoritative is decided by whichever code path happens to look.
-
-    The check applies only to records carrying a ``plan_revision`` stamp. That
-    stamp is written by the operations that know about revisions, so its absence
-    identifies a record written before they existed — those are reported by
-    nothing and migrated by nobody, which is the compatible default. New records
-    are held to the rule from the moment they are written.
-    """
-
-    issues: List[Dict[str, str]] = []
-    gates = _mapping(state.get("gates"))
-    records = _mapping(state.get("gate_records"))
-    for name, record in records.items():
-        record = _mapping(record)
-        if record.get("plan_revision") is None:
-            continue
-        if name not in gates:
-            continue
-        if record.get("status") != gates.get(name):
-            issue = _issue(
-                "gate-record-divergence",
-                "gate {} holds {!r} but its record says {!r}".format(
-                    name, gates.get(name), record.get("status")
-                ),
-            )
-            # The gate travels with the issue so a reader can ask whose
-            # judgement diverged without parsing the sentence back apart.
-            issue["gate"] = name
-            issues.append(issue)
-    return issues
-
-
-def superseded_gate_records(state: Dict[str, Any]) -> Set[str]:
-    """Gates whose divergent record was granted for work the phase has passed.
-
-    A record carries the task and the plan revision it was granted under. When
-    either names something already behind the phase — another task, or a
-    revision the current plan supersedes — the record is a leftover, and the
-    value beside it in ``gates`` is what the last reopen wrote. Starting the
-    next task reopens map and record together, so that particular drift is
-    about to be overwritten by the very operation being asked for.
-
-    A record stamped with the *current* task at the *current* revision is the
-    opposite case: it describes live work, its disagreement is about a
-    judgement someone is still relying on, and nothing here forgives it. So is
-    a record the comparison cannot place — an absent revision on either side
-    leaves no ground to call anything superseded, and ambiguity refuses.
-    """
-
-    gates = _mapping(state.get("gates"))
-    records = _mapping(state.get("gate_records"))
-    current_revision = _mapping(state.get("plan_revision")).get("version")
-    current_task = _mapping(state.get("current_task")).get("id")
-
-    superseded: Set[str] = set()
-    for name, record in records.items():
-        record = _mapping(record)
-        revision = record.get("plan_revision")
-        if revision is None or name not in gates:
-            continue
-        if record.get("status") == gates.get(name):
-            continue
-        task_id = record.get("task_id")
-        other_task = bool(task_id) and bool(current_task) and task_id != current_task
-        earlier_revision = (
-            isinstance(revision, int)
-            and isinstance(current_revision, int)
-            and revision < current_revision
-        )
-        if other_task or earlier_revision:
-            superseded.add(name)
-    return superseded
-
-
-def advance_would_resolve(
-    state: Dict[str, Any], issues: List[Dict[str, str]]
-) -> List[str]:
-    """The state errors that starting the next task rewrites on its way through.
-
-    An advance writes ``status`` and ``phase.status`` together and reopens the
-    review gates beside their records. A phase whose only faults are those same
-    fields is not describing damage anyone has to repair — it is describing the
-    write that is one operation away. Refusing over them would send an operator
-    to edit ``STATE.md`` by hand to satisfy a precondition the kernel is about
-    to satisfy correctly, which is the failure the formal writers exist to
-    prevent.
-
-    This is deliberately not a general repair. The shape is checked first —
-    only a ``verifying`` phase whose current task the state itself calls
-    ``verified`` can advance — and only divergences belonging to finished work
-    qualify. Every issue this does not name still stops the start, including a
-    record that disagrees about the current task at the current revision.
-    """
-
-    if state.get("status") != "verifying":
-        return []
-    if _mapping(state.get("current_task")).get("status") != "verified":
-        return []
-
-    superseded = superseded_gate_records(state)
-    resolved: List[str] = []
-    for item in issues:
-        if item.get("severity") != "error":
-            continue
-        code = item.get("code")
-        if code == "phase-state-mismatch":
-            resolved.append(item["message"])
-        elif code == "gate-record-divergence" and item.get("gate") in superseded:
-            resolved.append(item["message"])
-    return resolved
-
-
 def _gate(state: Dict[str, Any], name: str) -> Optional[str]:
     return _mapping(state.get("gates")).get(name)
 
@@ -769,102 +706,6 @@ def _blockers_have_evidence(blockers: Iterable[Dict[str, Any]]) -> bool:
         if not isinstance(blocker, dict) or not blocker.get("evidence"):
             return False
     return found
-
-
-def review_findings(
-    state: Dict[str, Any], task_id: Any, *, resolved: bool
-) -> List[Dict[str, Any]]:
-    """The blockers a review raised for ``task_id``, resolved or still open.
-
-    A review finding is the only blocker the framework raises with a ``source``
-    naming the gate that raised it, which is what makes it possible to ask "did
-    the round this correction answers actually happen" without trusting a field
-    a caller could have written for itself.
-    """
-
-    wanted = "resolved" if resolved else "open"
-    return [
-        blocker
-        for blocker in _blockers(state)
-        if isinstance(blocker, dict)
-        and blocker.get("source") in REVIEW_BLOCKER_SOURCES
-        and blocker.get("task_id") == task_id
-        and ("resolved" if blocker.get("status", "open") == "resolved" else "open")
-        == wanted
-    ]
-
-
-#: The blocker source each review gate raises its findings under. A gate is
-#: answered by its own findings and by nobody else's.
-GATE_BLOCKER_SOURCES = {
-    "spec_compliance": "spec-compliance",
-    "code_quality": "code-quality",
-}
-
-
-def correction_closed_round(
-    state: Dict[str, Any], task_id: Any, gate: str
-) -> bool:
-    """Whether the verdict standing on ``gate`` was answered by corrections.
-
-    Below `critical` the correction closes the round it answers, and
-    `resolve-finding` deliberately leaves the halting verdict on the gate — it
-    is the record of what the reviewer found, and rewriting it would erase the
-    review. Reading the verdict alone therefore refuses a round that closed.
-    Reading "some finding of this task is resolved" excuses far more than the
-    round in question, so what is asked for is the round itself: the findings
-    *this* gate raised under the record *now* standing on it, all resolved, all
-    carrying the evidence of the correction.
-
-    Three things scope it, and each one is a door the loose reading left open:
-
-    ``source`` — a corrected quality round says nothing about a blocked spec
-    verdict. Lumping the two together let findings from one gate close the
-    other.
-
-    ``plan_revision`` — a finding raised against a plan that was since amended
-    describes work that no longer exists as described. It is the same reason
-    `resolve-finding` refuses to close one.
-
-    ``resolved_at`` — a correction cannot answer a verdict that had not been
-    recorded when the correction was made. Without it one closed round excused
-    every later one: a fresh `BLOCKED` raising no blocker of its own would pass
-    on the strength of an older round, and `validate_spec_review` permits
-    exactly that shape, since missing requirements or a blocked acceptance
-    criterion are blocking content in themselves. It is also what keeps a
-    reopened gate honest — `reopen_review_gates` restamps ``at``, so corrections
-    made before the reopening no longer speak for the round after it.
-    """
-
-    source = GATE_BLOCKER_SOURCES.get(gate)
-    if source is None:
-        return False
-
-    revision = _mapping(state.get("plan_revision")).get("version")
-    recorded_at = _mapping(_mapping(state.get("gate_records")).get(gate)).get("at")
-
-    findings = [
-        blocker
-        for blocker in _blockers(state)
-        if isinstance(blocker, dict)
-        and blocker.get("source") == source
-        and blocker.get("task_id") == task_id
-        # A blocker with no revision stamp predates the check and is left alone,
-        # the same conservative treatment `resolve-finding` gives it.
-        and blocker.get("plan_revision") in (None, revision)
-    ]
-    if not findings:
-        return False
-
-    for finding in findings:
-        if finding.get("status") != "resolved":
-            return False
-        if not finding.get("resolution_evidence"):
-            return False
-        resolved_at = finding.get("resolved_at")
-        if recorded_at and (not resolved_at or str(resolved_at) < str(recorded_at)):
-            return False
-    return True
 
 
 def _open_blockers(state: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -970,23 +811,138 @@ def _plan_seal_issues(
     return issues
 
 
+def task_blocker_issues(state: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Open blockers raised against the task in hand.
+
+    The one kind of blocker that stops the lifecycle outside `critical`, and it
+    stops it in both directions: an explicitly blocked task may neither start
+    nor be called finished. Phase-wide blockers and blockers naming other tasks
+    are reported and left alone — an open question in one corner of a phase is
+    not a stop-work order over all of it.
+    """
+
+    task_id = _mapping(state.get("current_task")).get("id")
+    if not task_id:
+        return []
+    return [
+        _issue(
+            "task-blocked",
+            "task {} has an open blocker: {}".format(
+                task_id, blocker.get("id") or blocker.get("summary") or "unnamed"
+            ),
+        )
+        for blocker in _open_blockers(state)
+        if blocker.get("task_id") == task_id
+    ]
+
+
+def _execution_conflicts(
+    state: Dict[str, Any], root: Path, task: Dict[str, Any]
+) -> List[Dict[str, str]]:
+    """The conflicts that stop an execution from starting, in any mode.
+
+    Not a lighter lifecycle — a different question. These are the four things
+    that make the work itself impossible rather than the paperwork incomplete:
+    nothing selected, the selection does not exist, the selection is already
+    finished, or something it depends on has not landed. A dependency counts
+    because the task declared it: an obligation a task writes down for itself
+    is the one kind that never becomes ceremony.
+    """
+
+    issues: List[Dict[str, str]] = []
+    if not task.get("id"):
+        issues.append(_issue("task-not-selected", "current_task.id must select a task"))
+        return issues
+
+    snapshot = git_snapshot(root)
+    if snapshot["is_repository"] and snapshot["branch"] is None:
+        issues.append(
+            _issue("git-detached-head", "execution cannot start on a detached HEAD")
+        )
+
+    task_path = _artifact_path(state, root, "tasks")
+    if not task_path or not task_path.is_file():
+        return issues
+    try:
+        index, _ = load_task_index(task_path)
+    except DocumentError as exc:
+        issues.append(_issue("task-index-invalid", str(exc)))
+        return issues
+
+    contract = task_by_id(index["tasks"], task["id"])
+    if contract is None:
+        issues.append(
+            _issue("task-contract-missing", "task {} has no contract".format(task["id"]))
+        )
+        return issues
+    if contract.get("status") in FINISHED_TASK_STATES:
+        issues.append(
+            _issue(
+                "task-already-finished",
+                "task {} is {!r} and cannot be executed again".format(
+                    task["id"], contract.get("status")
+                ),
+            )
+        )
+    for message in dependency_issues(contract, index["tasks"]):
+        issues.append(_issue("dependency-unsatisfied", message))
+    return issues
+
+
 def validate_transition(
     state: Dict[str, Any], target: str, root: Path
 ) -> List[Dict[str, str]]:
+    """What stops this transition. Outside `critical`, very little.
+
+    A gate is a promise that somebody looked. Under `critical` that promise has
+    to be kept before the lifecycle moves, because the record is what the mode
+    is bought for. Everywhere else the phase status is a label on a grouper of
+    tasks, and refusing to move it stops the implementation of a feature to
+    satisfy bookkeeping — so what remains is the set of genuine conflicts: work
+    that is already over, a task that does not exist, a dependency that has not
+    landed, and a checkout that cannot carry the execution.
+    """
+
     current = state.get("status")
     issues: List[Dict[str, str]] = []
     if current not in STATES or target not in STATES:
         return [_issue("invalid-transition-state", "{} -> {}".format(current, target))]
-    if target not in ALLOWED_TRANSITIONS[current]:
+
+    strict = strict_lifecycle(effective_task_mode(state, root))
+    if strict:
+        if target not in ALLOWED_TRANSITIONS[current]:
+            return [
+                _issue(
+                    "forbidden-transition",
+                    "transition {} -> {} is not allowed".format(current, target),
+                )
+            ]
+    elif current in TERMINAL_STATES and target != "superseded":
         return [
             _issue(
                 "forbidden-transition",
-                "transition {} -> {} is not allowed".format(current, target),
+                "{} is closed; it may only be superseded".format(current),
             )
         ]
 
     blockers = _open_blockers(state)
     task = _mapping(state.get("current_task"))
+
+    if not strict:
+        # Outside `critical` the preconditions are the conflicts and nothing
+        # else: the task is not explicitly blocked, and — when the move is into
+        # execution — the work exists, has not already been done, and its
+        # declared dependencies have landed. Everything the strict branch adds
+        # below — gates, seals, risk classification, review verdicts,
+        # verification results — is recorded rather than enforced.
+        # A blocked task may still go *back* to execution — that is where the
+        # finding gets fixed, and refusing it would leave a corrected round with
+        # nowhere to be corrected. What it may not do is advance.
+        if target not in {"executing", "blocked", "cancelled", "superseded"}:
+            issues.extend(task_blocker_issues(state))
+        if target == "executing":
+            issues.extend(_execution_conflicts(state, root, task))
+        return issues
 
     if target == "blocked" and not _blockers_have_evidence(blockers):
         issues.append(
@@ -1146,60 +1102,16 @@ def validate_transition(
             issues.append(_issue("self-review", "self-review must be recorded as passed"))
 
     if current == "executing" and target == "verifying":
-        # The correction closes the round it answers. Below `critical`, sending a
-        # corrected diff back through a second independent review buys a second
-        # opinion on changes the first reviewer already specified — which is the
-        # ceremony that made a one-finding round cost two full reviews. What is
-        # demanded instead is the record: the round happened, every finding it
-        # raised is resolved against evidence of the correction, and nothing is
-        # still open. A second review is not forbidden, it is simply no longer
-        # the only door: a correction that outgrows its finding — new scope, a
-        # changed contract, a grave risk — is an amendment, and `amend-plan`
-        # reopens the gates and puts the task back through `reviewing`.
-        reviews = mode_requirements(effective_task_mode(state, root))[
-            "independent_reviews"
-        ]
-        if reviews >= 2:
-            issues.append(
-                _issue(
-                    "correction-requires-review",
-                    "critical closes a correction through a new independent "
-                    "review; return through reviewing",
-                )
+        # `critical` closes a correction through a new independent review and
+        # through nothing else: the second opinion on a corrected diff is the
+        # thing the mode is bought for.
+        issues.append(
+            _issue(
+                "correction-requires-review",
+                "critical closes a correction through a new independent "
+                "review; return through reviewing",
             )
-        task_id = task.get("id")
-        resolved = review_findings(state, task_id, resolved=True)
-        if not resolved:
-            issues.append(
-                _issue(
-                    "no-resolved-finding",
-                    "execution may reach verification only to close a review "
-                    "round whose findings are recorded as resolved",
-                )
-            )
-        for finding in resolved:
-            if not finding.get("resolution_evidence"):
-                issues.append(
-                    _issue(
-                        "finding-resolution-evidence",
-                        "resolved finding {} carries no evidence of the "
-                        "correction".format(finding.get("id")),
-                    )
-                )
-        if blockers:
-            issues.append(
-                _issue("open-blockers", "verification cannot start with an open finding")
-            )
-        if task.get("status") != "implementation_complete":
-            issues.append(
-                _issue(
-                    "implementation-incomplete",
-                    "the correction must be implementation_complete before "
-                    "verification",
-                )
-            )
-        if _gate(state, "self_review") != "passed":
-            issues.append(_issue("self-review", "self-review must be recorded as passed"))
+        )
 
     if current == "reviewing" and target == "executing":
         review_blocked = _gate(state, "spec_compliance") == "blocked"
@@ -1217,61 +1129,15 @@ def validate_transition(
             )
 
     if current == "reviewing" and target == "verifying":
-        # How many independent judgements this task owes is a property of the
-        # task, not of the project it lives in. Two reviewers over the same diff
-        # is what `critical` buys; asking for it on every feature is what made
-        # the framework cost more than the features.
-        reviews = mode_requirements(effective_task_mode(state, root))[
-            "independent_reviews"
-        ]
-        spec = _gate(state, "spec_compliance")
-        quality = _gate(state, "code_quality")
-        spec_approving = spec in {"passed", "passed_with_notes"}
-        quality_approving = quality in {"approved", "approved_with_notes"}
-        if reviews >= 2:
-            if not spec_approving:
-                issues.append(
-                    _issue("spec-review", "spec compliance review has not passed")
-                )
-            if not quality_approving:
-                issues.append(
-                    _issue("quality-review", "code quality review has not approved")
-                )
-        else:
-            # A halting verdict whose every finding carries a correction and the
-            # evidence of it is a round that closed, not a round that failed.
-            # `resolve-finding` deliberately leaves `blocked` on the gate — that
-            # is the record of what the reviewer found — so reading the verdict
-            # alone refused the very move `next_operation` had just named
-            # `verify-phase`, and the phase had no legal exit at all. Below
-            # `critical` the correction is what closes the round; `critical`
-            # keeps the strict reading because `resolve-finding` refuses it.
-            # Each gate is answered by its own round and by nothing else —
-            # `correction_closed_round` is where that is spelled out.
-            task_id = _mapping(state.get("current_task")).get("id")
-            spec_corrected = correction_closed_round(state, task_id, "spec_compliance")
-            quality_corrected = correction_closed_round(state, task_id, "code_quality")
-            if reviews >= 1 and not (
-                spec_approving
-                or quality_approving
-                or spec_corrected
-                or quality_corrected
-            ):
-                issues.append(
-                    _issue(
-                        "independent-review",
-                        "standard requires one recorded review beyond the "
-                        "self-review before verification",
-                    )
-                )
-            if spec == "blocked" and not spec_corrected:
-                issues.append(
-                    _issue("spec-review", "spec compliance review is blocked")
-                )
-            if quality == "changes_required" and not quality_corrected:
-                issues.append(
-                    _issue("quality-review", "code quality review requires changes")
-                )
+        # Two independent judgements over the same diff is what `critical` buys.
+        if _gate(state, "spec_compliance") not in {"passed", "passed_with_notes"}:
+            issues.append(
+                _issue("spec-review", "spec compliance review has not passed")
+            )
+        if _gate(state, "code_quality") not in {"approved", "approved_with_notes"}:
+            issues.append(
+                _issue("quality-review", "code quality review has not approved")
+            )
         if blockers:
             issues.append(_issue("open-blockers", "review cannot advance with blockers"))
 
@@ -1424,21 +1290,18 @@ def transition_state(
     *,
     actor: str,
     reason: str,
-    resolves: Optional[Iterable[str]] = None,
 ) -> Dict[str, Any]:
     """Move the lifecycle to ``target``, or raise with what stopped it.
 
-    ``resolves`` names state errors this transition has already been
-    established to overwrite. It exists for the task advance, whose own write
-    corrects the fields in question, and the entries are adjudicated by
-    ``advance_would_resolve`` — never composed by a caller deciding for itself
-    what it may ignore. An issue absent from that set refuses the transition
-    exactly as before.
+    Only errors stop it. ``validate_state`` grades its own findings, and outside
+    `critical` a lagging mirror or an unrecorded gate comes back as a warning —
+    so the escape hatch that used to let one operation forgive the divergences
+    its own write corrects is no longer needed, and is gone with the divergences
+    that made it necessary.
     """
 
-    forgiven = set(resolves or ())
     state_issues = [
-        item for item in validate_state(state, root) if item["message"] not in forgiven
+        item for item in validate_state(state, root) if item["severity"] == "error"
     ]
     if state_issues:
         raise DocumentError(

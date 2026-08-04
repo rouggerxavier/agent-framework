@@ -342,42 +342,15 @@ class TheReportedScenario(unittest.TestCase):
 
 
 class GatesAndRecordsStayCoherent(unittest.TestCase):
-    def test_a_stamped_record_may_not_diverge_from_the_map(self) -> None:
-        with TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            _verifying_phase(root)
-            _amend_the_contract(root)
-            _amend(root)
+    """The writers keep map and record together; validation no longer polices it.
 
-            from kernel.runtime.gates import set_gate_status
-
-            set_gate_status(
-                root,
-                gate="verification",
-                target="passed",
-                decision_id=DECISION,
-                evidence=_evidence(root),
-                actor="reviewer",
-            )
-            state, body = read_state(root)
-            # Hand-edit exactly the drift this rule exists to catch.
-            state["gates"]["verification"] = "pending"
-            codes = {issue["code"] for issue in validate_state(state, root)}
-            self.assertIn("gate-record-divergence", codes)
-
-    def test_unstamped_records_are_left_alone(self) -> None:
-        """Projects written before revisions were stamped are not migrated."""
-
-        with TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            _verifying_phase(root)
-            state, _ = read_state(root)
-            state["gate_records"] = {
-                "verification": {"status": "passed", "decision": "DEC-OLD"}
-            }
-            state["gates"]["verification"] = "failed"
-            codes = {issue["code"] for issue in validate_state(state, root)}
-            self.assertNotIn("gate-record-divergence", codes)
+    Requiring the two to agree meant a state could be *correct* about the work
+    and still refused for a disagreement between two copies of the same fact —
+    and it needed a second mechanism, adjudicating which divergences the next
+    operation was about to overwrite, to stay usable at all. Both are gone. What
+    remains is the part that was always the real answer: every operation that
+    moves a gate moves its record in the same write.
+    """
 
     def test_reentering_execution_moves_records_with_the_map(self) -> None:
         """The drift this fixes: a transition used to reset only the map."""

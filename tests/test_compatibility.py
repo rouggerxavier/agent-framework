@@ -9,9 +9,16 @@ from tests.helpers import FRAMEWORK_ROOT
 
 
 class CompatibilityTests(unittest.TestCase):
-    def test_legacy_state_without_execution_mode_defaults_to_critical(self) -> None:
+    def test_legacy_state_without_execution_mode_defaults_to_standard(self) -> None:
+        """Silence is not a declaration of catastrophic risk.
+
+        A state written before the field existed says nothing about grave
+        damage, and reading it as `critical` inferred the heaviest lifecycle in
+        the framework from an absent key.
+        """
+
         self.assertEqual(
-            "critical",
+            "standard",
             state_execution_mode(
                 {"schema_version": 1, "project": {"mode": "full"}}
             ),

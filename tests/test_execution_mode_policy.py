@@ -242,7 +242,15 @@ class StandardClassificationTests(unittest.TestCase):
 
 
 class CriticalClassificationTests(unittest.TestCase):
-    def test_small_change_in_the_authentication_core_is_critical(self) -> None:
+    """`critical` is named by a human, or by a caller naming the harm itself.
+
+    ``classify_task`` still reaches it: its ``severe_harm_factors`` are supplied
+    by the caller, which is a statement, not a guess. ``route_execution`` reads
+    free text, and a phrase match is not a statement — so it reports the harm it
+    recognised and leaves the mode where it found it.
+    """
+
+    def test_a_named_harm_factor_classifies_as_critical(self) -> None:
         self.assertEqual(
             "critical",
             _mode(
@@ -254,38 +262,38 @@ class CriticalClassificationTests(unittest.TestCase):
         )
         self.assertEqual(
             "critical",
-            route_execution(
-                "Ajuste pequeno no núcleo de autenticação que decide toda sessão."
-            )["selected_mode"],
-        )
-
-    def test_payment_gateway_is_critical(self) -> None:
-        self.assertEqual(
-            "critical",
-            route_execution("Troque o gateway de pagamento do checkout.")[
-                "selected_mode"
-            ],
-        )
-
-    def test_central_tenant_isolation_is_critical(self) -> None:
-        self.assertEqual(
-            "critical",
-            route_execution(
-                "Reescreva o isolamento central entre tenants das queries."
-            )["selected_mode"],
-        )
-
-    def test_destructive_hard_to_reverse_migration_is_critical(self) -> None:
-        self.assertEqual(
-            "critical",
-            route_execution(
-                "Rode uma migration destrutiva que remove coluna com dados."
-            )["selected_mode"],
-        )
-        self.assertEqual(
-            "critical",
             _mode(reversibility="irreversible", blast_radius="tenant-wide"),
         )
+
+    def test_routing_reports_the_harm_and_recommends_rather_than_escalating(
+        self,
+    ) -> None:
+        for request, factor in (
+            (
+                "Ajuste pequeno no núcleo de autenticação que decide toda sessão.",
+                "auth_core_breakage",
+            ),
+            ("Troque o gateway de pagamento do checkout.", "payment_gateway"),
+            (
+                "Reescreva o isolamento central entre tenants das queries.",
+                "cross_tenant_exposure",
+            ),
+            (
+                "Rode uma migration destrutiva que remove coluna com dados.",
+                "destructive_migration",
+            ),
+        ):
+            with self.subTest(request=request):
+                decision = route_execution(request)
+                self.assertEqual("standard", decision["selected_mode"])
+                self.assertIn(factor, decision["risk_factors"])
+                self.assertIn("--critical", decision["reason"])
+
+    def test_routing_selects_critical_when_it_is_asked_for(self) -> None:
+        decision = route_execution(
+            "Troque o gateway de pagamento do checkout.", requested_mode="critical"
+        )
+        self.assertEqual("critical", decision["selected_mode"])
 
     def test_oversized_coupled_work_that_cannot_be_split_is_critical(self) -> None:
         self.assertEqual(
@@ -676,21 +684,41 @@ class ProportionalReviewTests(unittest.TestCase):
             }
             self.assertIn("quality-review", codes)
 
-    def test_standard_still_needs_one_review(self) -> None:
+    def test_standard_may_verify_with_no_review_recorded(self) -> None:
+        """Review is available outside `critical`, not owed.
+
+        A recorded review is worth having and the framework keeps offering it.
+        What it no longer does is refuse the phase until one exists — the task
+        was implemented and tested, and a missing verdict is a missing note,
+        not a missing permission.
+        """
+
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             state = self._reviewing_project(root, "standard")
             state["gates"]["spec_compliance"] = "pending"
             state["gates"]["code_quality"] = "pending"
-            codes = {
-                issue["code"] for issue in validate_transition(state, "verifying", root)
-            }
-            self.assertIn("independent-review", codes)
+            self.assertEqual([], validate_transition(state, "verifying", root))
 
-    def test_a_blocking_review_stops_a_standard_task_too(self) -> None:
+    def test_a_blocking_verdict_does_not_hold_a_standard_task_hostage(self) -> None:
+        """The verdict is the record of what a reviewer found, not a lock.
+
+        Under `critical` the gate has to be answered by another review. Outside
+        it, the corrections were made and the verdict stays on the gate as the
+        history of the round — holding the phase shut on top of that made a
+        single finding cost two full review passes.
+        """
+
         with TemporaryDirectory() as temporary:
             root = Path(temporary)
             state = self._reviewing_project(root, "standard")
+            state["gates"]["spec_compliance"] = "blocked"
+            self.assertEqual([], validate_transition(state, "verifying", root))
+
+    def test_critical_is_still_stopped_by_a_blocking_verdict(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            state = self._reviewing_project(root, "critical")
             state["gates"]["spec_compliance"] = "blocked"
             codes = {
                 issue["code"] for issue in validate_transition(state, "verifying", root)

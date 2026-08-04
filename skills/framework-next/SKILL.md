@@ -35,18 +35,20 @@ Retomar trabalho persistente sem depender da conversa e respeitar o
 1. Rode `scripts/framework-next --project <caminho>`.
 2. Sem `.agent/`, encaminhe para `agent-framework-router`; nao inicialize
    automaticamente.
-3. Inicialize somente com pedido/necessidade confirmada. Para o kernel completo:
-   `scripts/framework-next init --project <caminho> --name <nome> --mode critical`.
-   Para retomada leve justificada:
-   `scripts/framework-next init --project <caminho> --name <nome> --mode standard`,
-   que cria somente `STATE.md` e `PLAN.md`.
-4. Leia `execution_mode`; estado antigo sem o campo usa `critical` por
-   compatibilidade segura.
-5. Em `standard`, leia apenas `STATE.md`/`PLAN.md` existentes e coordene o plano
-   leve sem exigir seal, contratos, ledger ou reviewers separados.
+3. Inicialize somente com pedido/necessidade confirmada. O padrao e `standard`:
+   `scripts/framework-next init --project <caminho> --name <nome>` cria somente
+   `STATE.md` e `PLAN.md`; acrescente `--persistent` para o kernel completo
+   (fases, contratos, gates, ledger) ainda em `standard`. `--mode critical` e
+   uma escolha explicita, nunca um padrao.
+4. Leia `execution_mode`; estado antigo sem o campo usa `standard`. Silencio nao
+   e declaracao de dano grave, e `critical` nunca e inferido.
+5. Em `standard`, o ciclo minimo e `start-task` -> implementacao -> testes
+   direcionados -> review opcional -> `finish-task`. Gates, seal, ledger e
+   reviewers separados continuam disponiveis e nunca sao pre-requisito.
 6. Em `critical`, leia todos os artefatos ativos, valide referencias/contexto/Git
    e siga exatamente a operacao retornada.
 7. Use transicoes formais somente no lifecycle `critical`, depois da evidencia.
+   Fora dele, `start-task` e `finish-task` movem fase e indice juntos.
 8. O comando funciona da raiz, de subdiretorio, de CI e de linked worktree; a
    raiz e resolvida por `git rev-parse --show-toplevel`, nunca pelo caminho
    gravado em `STATE.md`.
@@ -69,10 +71,12 @@ Retomar trabalho persistente sem depender da conversa e respeitar o
 
 - Uma unica proxima operacao.
 - Decisao explicada por evidencia observada.
-- Estado inconsistente bloqueia execucao.
+- Fora de `critical`, so bloqueiam: arquivo ilegivel ou ausente, task
+  inexistente, blocker aberto para a task, task ja concluida, dependencia
+  declarada nao satisfeita e conflito real de branch/worktree. O resto e aviso.
 - Nenhuma transicao proibida ou artefato ausente e inferido.
 - Ausencia de `.agent/` roteia para `auto`/`fast`, sem criar arquivos.
-- Estado P0/P1 antigo continua como `critical`.
+- Estado antigo sem `execution_mode` continua como `standard`.
 - Nenhum caminho absoluto local e gravado em `STATE.md`; `git.worktree` usa `.`.
 - Trocar de computador nao produz diff em `STATE.md`.
 

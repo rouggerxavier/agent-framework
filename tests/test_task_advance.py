@@ -372,25 +372,61 @@ class AdvanceGuards(unittest.TestCase):
             )
             self.assertEqual(_statuses(root)["U3C"], "pending")
 
-    def test_an_open_blocker_stops_the_advance(self) -> None:
-        with TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            _verified_first_task(root)
-            state, body = load_frontmatter(root / ".agent" / "STATE.md")
-            state["blockers"] = [
+    def _with_blocker(self, root: Path, **fields) -> None:
+        state, body = load_frontmatter(root / ".agent" / "STATE.md")
+        state["blockers"] = [
+            dict(
                 {
                     "id": "B-1",
                     "summary": "migration unresolved",
                     "status": "open",
                     "evidence": "notes.md",
-                }
-            ]
-            write_frontmatter(root / ".agent" / "STATE.md", state, body)
+                },
+                **fields,
+            )
+        ]
+        write_frontmatter(root / ".agent" / "STATE.md", state, body)
+
+    def test_any_open_blocker_stops_a_critical_advance(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _verified_first_task(root)
+            self._with_blocker(root)
 
             _, issues, changed = _advance(root)
 
             self.assertFalse(changed)
-            self.assertTrue(any("open blockers" in m for m in issues), issues)
+            self.assertTrue(any("blockers" in m for m in issues), issues)
+
+    def test_a_blocker_naming_the_next_task_stops_a_standard_advance(self) -> None:
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _verified_first_task(root, default_mode="standard")
+            self._with_blocker(root, task_id="U3B1")
+
+            _, issues, changed = _advance(root)
+
+            self.assertFalse(changed)
+            self.assertTrue(any("B-1" in m for m in issues), issues)
+
+    def test_a_phase_wide_blocker_does_not_stop_a_standard_advance(self) -> None:
+        """An open question in one corner of a phase is not a stop-work order.
+
+        A blocker that names no task belongs to the phase's documents. Holding
+        every eligible task hostage to it is how one unresolved decision froze
+        work that had nothing to do with it — the tasks that genuinely depend on
+        it say so in `depends_on`, and those are still refused.
+        """
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _verified_first_task(root, default_mode="standard")
+            self._with_blocker(root)
+
+            _, issues, changed = _advance(root)
+
+            self.assertEqual([], issues)
+            self.assertTrue(changed)
 
     def test_the_integration_branch_is_refused(self) -> None:
         with TemporaryDirectory() as temporary:
@@ -683,7 +719,6 @@ class TheFluxoNexoScenario(unittest.TestCase):
             decision = determine_next_operation(root)
             self.assertEqual(decision["next_operation"]["target"], "U3B1")
             self.assertEqual(decision["blocking_conditions"], [])
-            self.assertTrue(decision["stale_next_action"])
 
             updated, issues, changed = _advance(root)
 

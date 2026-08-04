@@ -285,6 +285,19 @@ STANDARD_PATTERNS: Tuple[Tuple[str, str], ...] = (
 )
 
 
+def strict_lifecycle(mode: Optional[str]) -> bool:
+    """Whether this mode runs the gated lifecycle, or only records one.
+
+    `critical` is the single mode where a gate, a seal or a mirror stops the
+    work. Everywhere else the same records are still written — they are the
+    project's memory — but reading them back is reporting, not permission. The
+    whole difference between "the framework organises the work" and "the
+    framework is the work" is this predicate.
+    """
+
+    return normalize_mode(mode, default=DEFAULT_EXECUTION_MODE) == "critical"
+
+
 def normalize_mode(value: Optional[str], *, default: str = "auto") -> str:
     candidate = (value or default).strip().casefold()
     if candidate.startswith("--"):
@@ -459,9 +472,11 @@ def route_execution(
 
     `standard` is the resting state of the router. `fast` needs positive evidence
     that the work is short and contained *and* that no sensitive area is
-    involved; `critical` needs a named grave-damage path. A sensitive area never
-    escalates to `critical` on its own, but it does rule out `fast` — the floor
-    becomes `standard`.
+    involved. `critical` is never inferred: it is the heaviest lifecycle in the
+    framework, and handing it out from a phrase match is how ordinary features
+    ended up paying for it. Detected grave-damage paths are reported in
+    ``risk_factors`` and recommended in ``reason`` so a human can select it —
+    the selection stays theirs.
     """
 
     clean = _normalized_text(request)
@@ -470,32 +485,35 @@ def route_execution(
     sensitive_areas = _signals(clean, SENSITIVE_AREA_PATTERNS)
     fast_factors = _signals(clean, FAST_PATTERNS)
     complexity_factors = _signals(clean, STANDARD_PATTERNS)
+    recommendation = (
+        " A grave-damage path was detected ({}); select --critical explicitly if "
+        "it applies.".format(", ".join(harm_factors))
+        if harm_factors
+        else ""
+    )
 
     escalated = False
     if explicit == "critical":
         selected = "critical"
         reason = "User explicitly selected critical mode."
     elif explicit in {"fast", "standard"}:
-        if harm_factors:
-            selected = "critical"
-            escalated = True
-            reason = (
-                "Escalated from explicit {} because a failure would cause grave "
-                "damage: {}.".format(explicit, ", ".join(harm_factors))
-            )
-        elif explicit == "fast" and sensitive_areas:
+        if explicit == "fast" and sensitive_areas:
             selected = "standard"
             escalated = True
-            reason = "fast rejected: sensitive area requires at least standard: {}.".format(
-                ", ".join(sensitive_areas)
+            reason = (
+                "fast rejected: sensitive area requires at least standard: {}.".format(
+                    ", ".join(sensitive_areas)
+                )
+                + recommendation
             )
         else:
             selected = explicit
-            reason = "User explicitly selected {} mode.".format(explicit)
+            reason = "User explicitly selected {} mode.".format(explicit) + recommendation
     elif harm_factors:
-        selected = "critical"
-        reason = "A defect here would cause grave damage: {}.".format(
-            ", ".join(harm_factors)
+        selected = "standard"
+        reason = (
+            "Ordinary development risk; critical is never inferred."
+            + recommendation
         )
     elif sensitive_areas:
         selected = "standard"
@@ -979,12 +997,14 @@ def state_execution_mode(state: Mapping[str, Any]) -> str:
     if explicit is not None and not isinstance(explicit, str):
         raise ValueError("execution_mode must be fast, standard, or critical")
     if isinstance(explicit, str):
-        normalized = normalize_mode(explicit, default="critical")
+        normalized = normalize_mode(explicit, default=DEFAULT_EXECUTION_MODE)
         if normalized == "auto":
             raise ValueError("persisted execution_mode cannot be auto")
         return normalized
-    # States created before adaptive execution used the complete P0/P1 kernel.
-    return "critical"
+    # A state written before the field existed says nothing about grave damage.
+    # Reading it as `critical` inferred the heaviest lifecycle from silence,
+    # which is the one thing `critical` must never be selected by.
+    return DEFAULT_EXECUTION_MODE
 
 
 def migrate_state_execution_mode(
