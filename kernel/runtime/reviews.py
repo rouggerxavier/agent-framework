@@ -91,9 +91,13 @@ def validate_spec_review(
                 )
             )
             continue
-        if not entry.get("evidence"):
+        criterion_evidence = entry.get("evidence")
+        if not isinstance(criterion_evidence, list) or not criterion_evidence:
             issues.append(
-                _issue("spec-criterion-evidence", "{} lacks evidence".format(criterion_id))
+                _issue(
+                    "spec-criterion-evidence",
+                    "{} evidence must be a non-empty list".format(criterion_id),
+                )
             )
         if entry.get("status") == "blocked":
             blocked_criteria.append(criterion_id)
@@ -120,12 +124,22 @@ def validate_spec_review(
                 isinstance(blocker, dict)
                 and blocker.get("id")
                 and blocker.get("summary")
-                and blocker.get("evidence")
             ):
                 issues.append(
                     _issue(
                         "spec-blocker-shape",
                         "each blocker requires id, summary, and evidence",
+                    )
+                )
+                continue
+            blocker_evidence = blocker.get("evidence")
+            if not isinstance(blocker_evidence, list) or not blocker_evidence:
+                issues.append(
+                    _issue(
+                        "spec-blocker-evidence",
+                        "blocker {} evidence must be a non-empty list".format(
+                            blocker.get("id")
+                        ),
                     )
                 )
     if classification in {"PASS", "PASS_WITH_NOTES"} and has_blocking_content:
@@ -161,11 +175,26 @@ def validate_quality_review(
     if not isinstance(findings, list):
         issues.append(_issue("quality-findings", "findings must be an array"))
         findings = []
+    for item in findings:
+        if not isinstance(item, dict):
+            continue
+        if item.get("severity") or item.get("required_change"):
+            finding_evidence = item.get("evidence")
+            if not isinstance(finding_evidence, list) or not finding_evidence:
+                issues.append(
+                    _issue(
+                        "quality-finding-evidence",
+                        "finding {} evidence must be a non-empty list".format(
+                            item.get("summary") or item.get("id") or "?"
+                        ),
+                    )
+                )
     actionable = [
         item
         for item in findings
         if isinstance(item, dict)
         and item.get("severity")
+        and isinstance(item.get("evidence"), list)
         and item.get("evidence")
         and item.get("required_change")
     ]

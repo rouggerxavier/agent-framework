@@ -518,7 +518,9 @@ def _merge_blockers(
     return merged
 
 
-def _spec_blockers(report: Dict[str, Any], task_id: Any) -> List[Dict[str, Any]]:
+def _spec_blockers(
+    report: Dict[str, Any], task_id: Any, plan_revision: Any
+) -> List[Dict[str, Any]]:
     return [
         {
             "id": str(blocker.get("id")),
@@ -527,13 +529,16 @@ def _spec_blockers(report: Dict[str, Any], task_id: Any) -> List[Dict[str, Any]]
             "status": "open",
             "source": SPEC_BLOCKER_SOURCE,
             "task_id": task_id,
+            "plan_revision": plan_revision,
         }
         for blocker in _listing(report.get("blockers"))
         if isinstance(blocker, dict)
     ]
 
 
-def _quality_blockers(report: Dict[str, Any], task_id: Any) -> List[Dict[str, Any]]:
+def _quality_blockers(
+    report: Dict[str, Any], task_id: Any, plan_revision: Any
+) -> List[Dict[str, Any]]:
     blockers: List[Dict[str, Any]] = []
     for position, finding in enumerate(_listing(report.get("findings")), start=1):
         if not isinstance(finding, dict) or not finding.get("required_change"):
@@ -548,6 +553,7 @@ def _quality_blockers(report: Dict[str, Any], task_id: Any) -> List[Dict[str, An
                 "status": "open",
                 "source": QUALITY_BLOCKER_SOURCE,
                 "task_id": task_id,
+                "plan_revision": plan_revision,
             }
         )
     return blockers
@@ -785,12 +791,12 @@ def _apply(
     raised_blockers: List[Dict[str, Any]] = []
     resolved_blockers: List[str] = []
     if gate == SPEC_GATE and gate_status == "blocked":
-        raised_blockers = _spec_blockers(report, task_id)
+        raised_blockers = _spec_blockers(report, task_id, revision)
         updated["blockers"] = _merge_blockers(
             _listing(updated.get("blockers")), raised_blockers
         )
     elif gate == QUALITY_GATE and gate_status == "changes_required":
-        raised_blockers = _quality_blockers(report, task_id)
+        raised_blockers = _quality_blockers(report, task_id, revision)
         updated["blockers"] = _merge_blockers(
             _listing(updated.get("blockers")), raised_blockers
         )
@@ -1217,17 +1223,29 @@ def resolve_review_finding(
     state, body = _load_state(project_root)
     issues: List[Dict[str, str]] = []
 
-    if state.get("status") != "executing":
+    critical_mode = (
+        mode_requirements(effective_task_mode(state, project_root))[
+            "independent_reviews"
+        ]
+        >= 2
+    )
+    # Standard closes a round on the record of the correction, and does so from
+    # either side of the return trip: ``reviewing``, before the task has been
+    # sent back to execution at all, or ``executing``, once it has. Critical
+    # keeps the narrower door — this operation does not exist for it, so its
+    # phase requirement stays exactly what it was.
+    allowed_statuses = {"executing"} if critical_mode else {"executing", "reviewing"}
+    if state.get("status") not in allowed_statuses:
         issues.append(
             _issue(
                 "finding-phase",
-                "a finding is resolved by the correction, which happens in "
-                "executing; the phase is {!r}".format(state.get("status")),
+                "a finding is resolved by the correction, which happens in {}; "
+                "the phase is {!r}".format(
+                    " or ".join(sorted(allowed_statuses)), state.get("status")
+                ),
             )
         )
-    if mode_requirements(effective_task_mode(state, project_root))[
-        "independent_reviews"
-    ] >= 2:
+    if critical_mode:
         issues.append(
             _issue(
                 "finding-mode",
@@ -1238,6 +1256,7 @@ def resolve_review_finding(
 
     task = _mapping(state.get("current_task"))
     task_id = task.get("id")
+    plan_revision = _mapping(state.get("plan_revision")).get("version")
     blockers = _listing(state.get("blockers"))
     position = None
     for index, blocker in enumerate(blockers):
@@ -1265,6 +1284,20 @@ def resolve_review_finding(
                     "{} belongs to {!r}, not to the task under way".format(
                         blocker_id, target.get("task_id")
                     ),
+                )
+            )
+        # A blocker with no revision stamp predates this check and is left
+        # alone, the same conservative treatment `_repeat_outcome` gives a
+        # legacy gate record. One that names a revision must name the current
+        # one: a blocker carried over from a plan that was since amended is a
+        # finding about work that no longer exists as described.
+        target_revision = target.get("plan_revision")
+        if target_revision is not None and target_revision != plan_revision:
+            issues.append(
+                _issue(
+                    "finding-revision",
+                    "{} was raised at plan revision {!r}; the plan is at "
+                    "revision {!r}".format(blocker_id, target_revision, plan_revision),
                 )
             )
 
@@ -1301,7 +1334,7 @@ def resolve_review_finding(
     resolved["resolved_by"] = actor
     resolved["resolution"] = "correction"
     resolved["resolution_evidence"] = evidence
-    resolved["resolution_note"] = note
+    resolved["note"] = note
     updated["blockers"] = list(_listing(updated.get("blockers")))
     updated["blockers"][position] = resolved
 
