@@ -9,12 +9,14 @@ from .contracts import eligible_tasks, load_task_index, task_by_id
 from .documents import DocumentError, git_snapshot, load_frontmatter, safe_project_path
 from .execution_modes import (
     is_persistent_state,
+    mode_requirements,
     state_execution_mode,
     validate_lightweight_state,
 )
 from .state_machine import (
     REVIEW_BLOCKER_SOURCES,
     advance_would_resolve,
+    effective_task_mode,
     execution_binding,
     validate_state,
 )
@@ -335,14 +337,64 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
             operation, target = "resolve-finding", pending_findings[0].get("id")
             evidence.append("open review finding: {}".format(target))
     elif status == "reviewing":
-        # A rejected review is not a missing one. Recommending the review that
-        # already ran would send the reviewer back to re-read the same diff,
-        # when what the verdict asked for is a correction.
-        if (
+        task_id = state["current_task"].get("id")
+        # What a review round owes is its findings, not the verdict that
+        # announced them. Below `critical`, `resolve-finding` closes a round
+        # against the evidence of each correction and deliberately leaves the
+        # halting verdict on the gate untouched: `blocked` is the record of what
+        # the reviewer found, and rewriting it would erase the review. Reading
+        # the verdict alone therefore sent a round whose every finding had been
+        # corrected back to execution — re-opening finished work, and
+        # contradicting the `verify-phase` cursor `resolve-finding` had itself
+        # just written.
+        round_findings = [
+            blocker
+            for blocker in state.get("blockers") or []
+            if isinstance(blocker, dict)
+            and blocker.get("source") in REVIEW_BLOCKER_SOURCES
+            and blocker.get("task_id") == task_id
+        ]
+        open_findings = [
+            blocker
+            for blocker in round_findings
+            if blocker.get("status", "open") != "resolved"
+        ]
+        halting = (
             state["gates"].get("spec_compliance") == "blocked"
             or state["gates"].get("code_quality") == "changes_required"
-        ):
+        )
+        # `critical` closes a round through a second independent review and
+        # through nothing else — `resolve-finding` refuses it outright — so its
+        # halting verdict keeps meaning exactly what it always meant.
+        correction_closes_the_round = (
+            mode_requirements(effective_task_mode(state, project_root))[
+                "independent_reviews"
+            ]
+            < 2
+        )
+        # A halting verdict with no finding recorded against the task is not a
+        # round closed by correction; it is a verdict with nothing behind it.
+        # Advancing past that would be the forged record the gates exist to
+        # prevent, so it keeps the conservative reading.
+        corrected = bool(round_findings) and not open_findings
+        if halting and not (corrected and correction_closes_the_round):
+            # A rejected review is not a missing one. Recommending the review
+            # that already ran would send the reviewer back to re-read the same
+            # diff, when what the verdict asked for is a correction.
             operation = "return-to-execution"
+            if open_findings:
+                evidence.append(
+                    "open review finding: {}".format(open_findings[0].get("id"))
+                )
+        elif halting:
+            # Every finding the round raised carries a correction and the
+            # evidence of it. The gate keeps `blocked` as the history of the
+            # review; what the task owes now is the verification.
+            operation = "verify-phase"
+            evidence.append(
+                "review round closed by correction: {} finding(s) resolved, "
+                "none open".format(len(round_findings))
+            )
         elif state["gates"].get("spec_compliance") not in {
             "passed",
             "passed_with_notes",
@@ -359,7 +411,7 @@ def determine_next_operation(project_root: Path) -> Dict[str, Any]:
             operation = "run-quality-review"
         else:
             operation = "verify-phase"
-        target = state["current_task"].get("id") or state["phase"].get("id")
+        target = task_id or state["phase"].get("id")
     elif status == "verifying":
         task_path = safe_project_path(project_root, state["artifacts"]["tasks"])
         index, _ = load_task_index(task_path)
