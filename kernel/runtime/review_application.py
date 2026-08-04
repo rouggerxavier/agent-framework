@@ -48,7 +48,7 @@ from .documents import (
     load_frontmatter,
     safe_project_path,
     utc_now,
-    write_frontmatter,
+    write_state,
 )
 from .evidence import append_evidence_event
 from .execution_modes import mode_requirements
@@ -1041,7 +1041,7 @@ def _apply(
         )
         if task_status_target:
             update_task_status(tasks_path, str(task_id), task_status_target)
-        write_frontmatter(state_path, updated, body)
+        write_state(state_path, updated, body)
     except Exception:
         restore()
         raise
@@ -1417,7 +1417,7 @@ def resolve_review_finding(
             + "- Resolved by: {}\n\n".format(actor),
             encoding="utf-8",
         )
-        write_frontmatter(state_path, updated, body)
+        write_state(state_path, updated, body)
     except Exception:
         review_path.write_bytes(review_before)
         ledger_path.write_bytes(ledger_before)

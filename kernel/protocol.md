@@ -81,6 +81,12 @@ full documents and must not duplicate their prose.
 - Plan changes are recorded as decisions and revisions to `PLAN.md`/`TASKS.md`.
 - Handoffs complement `STATE.md`; they never override it.
 
+The frontmatter of `STATE.md` is the source of truth, and the Markdown body
+below it is a **generated projection** of that frontmatter — rewritten by every
+formal state write, never authored, never read back by the kernel. Prose that is
+not a mirror of state survives only inside a `<!-- kernel:preserve -->` fence.
+There is no repair command: the next formal operation regenerates the body.
+
 `STATE.md` is shared state and must stay portable. Branch, commit, milestone,
 phase, tasks, decisions, evidence, gates, and repository-relative references
 belong there. Machine-specific facts — absolute paths, caches, sockets, local

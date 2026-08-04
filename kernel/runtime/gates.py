@@ -25,7 +25,7 @@ from .documents import (
     load_frontmatter,
     safe_project_path,
     utc_now,
-    write_frontmatter,
+    write_state,
 )
 from .evidence import append_evidence_event
 
@@ -346,5 +346,5 @@ def set_gate_status(
     updated["updated_at"] = recorded_at
     updated["updated_by"] = actor
 
-    write_frontmatter(state_path, updated, body)
+    write_state(state_path, updated, body)
     return updated, [], True

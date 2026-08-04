@@ -742,16 +742,20 @@ class Rollback(unittest.TestCase):
                 for path in (state_path, tasks_path, ledger_path)
             }
 
+            # The state write is its own function now — it regenerates the
+            # body from the frontmatter — so the injection targets that, and
+            # the guard on the file name is what it always was: only STATE.md
+            # is allowed to fail here.
             real = __import__(
-                "kernel.runtime.amendment", fromlist=["write_frontmatter"]
-            ).write_frontmatter
+                "kernel.runtime.amendment", fromlist=["write_state"]
+            ).write_state
 
             def explode(path, data, body):
                 if Path(path).name == "STATE.md":
                     raise OSError("disk full")
                 return real(path, data, body)
 
-            with patch("kernel.runtime.amendment.write_frontmatter", explode):
+            with patch("kernel.runtime.amendment.write_state", explode):
                 with self.assertRaises(OSError):
                     _amend(root)
 

@@ -77,6 +77,24 @@ def write_frontmatter(path: Path, data: Dict[str, Any], body: str) -> None:
             temporary.unlink()
 
 
+def write_state(path: Path, data: Dict[str, Any], body: str) -> None:
+    """Write ``STATE.md``, regenerating its body from the frontmatter.
+
+    Every formal state write goes through here rather than through
+    :func:`write_frontmatter`, so the prose can never describe a phase the
+    frontmatter has already left. ``body`` is the *previous* body: only the
+    regions it fenced for keeping survive.
+
+    Nothing reads the body back, and the plan fingerprint covers ``PLAN.md`` and
+    ``TASKS.md`` only, so regenerating it cannot change a kernel decision or
+    break a seal.
+    """
+
+    from .state_body import project_state_body
+
+    write_frontmatter(path, data, project_state_body(data, body))
+
+
 def resolve_project_root(start: Path) -> Path:
     """Resolve the nearest initialized project, then the Git repository root.
 
