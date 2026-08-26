@@ -142,6 +142,131 @@ sem declarar tudo `critical` usa `--persistent`:
 `fast` recusa inicializacao persistente. O plan seal e as duas reviews
 independentes continuam exclusivos das tarefas `critical`.
 
+## CI Throughput Policy
+
+```text
+CI gates integration, not continuous development.
+```
+
+CI bloqueia **merge**. Nao bloqueia, por si so, continuar programando. O modo de
+execucao e o perfil de CI sao eixos separados:
+
+| Eixo | Pergunta | Valores |
+| --- | --- | --- |
+| `execution_mode` | Quanta cerimonia um defeito aqui merece? | `fast`, `standard`, `critical` |
+| `ci_profile` | Quais gates este diff deve? | `minimal`, `targeted`, `full` |
+
+`critical` implica `full`. `standard` nao implica nada: pode rodar `minimal`
+(README), `targeted` (a maior parte da implementacao) ou `full` (tem migration).
+
+### Tres distincoes que a politica existe para preservar
+
+```text
+MERGE BLOCKER          gate que precisa estar verde antes de integrar
+NEXT-WORK BLOCKER      motivo para a proxima unidade nao comecar (raro)
+POST-MERGE OBSERVATION run que reporta, nao autoriza
+```
+
+### Em vez de esperar
+
+```text
+antes:  push PR → espera CI → so entao continua
+agora:  push PR → classifica dependencia da proxima unidade
+                → continua quando seguro
+                → volta ao CI no merge boundary
+```
+
+- `continue_independent` — a proxima unidade nao depende da PR pendente: comece
+  da base de integracao, em worktree propria.
+- `stack_local` — depende: branch **local** a partir da HEAD pendente, sem
+  publicar PR dependente antes da pai integrar; depois do merge, rebase e so
+  entao valide e publique.
+- `wait` — so quando o resultado do CI muda a proxima decisao, risco critico
+  proibe trabalho especulativo ou dependencia externa impede continuar.
+
+### Perfis e espera
+
+```yaml
+ci_profile:        minimal | targeted | full
+ci_blocking_point: before_merge | now | none
+ci_wait_policy:    background | blocking_before_merge | blocking_now
+publication_hold:  true quando nada pode ser publicado sobre esta unidade
+next_work_policy:  continue_independent | stack_local | wait
+```
+
+`ci_blocking_point` e `ci_wait_policy` sao eixos distintos. Perfil `full` **nao**
+gera espera por si: levanta `publication_hold` e, havendo trabalho seguro,
+mantem `background`. `blocking_before_merge` so aparece quando nao sobrou nada
+seguro para fazer. `blocking_now` exige razao nomeada — release ou deploy ativo,
+dependencia externa, resultado que muda a proxima decisao, ou risco critico que
+proibe trabalho especulativo. "CI rodando", perfil `full` e modo `critical` nao
+sao razoes.
+
+O router reporta o eixo de CI junto com o modo, e recebe contexto operacional
+como dado — nunca como texto ambiguo no pedido:
+
+```bash
+./scripts/agent-framework-route --auto \
+  --runner-kind self_hosted_shared --remote-ci-running \
+  --next-unit dependent --unit-ref pr-42 \
+  "Implemente a tela de fornecedores no frontend."
+```
+
+```text
+selected_mode: standard
+ci_profile: targeted
+ci_blocking_point: before_merge
+ci_wait_policy: background
+next_work_policy: stack_local
+local_gates: lint, typecheck
+local_verification: targeted
+deferred_gates: e2e-full-regression → nightly, release ou perfil full explicito
+MERGE BLOCKER: lint, typecheck, component-tests-affected pending
+NEXT-WORK BLOCKER: none — stack_local permitted
+POST-MERGE OBSERVATION: main CI: not_applicable
+```
+
+Tambem aceita `--ci-context-json '{...}'`. Campo ausente usa default
+documentado: runner nao declarado e tratado como compartilhado, e dependencia
+nao declarada **nunca** vira dependencia confirmada.
+
+### Exemplos
+
+| # | Situacao | Perfil | Blocking point | Wait | Proxima unidade |
+| --- | --- | --- | --- | --- | --- |
+| A | frontend `standard`, proxima unidade depende | `targeted` | `before_merge` | `background` | `stack_local` |
+| B | docs-only | `minimal` | `before_merge` | `background` | `continue_independent` |
+| C | migration `critical`, existe trabalho seguro | `full` | `before_merge` | `background` (`publication_hold`) | `continue_independent` |
+| D | release ativo | `full` | `now` | `blocking_now` | `wait` |
+| E | shared runner ocupado | `targeted` | `before_merge` | `background`, gates locais pesados em espera | edicao continua |
+
+### Runner self-hosted compartilhado
+
+Enquanto uma run remota executa na mesma maquina de desenvolvimento: leitura,
+edicao, escrita de teste, planejamento, analise e review continuam liberados;
+suite completa, Playwright, builds Docker/Next e E2E local ficam em espera.
+Contencao de recurso **nao** e instabilidade de runner. Runner hospedado ou
+self-hosted dedicado nao gera contencao — isso e capability do executor, nunca
+uma exigencia do framework.
+
+### Main CI
+
+Se a arvore exata do merge ja foi validada pela PR e o workflow de `main` nao
+adiciona gate funcional novo, a run de `main` **observa**: nao segura a proxima
+unidade segura. `main` vermelho continua sendo incidente a investigar.
+
+### Onde a politica para
+
+Gate kind e abstrato (`unit-tests-affected`, nao `pnpm vitest run --changed`). O
+binding para comandos reais do repositorio e de `test-confidence-mapper`. O
+framework nao versiona configuracao de CI especifica de repo nem
+`.agent/ci-profile.yml`.
+
+Detalhes em `kernel/ci-throughput-policy.md`; sequencia operacional em
+`workflows/ci-throughput.md`; referencia executavel em
+`kernel/runtime/ci_policy.py`; decisao por unidade via
+`/ci-throughput-controller`.
+
 ## Kernel persistente `critical` (P0 + P1)
 
 Em `critical`, o kernel coordena os assets existentes sem substitui-los e mantém

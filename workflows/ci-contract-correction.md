@@ -73,7 +73,9 @@ Two shortcuts exist and both destroy the record:
    revision that is now current.
 
 7. **Push, and let CI answer.** The gate that failed is the gate that has to
-   pass.
+   pass. Waiting on it is not part of the step: the amendment is published, and
+   `kernel/ci-throughput-policy.md` decides what happens while the run executes —
+   the failing gate blocks the merge, not the next safe unit of work.
 
 ## What the amendment is allowed to change
 

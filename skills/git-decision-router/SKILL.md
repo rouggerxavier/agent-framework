@@ -41,7 +41,10 @@ Escolher a proxima acao de git sem automatismo perigoso: commit direto, esperar 
 7. Registre base/branch/worktree/starting commit em `STATE.md`; valide antes de
    reutilizar e finalize/limpe explicitamente. Grave `worktree` como `.`; nunca
    versione o caminho absoluto do clone local.
-8. Registre decisao, bloqueios e comando sugerido sem executar Git destrutivo.
+8. Se a decisao for PR ou merge, chame `ci-throughput-controller` para o perfil
+   de CI, a wait policy e a classificacao da proxima unidade. CI bloqueia
+   merge, nao necessariamente o trabalho seguinte.
+9. Registre decisao, bloqueios e comando sugerido sem executar Git destrutivo.
 
 ## Saida obrigatoria
 Preencha `../../templates/git-decision-report.md` com decisao, motivo, gates pendentes, acao recomendada e riscos.
@@ -58,6 +61,7 @@ Preencha `../../templates/git-decision-report.md` com decisao, motivo, gates pen
 - Commit: ../../skills/commit-readiness-checker/SKILL.md
 - PR: ../../skills/pr-description-builder/SKILL.md
 - Review: ../../skills/code-review-gate/SKILL.md
+- CI/throughput: ../../skills/ci-throughput-controller/SKILL.md
 
 ## Exemplos de uso
 - Codex: `$git-decision-router Decida se este diff pode ser commitado agora.`
