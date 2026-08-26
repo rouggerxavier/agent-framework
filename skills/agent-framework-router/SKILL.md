@@ -46,6 +46,10 @@ apontar rapidamente os assets certos. Dispatcher leve, nao executor.
    usar o kernel.
 8. Classifique a intencao, liste 1-4 assets relevantes e corte o resto.
 9. Indique o primeiro asset a invocar.
+10. Se CI, PR, merge ou integracao fizer parte do fluxo, acrescente o perfil de
+    CI e as politicas de espera/proxima unidade, e selecione
+    `ci-throughput-controller`. O modo continua sendo risco/execucao; o perfil de
+    CI e um eixo separado.
 
 ## Modos
 
@@ -128,6 +132,7 @@ grave; reducao exige apenas `--reason`.
 | Decidir gate de code review | code-review-gate | templates/code-review-gate-report, diff-reviewer, agent-code-reviewer |
 | Revisar codigo de agente | agent-code-reviewer | templates/agent-code-review-report, tool-contract-auditor, agent-security-auditor |
 | Decidir git/commit/PR | git-decision-router | templates/git-decision-report, commit-readiness-checker, pr-description-builder |
+| Escolher perfil de CI e politica de espera | ci-throughput-controller | kernel/ci-throughput-policy, templates/ci-throughput-decision, test-confidence-mapper |
 | Checar commit readiness | commit-readiness-checker | templates/commit-readiness-report, docs-sync-auditor, env-gitignore-auditor |
 | Montar descricao de PR | pr-description-builder | templates/pr-description, backend-release-packager, goal-coverage-verifier |
 | Decidir documentacao | documentation-decision-router | templates/documentation-decision, architecture-decision, docs-sync-auditor |
@@ -151,6 +156,38 @@ assets_selected: []
 assets_skipped: []
 ```
 
+Quando CI/PR/integracao entra no fluxo, o router tambem reporta o eixo de CI —
+campos opcionais e aditivos, que nao alteram o significado de fast/standard/critical:
+
+```yaml
+ci_profile: minimal | targeted | full
+ci_blocking_point: before_merge | now | none
+ci_wait_policy: background | blocking_before_merge | blocking_now
+next_work_policy: continue_independent | stack_local | wait
+local_gates: []
+remote_gates: []
+deferred_gates: []      # cada gate adiado declara onde roda de fato
+runner_policy:          # contencao de runner self-hosted compartilhado
+```
+
+`standard` nao implica pipeline completo nem espera sincrona. CI bloqueia merge,
+nao necessariamente a proxima unidade de trabalho. Perfil `full` levanta
+`publication_hold`, nao espera automatica. Detalhe em
+`kernel/ci-throughput-policy.md`; sequencia operacional em
+`workflows/ci-throughput.md`.
+
+Contexto operacional entra como dado, nao como texto do pedido:
+
+```bash
+./scripts/agent-framework-route --auto \
+  --runner-kind self_hosted_shared --remote-ci-running \
+  --next-unit dependent --unit-ref pr-42 \
+  "Implemente a tela de fornecedores."
+```
+
+Tambem aceita `--ci-context-json '{...}'`. Campo ausente usa o default
+documentado; dependencia nao declarada nunca vira dependencia confirmada.
+
 Toda selecao `fast` ou `critical` inclui uma justificativa concreta: `fast`
 mostra por que o trabalho e curto e contido; `critical` nomeia o dano grave. A
 saida pode ainda indicar intencao e primeiro asset.
@@ -166,6 +203,9 @@ saida pode ainda indicar intencao e primeiro asset.
 - Nao duplicar checklist de rubric/workflow aqui; so referenciar.
 - Backend simples nao e automaticamente `critical`.
 - Roteamento nao cria `.agent/` nem instancia templates.
+- Perfil de CI nunca e derivado do modo sozinho: `standard` pode ser `minimal`,
+  `targeted` ou `full` conforme o impacto real da mudanca.
+- Nao orientar espera sincrona por CI sem motivo nomeado.
 
 ## Exemplos de uso
 - Codex: `$agent-framework-router Qual skill para auditar este PR de API?`

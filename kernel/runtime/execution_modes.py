@@ -14,6 +14,13 @@ import re
 import unicodedata
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from .ci_policy import (
+    CI_CONTEXT_DEFAULTS,
+    CI_PROFILES,
+    RUNNER_KINDS,
+    ci_decision_for_request,
+)
+
 
 EXECUTION_MODES = ("fast", "standard", "critical")
 REQUESTED_MODES = ("auto",) + EXECUTION_MODES
@@ -467,6 +474,7 @@ def route_execution(
     *,
     requested_mode: Optional[str] = None,
     persistence_requested: bool = False,
+    ci_context: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Select a mode from concrete signals, defaulting to standard.
 
@@ -477,6 +485,13 @@ def route_execution(
     ended up paying for it. Detected grave-damage paths are reported in
     ``risk_factors`` and recommended in ``reason`` so a human can select it —
     the selection stays theirs.
+
+    The decision also carries a ``ci`` block, on a deliberately separate axis:
+    the mode says how much ceremony a defect deserves, while the CI profile says
+    which gates *this diff* owes and what may happen while they run. `standard`
+    does not mean "full pipeline, then idle". ``ci_context`` supplies what the
+    request text cannot know — the runner kind, whether the next unit depends on
+    this one, whether a release is under way.
     """
 
     clean = _normalized_text(request)
@@ -538,6 +553,19 @@ def route_execution(
             "a short contained change; standard is the default."
         )
 
+    ci = ci_decision_for_request(
+        request,
+        execution_mode=selected,
+        severe_harm_factors=harm_factors,
+        sensitive_areas=sensitive_areas,
+        context=ci_context,
+    )
+    # The propagation the policy exists for: the profile that was just selected
+    # is the profile local verification is planned against. Leaving the caller
+    # to re-derive it is how `pull_request=True` kept meaning "full suite" for a
+    # change whose CI profile had already said otherwise.
+    ci["local_verification"] = verification_for_ci(selected, ci, pull_request=True)
+
     policy = deepcopy(MODE_POLICIES[selected])
     policy["verification_budget"] = deepcopy(VERIFICATION_BUDGETS[selected])
     policy["review_rounds"] = deepcopy(REVIEW_ROUNDS[selected])
@@ -564,6 +592,7 @@ def route_execution(
         "requested_mode": explicit,
         "escalated": escalated,
         "policy": policy,
+        "ci": ci,
     }
 
 
@@ -684,8 +713,18 @@ def verification_scope_for_change(
     full_suite_already_green: bool = False,
     failure_kind: str = "",
     environment_running: bool = True,
+    ci_profile: Optional[str] = None,
+    local_heavy_jobs_allowed: bool = True,
 ) -> Dict[str, Any]:
-    """Pick verification proportional to the diff instead of replaying everything."""
+    """Pick verification proportional to the diff instead of replaying everything.
+
+    ``ci_profile`` is optional and additive: without it the historical answer is
+    unchanged, and a pull request still asks for the complete suite locally.
+    Supplied, it lets CI own what CI already runs — under `minimal` or
+    `targeted` there is no reason to replay the whole suite on the developer's
+    machine before pushing, and under a busy shared runner there is a reason not
+    to.
+    """
 
     selected = normalize_mode(mode, default="fast")
     if selected == "auto":
@@ -694,8 +733,23 @@ def verification_scope_for_change(
     if size not in CHANGE_SIZES:
         raise ValueError("unknown change size: {}".format(change_size))
 
+    profile = str(ci_profile).strip().lower() if ci_profile else None
+    if profile is not None and profile not in CI_PROFILES:
+        raise ValueError("unknown ci profile: {!r}".format(ci_profile))
+
     closing = bool(phase_closure or pull_request)
-    if closing:
+    delegated = closing and profile in {"minimal", "targeted"}
+    contended = closing and not local_heavy_jobs_allowed and profile != "full"
+    if delegated or contended:
+        scope, run_full_suite = "targeted", False
+        reason = (
+            "The shared runner is busy; leave the heavy suite to CI and keep local "
+            "verification light."
+            if contended and not delegated
+            else "CI profile {} owns the remote gates: verify the affected surface "
+            "locally instead of replaying the complete suite.".format(profile)
+        )
+    elif closing:
         scope, run_full_suite = "full-suite", True
         reason = "Real phase closure or pull request: run the complete suite once."
     elif size == "small" and full_suite_already_green:
@@ -725,6 +779,34 @@ def verification_scope_for_change(
         ),
         "rerun_failing_spec_only": bool(kind) and not rebuild,
     }
+
+
+def verification_for_ci(
+    mode: str,
+    ci: Mapping[str, Any],
+    *,
+    change_size: str = "small",
+    phase_closure: bool = False,
+    pull_request: bool = False,
+) -> Dict[str, Any]:
+    """Plan local verification from a CI decision instead of from the mode alone.
+
+    One call carries the whole chain: the profile chosen for this change and the
+    contention state of the runner both reach ``verification_scope_for_change``,
+    so a `targeted` frontend change stops asking for the complete suite the
+    moment a pull request is mentioned.
+    """
+
+    return verification_scope_for_change(
+        mode,
+        change_size=change_size,
+        phase_closure=phase_closure,
+        pull_request=pull_request,
+        ci_profile=ci.get("ci_profile"),
+        local_heavy_jobs_allowed=bool(
+            ci.get("runner_policy", {}).get("allow_local_heavy_jobs", True)
+        ),
+    )
 
 
 def verification_budget_exceeded(
@@ -1074,14 +1156,143 @@ def validate_lightweight_state(
     return issues
 
 
+#: CLI flags for the operational context, mapped to their context field. Every
+#: one is optional: the request text stays a description of the *task*, and the
+#: state of the machine, the queue and the release never has to be inferred from
+#: prose.
+CI_CONTEXT_FLAGS: Tuple[Tuple[str, str, str], ...] = (
+    ("--remote-ci-running", "remote_ci_running", "a remote CI run is executing now"),
+    ("--unit-merged", "unit_merged", "this unit has already been merged"),
+    (
+        "--merge-tree-validated",
+        "merge_tree_validated_by_pr",
+        "the exact merged tree was validated by the pull request",
+    ),
+    (
+        "--main-adds-new-gate",
+        "main_adds_new_gate",
+        "the workflow on main runs jobs the pull request did not",
+    ),
+    ("--release-in-flight", "release_in_progress", "a release is under way"),
+    ("--deploy-in-flight", "deploy_in_progress", "a deploy is under way"),
+    (
+        "--ci-result-decides-next",
+        "next_decision_depends_on_ci",
+        "the CI result changes the next decision",
+    ),
+    (
+        "--external-dependency-blocks",
+        "external_dependency_blocks",
+        "an external dependency blocks continuation",
+    ),
+    (
+        "--stacked-prs",
+        "stacked_prs_supported",
+        "the workflow explicitly supports stacked pull requests",
+    ),
+    (
+        "--critical-user-paths",
+        "critical_user_paths_touched",
+        "the change touches a critical user path",
+    ),
+)
+
+#: How `--next-unit` reads: an *undeclared* next unit is never treated as a
+#: confirmed dependency, which is why "unknown" is not one of the choices — it
+#: is what you get by omitting the flag.
+NEXT_UNIT_CHOICES: Dict[str, Dict[str, bool]] = {
+    "independent": {"has_next_unit": True, "next_unit_depends_on_current": False},
+    "dependent": {"has_next_unit": True, "next_unit_depends_on_current": True},
+    "none": {"has_next_unit": False, "next_unit_depends_on_current": False},
+}
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="agent-framework-route")
     choices = parser.add_mutually_exclusive_group()
     for mode in REQUESTED_MODES:
         choices.add_argument("--" + mode, dest="requested_mode", action="store_const", const=mode)
     parser.add_argument("--json", action="store_true", help="emit structured JSON")
+    context = parser.add_argument_group(
+        "ci context",
+        "Optional operational context. Omitted fields keep the documented "
+        "defaults: an undeclared runner is treated as sharing this machine, and "
+        "an undeclared next unit is read as not-declared-dependent.",
+    )
+    context.add_argument(
+        "--ci-context-json",
+        metavar="JSON",
+        help="complete ci context as a JSON object; explicit flags win over it",
+    )
+    context.add_argument(
+        "--runner-kind", choices=list(RUNNER_KINDS), help="kind of CI runner in use"
+    )
+    context.add_argument(
+        "--ci-profile",
+        choices=list(CI_PROFILES),
+        dest="requested_profile",
+        help="request a CI profile explicitly; a change that owes full is still raised",
+    )
+    context.add_argument(
+        "--next-unit",
+        choices=sorted(NEXT_UNIT_CHOICES),
+        help="relationship of the next unit to this one",
+    )
+    context.add_argument("--main-status", choices=("unknown", "green", "red"))
+    context.add_argument("--unit-ref", help="name for the concurrency group, e.g. pr-42")
+    context.add_argument(
+        "--local-workload",
+        action="append",
+        dest="planned_local_workloads",
+        metavar="NAME",
+        help="a local job you intend to run; repeatable",
+    )
+    for flag, field, help_text in CI_CONTEXT_FLAGS:
+        context.add_argument(flag, dest=field, action="store_true", default=None, help=help_text)
     parser.add_argument("request", nargs="+", help="task request to route")
     return parser
+
+
+def ci_context_from_arguments(args: argparse.Namespace) -> Dict[str, Any]:
+    """Merge `--ci-context-json` with the explicit flags, flags winning.
+
+    Nothing is invented here. A field nobody supplied is simply absent, and the
+    policy answers it with its documented default.
+    """
+
+    context: Dict[str, Any] = {}
+    raw = getattr(args, "ci_context_json", None)
+    if raw:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise ValueError("--ci-context-json is not valid JSON: {}".format(exc))
+        if not isinstance(parsed, dict):
+            raise ValueError("--ci-context-json must be a JSON object")
+        context.update(parsed)
+
+    next_unit = getattr(args, "next_unit", None)
+    if next_unit:
+        context.update(NEXT_UNIT_CHOICES[next_unit])
+    for field in ("runner_kind", "requested_profile", "main_status", "unit_ref"):
+        value = getattr(args, field, None)
+        if value is not None:
+            context[field] = value
+    workloads = getattr(args, "planned_local_workloads", None)
+    if workloads:
+        context["planned_local_workloads"] = list(workloads)
+    for _, field, _ in CI_CONTEXT_FLAGS:
+        if getattr(args, field, None):
+            context[field] = True
+
+    unknown = sorted(set(context) - set(CI_CONTEXT_DEFAULTS))
+    if unknown:
+        raise ValueError(
+            "unknown ci context field(s): {}; known: {}".format(
+                ", ".join(unknown), ", ".join(sorted(CI_CONTEXT_DEFAULTS))
+            )
+        )
+    return context
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -1089,7 +1300,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
     try:
         decision = route_execution(
-            " ".join(args.request), requested_mode=args.requested_mode
+            " ".join(args.request),
+            requested_mode=args.requested_mode,
+            ci_context=ci_context_from_arguments(args),
         )
     except ValueError as exc:
         parser.error(str(exc))
@@ -1106,17 +1319,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "assets_selected",
         "assets_skipped",
     ):
-        value = decision[key]
-        if isinstance(value, list):
-            if not value:
-                print("{}: []".format(key))
-                continue
-            print("{}:".format(key))
-            for item in value:
-                print("  - {}".format(item))
-        else:
-            print("{}: {}".format(key, value))
+        _print_field(key, decision[key])
+    ci = decision["ci"]
+    for key in ("ci_profile", "ci_blocking_point", "ci_wait_policy", "next_work_policy"):
+        _print_field(key, ci[key])
+    for key in ("local_gates", "remote_gates"):
+        _print_field(key, ci[key])
+    _print_field(
+        "deferred_gates", ["{}: {}".format(item["gate"], item["runs_at"]) for item in ci["deferred_gates"]]
+    )
+    _print_field("local_verification", ci["local_verification"]["scope"])
+    _print_field("runner_policy", ci["runner_policy"]["reason"])
+    for line in ci["blocker_report"]["lines"]:
+        print(line)
     return 0
+
+
+def _print_field(key: str, value: Any) -> None:
+    if isinstance(value, list):
+        if not value:
+            print("{}: []".format(key))
+            return
+        print("{}:".format(key))
+        for item in value:
+            print("  - {}".format(item))
+        return
+    print("{}: {}".format(key, value))
 
 
 if __name__ == "__main__":

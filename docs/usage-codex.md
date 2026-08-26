@@ -62,6 +62,10 @@ $agent-code-reviewer Revise prompt, tools, guardrails, config, logs, fallback e 
 ```
 
 ```text
+$ci-throughput-controller Escolha o perfil de CI e diga se posso comecar a proxima unidade.
+```
+
+```text
 $git-decision-router Decida commit direto, esperar validacao, branch, PR ou unstaged.
 $commit-readiness-checker Cheque escopo, testes, secrets e mensagem antes do commit.
 $pr-description-builder Gere descricao de PR com evidencias, riscos e rollback.

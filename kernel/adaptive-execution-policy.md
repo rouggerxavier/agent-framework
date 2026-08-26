@@ -321,9 +321,12 @@ mechanically affected fallout (generated files, migration head, architectural
 maps) into a single re-seal. `critical` keeps the strict flow: a new review after
 the correction, the full local suite, and multiple gates.
 
-While tests or a build run, wait for the result. Do not open a monitoring loop,
-poll a log, or start speculative work around them. Reports stay short: what
-changed, what ran, what is left. State results; do not re-narrate the work.
+While a **local** test run or build is executing, wait for its result. Do not
+open a monitoring loop, poll a log, or start speculative work around it. Remote
+CI is the opposite case and is governed by `ci-throughput-policy.md`: it gates
+the merge, not the next unit of work, and the default is to keep working while
+it runs. Reports stay short: what changed, what ran, what is left. State
+results; do not re-narrate the work.
 
 ## Test scope
 
@@ -331,12 +334,16 @@ Verification is proportional to the diff:
 
 - targeted tests for a small local change, even when the suite was green before;
 - affected areas and their integration points for a broader diff;
-- the complete suite only at a real phase closure or when opening the PR.
+- the complete suite only at a real phase closure, or when opening a PR under a
+  `full` CI profile.
 
 CI owns the full suite. Run it locally only for a real technical reason — no CI
 for the repository, a failure that only reproduces locally, or a change whose
-blast radius the targeted runs cannot bound. After a correction, run the tests
-the correction affects, not the round's whole verification again.
+blast radius the targeted runs cannot bound. Under a `minimal` or `targeted` CI
+profile, opening a pull request does not ask for the complete local suite; under
+a self-hosted runner sharing this machine while a remote run executes, it asks
+for less still. After a correction, run the tests the correction affects, not the
+round's whole verification again.
 
 Do not replay the whole suite after every small local change. When an E2E test
 fails on a selector, fixture, or assertion, reuse the running environment and
@@ -377,5 +384,19 @@ known_risks:
 Repeat full grounding only after a material commit change, scope change, newly
 discovered core files, stale context, or a contradiction.
 
-The executable reference is `kernel/runtime/execution_modes.py`; routing is
-side-effect free and never creates `.agent/`.
+## CI is a second axis
+
+The mode is about risk and ceremony. It is **not** a CI profile: `standard` does
+not imply a full pipeline, and it never implies waiting for CI before continuing.
+Which gates a change owes, whether the wait is `background` or blocking, and
+whether the next unit is independent or stacked are decided by
+`kernel/ci-throughput-policy.md` and `skills/ci-throughput-controller`.
+
+```text
+execution_mode → how much ceremony a defect deserves
+ci_profile     → which gates this diff owes
+```
+
+The executable references are `kernel/runtime/execution_modes.py` and
+`kernel/runtime/ci_policy.py`; both are side-effect free and never create
+`.agent/`.
