@@ -9,7 +9,9 @@ evidencia e rollback.
 2. Confirme escopo, task commits, reviews, ledger e commit verificado.
 3. Use `goal-coverage-verifier` e `test-strategy-builder` para lacunas finais.
 4. Rode `runtime-qa-audit` nos fluxos criticos e registre resultado.
-5. Use gates especializados de seguranca, dados, API e dependencia conforme risco.
+5. Aplique `workflows/security-review.md` sobre o escopo acumulado da fase;
+   achado `Critical`/`High` aberto impede `ready_to_ship`. Gates de dados, API e
+   dependencia entram conforme risco.
 6. Use `release-verifier`; blocker retorna a `verifying` ou `blocked`.
 7. Preencha `templates/release-checklist.md` com evidencia e rollback.
 8. Use `git-decision-router`: commit/branch/PR/handoff conforme ambiente.

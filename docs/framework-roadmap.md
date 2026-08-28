@@ -58,6 +58,10 @@ Criar um framework que ajude o agente a fazer quatro coisas bem:
 | agent-doc-writer | Documenta agentes com objetivo, tools, config, env, guardrails, evals, runtime QA, observabilidade e troubleshooting. | criada |
 | deadcode-orphan-mapper | Mapeia codigo morto/orfao, exports nao usados, rotas mortas, jobs, configs, prompts e tools desconectados. | criada |
 | agent-optimization-auditor | Otimiza agentes quanto a tokens, latencia, tool calls, retries, cache, prompt size, model tier e contexto. | criada |
+| injection-vulnerability-auditor | Audita input externo chegando a query, comando, parser, template, URL, deserializacao ou bind de modelo. | criada |
+| authn-authz-auditor | Audita autenticacao, JWT, sessao, CSRF, BOLA/IDOR, papel administrativo e bypass de fluxo de negocio. | criada |
+| crypto-secrets-auditor | Audita segredo hardcoded, vazamento em log/bundle e criptografia fraca (MD5, SHA1, DES, TLS sem verificacao). | criada |
+| infra-security-auditor | Audita debug em producao, CORS amplo, portas expostas, Docker root, imagem sem pin, IaC e pipeline. | criada |
 | performance-budget-auditor | Audita budget de performance em backend e agentes: latencia, custo, memoria, queries, batch, cache e timeout. | criada |
 | coding-standards-enforcer | Descobre e aplica padroes locais (nomes, estrutura, estilo, erros, testes) antes de refatorar, gerar patch ou criar arquivo. | criada |
 

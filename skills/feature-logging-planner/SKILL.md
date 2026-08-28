@@ -13,6 +13,7 @@ Definir logs uteis e proporcionais para features que podem gerar bugs complexos,
 - Quando um bug seria dificil de reproduzir sem eventos, correlation id, payload resumido ou erro estruturado.
 - Antes de release de mudanca que altera comportamento runtime, contrato, auth, dados, model/tool calls ou side effects.
 - Ao revisar feature com logs demais, logs de menos, logs sem contexto ou logs com risco de segredo/dado sensivel.
+- Quando a feature produz evento de seguranca sem rastro: login, falha de autorizacao, mudanca de permissao, acesso a dado sensivel ou operacao privilegiada.
 
 ## Quando nao usar
 - Para copy, docs, UI trivial, config sem runtime ou mudanca sem risco de investigacao complexa.
@@ -31,8 +32,9 @@ Definir logs uteis e proporcionais para features que podem gerar bugs complexos,
 3. Escolha pontos de log: entrada do fluxo, decisao critica, chamada externa, mutacao de estado, erro, retry/fallback e conclusao.
 4. Defina nivel e campos: `debug`, `info`, `warn`, `error`, correlation id, ids seguros, status, duracao e resumo de payload.
 5. Aplique seguranca: redaction, sem secrets/tokens/PII desnecessaria, limite de cardinalidade, sampling e volume esperado.
-6. Se estiver implementando, adicione logs nos pontos aprovados e evite logs duplicados, ruidosos ou linha-a-linha.
-7. Verifique com runtime/teste: logs aparecem no caminho feliz, falha relevante e caso de retry/fallback quando aplicavel.
+6. Garanta a trilha de auditoria dos eventos de seguranca: ator, recurso, acao, resultado, origem e horario. Falha de autenticacao/autorizacao, escalada de permissao e operacao privilegiada precisam de evento proprio, com alerta ou consulta definida para quem responde.
+7. Se estiver implementando, adicione logs nos pontos aprovados e evite logs duplicados, ruidosos ou linha-a-linha.
+8. Verifique com runtime/teste: logs aparecem no caminho feliz, falha relevante e caso de retry/fallback quando aplicavel.
 
 ## Saida obrigatoria
 Preencha `../../templates/feature-logging-plan.md` com decisao, eventos, campos, riscos, patches recomendados e verificacao.
@@ -41,6 +43,7 @@ Preencha `../../templates/feature-logging-plan.md` com decisao, eventos, campos,
 - Cada log proposto responde uma pergunta real de debug, operacao ou auditoria.
 - Logs cobrem o fluxo ponta a ponta quando o risco justifica, sem overlogging.
 - Campos sensiveis sao redigidos ou omitidos.
+- Evento de seguranca relevante ao escopo tem rastro auditavel e consulta/alerta associado, ou a lacuna e declarada.
 - Nivel, cardinalidade, volume e correlation id sao considerados.
 - Verificacao confirma pelo menos um caminho feliz e uma falha relevante quando houver runtime.
 
@@ -49,6 +52,8 @@ Preencha `../../templates/feature-logging-plan.md` com decisao, eventos, campos,
 - Observabilidade de agente: ../../skills/agent-observability-auditor/SKILL.md
 - Runtime QA: ../../skills/runtime-qa-audit/SKILL.md
 - Seguranca: ../../skills/security-privacy-audit/SKILL.md
+- Acesso e auditoria: ../../skills/authn-authz-auditor/SKILL.md
+- Workflow: ../../workflows/security-review.md
 
 ## Exemplos de uso
 - Codex: `$feature-logging-planner Avalie onde esta feature precisa de logs antes de implementar.`

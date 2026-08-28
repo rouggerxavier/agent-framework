@@ -22,8 +22,10 @@ Use para mudancas backend sem presumir que backend significa `critical`.
 ## Gates
 
 - API simples nao e critica apenas por ser backend.
-- Auditors de API, dados, auth, seguranca e observabilidade entram somente quando
-  houver risco ou contrato concreto.
+- Auditors de API, dados e observabilidade entram somente quando houver risco ou
+  contrato concreto.
+- Auditors de seguranca nao sao discricionarios: valem os gatilhos de
+  `workflows/security-review.md`, em qualquer modo.
 - Migration exige forward e rollback/recuperacao.
 - Integracao externa critica exige testes de contrato e integracao.
 

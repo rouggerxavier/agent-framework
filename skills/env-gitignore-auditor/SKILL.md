@@ -43,6 +43,7 @@ Preencha `../../templates/env-gitignore-report.md` com inventario, gaps, patches
 - Se secret possivelmente vazou, recomendar rotacao e investigacao de historico git.
 
 ## Arquivos de apoio
+- Segredo no codigo e criptografia: ../../skills/crypto-secrets-auditor/SKILL.md
 - Template: ../../templates/env-gitignore-report.md
 - Config: ../../skills/config-surface-auditor/SKILL.md
 - Docs: ../../skills/docs-sync-auditor/SKILL.md

@@ -17,6 +17,10 @@ Identificar riscos praticos de seguranca e privacidade e recomendar mitigacoes p
 - Para substituir pentest formal ou revisao legal.
 - Para mudancas sem acesso a dados, auth ou superficie externa.
 - Para discutir politica abstrata sem artefato tecnico.
+- Para uma classe ja coberta por auditor especializado: injecao e sinks perigosos
+  (`injection-vulnerability-auditor`), acesso/sessao/CSRF (`authn-authz-auditor`),
+  segredo e criptografia (`crypto-secrets-auditor`), config/container/IaC
+  (`infra-security-auditor`), CVE de dependencia (`dependency-risk-auditor`).
 
 ## Entradas esperadas
 - Diff, arquivo, fluxo ou descricao da feature.
@@ -25,10 +29,13 @@ Identificar riscos praticos de seguranca e privacidade e recomendar mitigacoes p
 
 ## Workflow
 1. Identifique dados sensiveis, atores e superficies externas.
-2. Revise authn/authz, entrada, secrets, logs e armazenamento.
-3. Procure exposicao indevida, permissao excessiva e falhas de config.
-4. Classifique achados por impacto e explorabilidade.
-5. Recomende mitigacao minima, teste e monitoramento.
+2. Passe o escopo pela tabela de gatilhos de `../../workflows/security-review.md`
+   e delegue as classes cobertas por auditor especializado antes de seguir.
+3. Revise o que sobra: ciclo de vida do dado, minimizacao, retencao, compartilhamento
+   com terceiros, base legal, logs e armazenamento.
+4. Procure exposicao indevida, permissao excessiva e falhas de config.
+5. Classifique achados por impacto e explorabilidade.
+6. Recomende mitigacao minima, teste e monitoramento.
 
 ## Saida obrigatoria
 Conforme `../../templates/audit-report.md`: escopo, superficies e dados
@@ -44,6 +51,8 @@ Nao copie estes checklists na skill; aplique-os a partir daqui.
 - Rubric: ../../rubrics/security-privacy.md
 - Rubric: ../../rubrics/diff-review.md
 - Template: ../../templates/audit-report.md
+- Workflow e gatilhos: ../../workflows/security-review.md
+- Cobertura por classe: ../../docs/security-coverage.md
 
 ## Exemplos de uso
 - Codex: `$security-privacy-audit Audite este fluxo de auth e dados pessoais.`

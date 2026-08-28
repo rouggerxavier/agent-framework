@@ -14,13 +14,18 @@ routing, billing, permissao ou mudanca dificil de reverter.
 6. Use branch/worktree isolado; paralelismo somente sem arquivos/contratos comuns.
 7. Execute uma tarefa por vez com a politica central de testes.
 8. Exija self-review, spec compliance e code quality `deep`/`cross-area`.
-9. Rode reviewers especializados, runtime QA e goal coverage.
-10. Use release gate, commit readiness e PR; nao faça integracao direta sem
+9. Aplique `workflows/security-review.md`: os auditores disparados pelos
+   gatilhos do diff sao obrigatorios aqui e rodam como reviewers independentes
+   do executor.
+10. Rode reviewers especializados, runtime QA e goal coverage.
+11. Use release gate, commit readiness e PR; nao faça integracao direta sem
     evidencia proporcional.
 
 ## Gates
 
 - Falha, stale context, conflito ou scope expansion bloqueia.
+- Achado de seguranca `Critical`/`High` sem correcao e teste negativo bloqueia
+  integracao; segredo real exposto exige rotacao antes do merge.
 - Waiver precisa aprovacao e evidencia alternativa.
 - Executor, reviewers e verifier possuem autoridades separadas.
 
