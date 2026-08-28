@@ -1,0 +1,6 @@
+# Caminhos nao escaneados por scripts/security-check.
+# Use apenas para fixture de teste e amostra deliberada de codigo inseguro.
+# Toda linha aqui aparece na saida da checagem; nada e suprimido em silencio.
+
+# Fixtures de vulnerabilidade usados pelos testes do proprio framework.
+tests/test_security_assets.py

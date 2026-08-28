@@ -825,7 +825,12 @@ Testes do kernel:
 python3 -m unittest discover -s tests -v
 ```
 
-## Checagem de seguranca
+## Seguranca
+
+A revisao de seguranca tem dois niveis: uma passada estatica automatica e os
+auditores especializados.
+
+Passada estatica (sem dependencia nova, so ferramenta nativa do repo):
 
 ```bash
 make security:check
@@ -836,6 +841,30 @@ Ou:
 ```bash
 ./scripts/security-check
 ```
+
+Ela checa `.env` versionado, segredo aparente, criptografia fraca, sinks
+perigosos, configuracao insegura, manifest/IaC e Dockerfile, e roda o audit de
+dependencia do ecossistema presente. `[fail]` bloqueia; `[warn]` aponta onde
+olhar. Use `SECURITY_STRICT=1` para transformar warning em falha no CI.
+
+Fixture de teste e amostra deliberada de codigo inseguro vao em
+`.security-ignore`. Cada caminho listado ali aparece na saida da checagem;
+nada e suprimido em silencio.
+
+Auditores por classe de vulnerabilidade:
+
+```text
+$injection-vulnerability-auditor Procure SQLi, XSS, RCE, XXE, SSRF, deserializacao e mass assignment.
+$authn-authz-auditor Revise auth, JWT, sessao, CSRF, IDOR, papel admin e bypass de fluxo.
+$crypto-secrets-auditor Procure segredo hardcoded, hash fraco e TLS sem verificacao.
+$infra-security-auditor Revise debug, CORS, portas, Docker root, IaC e pipeline.
+$dependency-risk-auditor Cheque CVE, versao EOL e supply chain das dependencias.
+```
+
+`workflows/security-review.md` define quando cada auditor e obrigatorio: o
+gatilho vem do diff, nao do humor da revisao, e vale em `fast`, `standard` e
+`critical`. `docs/security-coverage.md` mapeia as 20 classes cobertas, a skill
+responsavel e o que a checagem automatica alcanca de fato.
 
 ## Atualizar em outro computador
 
@@ -921,6 +950,10 @@ $agent-guardrails-implementer Especifique guardrails de input, output, tools e l
 $agent-security-auditor Audite prompt injection, vazamento, tools inseguras e permissoes.
 $env-gitignore-auditor Revise .gitignore, .env.example, tokens, logs e artefatos.
 ```
+
+O `agent-security-auditor` roda os casos base de
+`templates/prompt-injection-eval.md`; PI-03, PI-04 e PI-05 precisam passar antes
+do release.
 
 Runtime QA, evals e observabilidade para agentes:
 

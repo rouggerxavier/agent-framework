@@ -2,14 +2,133 @@
 set -eu
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+STRICT="${SECURITY_STRICT:-0}"
+IGNORE_FILE="$ROOT/.security-ignore"
 status=0
+warnings=0
 
 ok() { printf '[ok] %s\n' "$1"; }
-warn() { printf '[warn] %s\n' "$1"; }
+warn() { printf '[warn] %s\n' "$1"; warnings=$((warnings + 1)); }
 fail() { printf '[fail] %s\n' "$1"; status=1; }
 
 is_git_repo() {
   git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1
+}
+
+load_ignores() {
+  [ -f "$IGNORE_FILE" ] || return 0
+  grep -vE '^[[:space:]]*(#|$)' "$IGNORE_FILE" || true
+}
+
+apply_ignores() {
+  patterns="$(load_ignores)"
+
+  if [ -z "$patterns" ]; then
+    cat
+    return 0
+  fi
+
+  while IFS= read -r file; do
+    rel="${file#"$ROOT"/}"
+    skip=0
+    while IFS= read -r pattern; do
+      [ -n "$pattern" ] || continue
+      case "$rel" in
+        $pattern) skip=1; break ;;
+      esac
+    done <<EOF
+$patterns
+EOF
+    if [ "$skip" -eq 0 ]; then
+      printf '%s\n' "$file"
+    fi
+  done
+}
+
+report_ignores() {
+  patterns="$(load_ignores)"
+
+  if [ -z "$patterns" ]; then
+    return 0
+  fi
+
+  printf '[note] .security-ignore active; these paths are not scanned:\n'
+  printf '%s\n' "$patterns" | sed 's/^/       /'
+}
+
+raw_files() {
+  if is_git_repo; then
+    git -C "$ROOT" ls-files --cached --others --exclude-standard |
+      while IFS= read -r file; do printf '%s/%s\n' "$ROOT" "$file"; done
+  else
+    find "$ROOT" \
+      \( -path "$ROOT/.git" \
+      -o -path "$ROOT/node_modules" \
+      -o -path "$ROOT/dist" \
+      -o -path "$ROOT/build" \
+      -o -path "$ROOT/.cache" \
+      -o -path "$ROOT/.agent-framework-backups" \
+      \) -prune -o -type f -print
+  fi
+}
+
+list_files() {
+  raw_files | apply_ignores
+}
+
+filter_group() {
+  group="$1"
+  while IFS= read -r file; do
+    base="$(basename "$file")"
+    case "$group" in
+      code)
+        case "$base" in
+          *.py|*.js|*.ts|*.jsx|*.tsx|*.mjs|*.cjs|*.rb|*.php|*.go|*.java|*.kt|*.cs|*.rs|*.sh|*.bash|*.sql|*.vue|*.svelte|*.html|*.htm|*.erb|*.ejs)
+            printf '%s\n' "$file" ;;
+        esac ;;
+      config)
+        case "$base" in
+          *.py|*.js|*.ts|*.json|*.yaml|*.yml|*.toml|*.ini|*.cfg|*.conf|*.tf|*.tfvars)
+            printf '%s\n' "$file" ;;
+        esac ;;
+      manifest)
+        case "$base" in
+          *.yaml|*.yml|*.tf|*.tfvars|Dockerfile|Dockerfile.*|*.dockerfile)
+            printf '%s\n' "$file" ;;
+        esac ;;
+    esac
+  done
+}
+
+# scan_pattern <label> <extended-regex> <group> [exclude-regex]
+scan_pattern() {
+  label="$1"
+  regex="$2"
+  group="$3"
+  exclude="${4:-}"
+
+  if ! printf '' | grep -E "$regex" >/dev/null 2>&1; then
+    if [ "$?" -gt 1 ]; then
+      fail "$label: invalid pattern; check cannot run"
+      return
+    fi
+  fi
+
+  hits="$(
+    list_files | filter_group "$group" |
+      while IFS= read -r file; do
+        grep -n -I -E "$regex" "$file" 2>/dev/null |
+          cut -c1-160 |
+          sed "s|^|${file#"$ROOT"/}:|"
+      done | { if [ -n "$exclude" ]; then grep -vE "$exclude" || true; else cat; fi; } | head -n 20
+  )"
+
+  if [ -n "$hits" ]; then
+    warn "$label"
+    printf '%s\n' "$hits" | sed 's/^/       /'
+  else
+    ok "$label: nothing found"
+  fi
 }
 
 check_tracked_env() {
@@ -41,20 +160,11 @@ scan_secrets() {
     if grep -I -i -E "$secret_regex|$known_regex" "$file" >/dev/null 2>&1; then
       findings=$((findings + 1))
       grep -n -I -i -E "$secret_regex|$known_regex" "$file" |
-        while IFS=: read -r path line _; do
-          printf '[secret?] %s:%s\n' "$path" "$line"
+        while IFS=: read -r line _; do
+          printf '[secret?] %s:%s\n' "${file#"$ROOT"/}" "$line"
         done
     fi
-  done < <(
-    find "$ROOT" \
-      \( -path "$ROOT/.git" \
-      -o -path "$ROOT/node_modules" \
-      -o -path "$ROOT/dist" \
-      -o -path "$ROOT/build" \
-      -o -path "$ROOT/.cache" \
-      -o -path "$ROOT/.agent-framework-backups" \
-      \) -prune -o -type f -print
-  )
+  done < <(list_files)
 
   if [ "$findings" -gt 0 ]; then
     fail "possible secrets found; paths only shown, inspect and redact"
@@ -63,37 +173,156 @@ scan_secrets() {
   fi
 }
 
+scan_weak_crypto() {
+  scan_pattern "weak crypto / disabled TLS verification" \
+    'hashlib\.(md5|sha1)\(|createHash\(["'\'']?(md5|sha1)|MessageDigest\.getInstance\(["'\'']?(MD5|SHA-?1)|(Cipher\.getInstance|createCipheriv)\(["'\'']?(des|3des|rc4|DES|RC4)|(aes|AES)[-/][0-9]*[-/]?(ecb|ECB)|verify[[:space:]]*=[[:space:]]*False|rejectUnauthorized[[:space:]]*:[[:space:]]*false|InsecureSkipVerify[[:space:]]*:[[:space:]]*true|NODE_TLS_REJECT_UNAUTHORIZED' \
+    code
+}
+
+scan_dangerous_sinks() {
+  scan_pattern "dangerous sinks (command/deserialization/render)" \
+    'os\.system\(|subprocess\.[A-Za-z_]+\(.*shell[[:space:]]*=[[:space:]]*True|child_process\.(exec|execSync)\(|(^|[^A-Za-z_.])eval\(|pickle\.loads?\(|yaml\.load\(|Marshal\.load\(|unserialize\(|innerHTML[[:space:]]*=|dangerouslySetInnerHTML|v-html' \
+    code \
+    'SafeLoader|safe_load'
+}
+
+scan_insecure_config() {
+  scan_pattern "insecure configuration (debug, wildcard CORS/hosts)" \
+    'DEBUG[[:space:]]*[:=][[:space:]]*(True|true|1)[^0-9]|ALLOWED_HOSTS[[:space:]]*=[[:space:]]*\[[[:space:]]*["'\'']\*|Access-Control-Allow-Origin["'\'' ]*[:,][[:space:]]*["'\'']?\*|origin[[:space:]]*:[[:space:]]*["'\'']\*["'\'']|["'\'']alg["'\'']?[[:space:]]*:[[:space:]]*["'\'']none' \
+    config
+}
+
+scan_manifests() {
+  scan_pattern "secret or open access in manifest/IaC" \
+    '(password|passwd|secret|token|api[_-]?key)[[:space:]]*:[[:space:]]*[^ $#{]|privileged[[:space:]]*:[[:space:]]*true|0\.0\.0\.0/0' \
+    manifest \
+    'secretKeyRef|secretName|valueFrom|_FILE|\$\{'
+}
+
+check_dockerfiles() {
+  dockerfiles="$(list_files | grep -E '(^|/)(Dockerfile(\..*)?|[^/]*\.dockerfile)$' || true)"
+
+  if [ -z "$dockerfiles" ]; then
+    ok "no Dockerfile found"
+    return
+  fi
+
+  while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    rel="${file#"$ROOT"/}"
+
+    if ! grep -Eq '^[[:space:]]*USER[[:space:]]+' "$file"; then
+      warn "$rel: no USER directive; container runs as root"
+    elif grep -Eq '^[[:space:]]*USER[[:space:]]+root' "$file"; then
+      warn "$rel: USER root"
+    fi
+
+    if grep -Eq '^[[:space:]]*FROM[[:space:]]+[^[:space:]]+:latest' "$file"; then
+      warn "$rel: base image pinned to :latest"
+    elif grep -E '^[[:space:]]*FROM[[:space:]]+' "$file" | grep -qvE '[:@]'; then
+      warn "$rel: base image without version or digest"
+    fi
+
+    if grep -Eqi '^[[:space:]]*(ENV|ARG)[[:space:]]+[^=]*(secret|token|password|api[_-]?key)' "$file"; then
+      warn "$rel: secret-like value in ENV/ARG layer"
+    fi
+  done <<EOF
+$dockerfiles
+EOF
+}
+
 run_framework_check() {
   if [ -f "$ROOT/installers/verify-framework.sh" ]; then
-    bash "$ROOT/installers/verify-framework.sh"
-    ok "framework verifier passed"
+    if bash "$ROOT/installers/verify-framework.sh" >/dev/null; then
+      ok "framework verifier passed"
+    else
+      fail "framework verifier failed; run installers/verify-framework.sh"
+    fi
   else
     warn "no framework verifier found"
   fi
 }
 
-run_native_checks() {
-  if [ -f "$ROOT/package.json" ] && command -v npm >/dev/null 2>&1; then
-    npm --prefix "$ROOT" run lint --if-present
-    npm --prefix "$ROOT" test --if-present
-    if [ -f "$ROOT/package-lock.json" ]; then
-      npm --prefix "$ROOT" audit --audit-level=high
-    fi
-    ok "npm checks completed"
-  else
-    warn "no package.json; skipping npm lint/test/audit"
+run_node_checks() {
+  [ -f "$ROOT/package.json" ] || return 0
+
+  if ! command -v npm >/dev/null 2>&1; then
+    warn "package.json present but npm not available; dependency CVEs unverified"
+    return 0
   fi
+
+  npm --prefix "$ROOT" run lint --if-present
+  npm --prefix "$ROOT" test --if-present
+  if [ -f "$ROOT/package-lock.json" ]; then
+    npm --prefix "$ROOT" audit --audit-level=high || fail "npm audit reported high severity advisories"
+  fi
+  ok "npm checks completed"
+}
+
+run_python_checks() {
+  python_manifest=0
+  for marker in requirements.txt pyproject.toml Pipfile; do
+    [ -e "$ROOT/$marker" ] && python_manifest=1
+  done
+  [ "$python_manifest" -eq 1 ] || return 0
+
+  if ! command -v pip-audit >/dev/null 2>&1; then
+    warn "python manifest present but pip-audit not installed; dependency CVEs unverified"
+    return 0
+  fi
+
+  if [ -f "$ROOT/requirements.txt" ]; then
+    pip-audit --progress-spinner off -r "$ROOT/requirements.txt" || fail "pip-audit reported vulnerabilities"
+  else
+    pip-audit --progress-spinner off || fail "pip-audit reported vulnerabilities"
+  fi
+  ok "pip-audit completed"
+}
+
+run_ecosystem_checks() {
+  found=0
+  for marker in package.json requirements.txt pyproject.toml Pipfile Gemfile go.mod Cargo.toml composer.json; do
+    [ -e "$ROOT/$marker" ] && found=1
+  done
+
+  run_node_checks
+  run_python_checks
+
+  if [ "$found" -eq 0 ]; then
+    ok "no dependency manifest; nothing to audit"
+    return 0
+  fi
+
+  for marker in Gemfile go.mod Cargo.toml composer.json; do
+    if [ -e "$ROOT/$marker" ]; then
+      warn "$marker present; run the native audit (bundle audit / govulncheck / cargo audit / composer audit)"
+    fi
+  done
 }
 
 printf 'security check: %s\n' "$ROOT"
+report_ignores
 check_tracked_env
 scan_secrets
+scan_weak_crypto
+scan_dangerous_sinks
+scan_insecure_config
+scan_manifests
+check_dockerfiles
 run_framework_check
-run_native_checks
+run_ecosystem_checks
+
+printf 'warnings: %s\n' "$warnings"
 
 if [ "$status" -ne 0 ]; then
   printf 'security check: failed\n'
   exit "$status"
 fi
 
+if [ "$STRICT" = "1" ] && [ "$warnings" -gt 0 ]; then
+  printf 'security check: failed (SECURITY_STRICT=1 with %s warnings)\n' "$warnings"
+  exit 1
+fi
+
 printf 'security check: ok\n'
+printf 'static pass only; run workflows/security-review.md for the audit itself\n'
