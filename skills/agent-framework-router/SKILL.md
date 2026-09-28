@@ -75,6 +75,10 @@ grave; reducao exige apenas `--reason`.
 - Se o pedido mencionar brief, documentacao de feature/refatoracao, plano de execucao, organizar tarefa, quebrar em etapas ou preparar trabalho para outro agente, priorize `execution-plan-builder`.
 - Se o pedido mencionar prompts por etapa, prompt para proximo agente, pacote de prompts ou delegar execucao, priorize `execution-prompt-builder`.
 - Para esse fluxo, referencie `workflows/execution-brief` e mantenha o router como dispatcher.
+- Se a tarefa envolver mexer em frontend/UI, `impeccable` e obrigatoria em
+  qualquer harness. No Claude Code, `design` e igualmente obrigatoria junto
+  com `impeccable`, sem ordem fixa entre as duas; `design` nao existe para o
+  Codex.
 
 ## Tabela de roteamento
 | Intencao | Skill | Apoio |
@@ -115,7 +119,9 @@ grave; reducao exige apenas `--reason`.
 | Auth, JWT, sessao, CSRF, IDOR, papel admin, bypass de fluxo | authn-authz-auditor | rubrics/access-control, templates/security-audit-report |
 | Segredo hardcoded, chave, hash fraco, TLS sem verificacao | crypto-secrets-auditor | rubrics/crypto-secrets, env-gitignore-auditor |
 | Debug em producao, CORS, portas, Docker root, IaC, pipeline | infra-security-auditor | rubrics/infra-security, dependency-risk-auditor |
-| UI/UX | ui-ux-pro-max-audit | rubrics/ui-ux, workflows/frontend-refactor |
+| UI/UX (auditoria formal com template do framework) | ui-ux-pro-max-audit | rubrics/ui-ux, workflows/frontend-refactor |
+| Criar/redesenhar/ajustar frontend (Claude Code) | design, impeccable | ui-ux-pro-max-audit |
+| Criar/redesenhar/ajustar frontend (Codex) | impeccable | ui-ux-pro-max-audit |
 | QA app rodando | runtime-qa-audit | — |
 | Release | release-verifier | workflows/release, templates/release-checklist |
 | Handoff entre agentes | handoff-builder | workflows/agent-handoff, templates/handoff-summary |

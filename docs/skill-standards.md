@@ -45,6 +45,17 @@ O nome deve bater com a pasta em `skills/<name>/`.
 | Estrutura de saida reutilizavel | Template |
 | Regra do framework ou manutencao | Doc |
 
+## Skills vendorizadas
+Skill importada verbatim de um projeto de terceiros (para preservar o
+trigger e as instrucoes exatamente como o autor original desenhou) fica
+isenta das secoes recomendadas, do limite de 240 caracteres na `description`
+e das headings obrigatorias (`## Objetivo`, `## Workflow`, `## Saida`,
+`## Criterios`). Marque a isencao criando `skills/<name>/VENDORED.md` com
+origem, commit/versao vendorizados, licenca e passo a passo de atualizacao.
+`installers/verify-framework.sh` pula os checks de template para qualquer
+skill com esse arquivo, mas ainda exige `SKILL.md` com `name` batendo o
+diretorio e `description` presente.
+
 ## Checklist antes de commit
 - Nome em kebab-case e igual ao frontmatter.
 - Escopo nao duplica skill existente.

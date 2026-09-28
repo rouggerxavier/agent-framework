@@ -17,6 +17,10 @@ Identificar problemas de experiencia e interface que afetam clareza, conversao, 
 - Para avaliar logica de backend sem impacto visual.
 - Para substituir teste funcional quando o problema e runtime.
 - Para redesenhar tudo quando uma correcao local basta.
+- Para criar, redesenhar ou iterar visualmente o frontend em si: use
+  `impeccable` (Codex e Claude Code) junto com `design` (Claude Code); esta
+  skill audita e gera relatorio no template do framework, nao substitui as
+  duas.
 
 ## Entradas esperadas
 - Screenshot, URL, arquivo do app ou descricao da tela.

@@ -119,6 +119,16 @@ persistente, nao como entrada obrigatoria de tarefa comum.
 ```
 
 ```text
+/design Redesenhe a tela de checkout.
+/impeccable polish Faca a ultima passada antes do release.
+```
+
+Skill `design` e exclusiva do Claude Code (usa a skill de design nativa do
+proprio harness) e e obrigatoria junto com `impeccable` sempre que voce for
+mexer em frontend; a ordem entre as duas fica livre. `impeccable` sozinha
+tambem funciona no Codex, ver `docs/usage-codex.md`.
+
+```text
 /handoff-builder Gere um handoff para Codex continuar.
 ```
 

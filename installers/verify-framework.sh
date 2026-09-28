@@ -48,7 +48,14 @@ for skill in "$SKILLS_DIR"/*; do
   if [ -z "$description" ]; then
     echo "  problem: missing frontmatter description"
     problems=$((problems + 1))
-  elif [ "${#description}" -gt 240 ]; then
+  fi
+
+  if [ -f "$skill/VENDORED.md" ]; then
+    echo "  vendored: skipping local template checks (see VENDORED.md)"
+    continue
+  fi
+
+  if [ -n "$description" ] && [ "${#description}" -gt 240 ]; then
     echo "  problem: description too long (${#description} chars, max 240)"
     problems=$((problems + 1))
   fi

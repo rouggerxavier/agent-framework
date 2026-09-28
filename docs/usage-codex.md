@@ -125,6 +125,13 @@ $diff-reviewer Revise o diff antes do merge.
 $context-compressor Comprima esta conversa com estado atual, riscos e prompt de retomada.
 ```
 
+```text
+$impeccable polish Faca a ultima passada antes do release.
+```
+
+Nao ha equivalente a `design` no Codex (ela usa a skill de design nativa do
+harness Claude); em frontend, use `impeccable` sozinha.
+
 ## Kernel persistente (`critical`)
 
 ```text
