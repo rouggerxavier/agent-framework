@@ -111,11 +111,13 @@ grave; reducao exige apenas `--reason`.
 | Auditar migration/dados | data-migration-auditor | templates/data-migration-report, rubrics/data-migration, release-verifier |
 | Sincronizar docs | docs-sync-auditor | templates/docs-sync-report, rubrics/docs-sync, release-verifier |
 | Seguranca/privacidade e dados pessoais | security-privacy-audit | rubrics/security-privacy, workflows/security-review, docs/security-coverage |
+| Auditoria de seguranca completa / pen test do codigo | security-audit | security-privacy-audit, workflows/security-review |
 | SQLi, XSS, RCE, XXE, SSRF, deserializacao, redirect, mass assignment | injection-vulnerability-auditor | rubrics/injection-vulnerabilities, templates/security-audit-report |
 | Auth, JWT, sessao, CSRF, IDOR, papel admin, bypass de fluxo | authn-authz-auditor | rubrics/access-control, templates/security-audit-report |
 | Segredo hardcoded, chave, hash fraco, TLS sem verificacao | crypto-secrets-auditor | rubrics/crypto-secrets, env-gitignore-auditor |
 | Debug em producao, CORS, portas, Docker root, IaC, pipeline | infra-security-auditor | rubrics/infra-security, dependency-risk-auditor |
 | UI/UX | ui-ux-pro-max-audit | rubrics/ui-ux, workflows/frontend-refactor |
+| Video em motion (direcao, determinismo, render 60 FPS) | motion-video-director | rubrics/motion-video, hyperframes, remotion-motion-graphics |
 | QA app rodando | runtime-qa-audit | — |
 | Release | release-verifier | workflows/release, templates/release-checklist |
 | Handoff entre agentes | handoff-builder | workflows/agent-handoff, templates/handoff-summary |
