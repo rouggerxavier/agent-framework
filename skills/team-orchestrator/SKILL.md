@@ -63,21 +63,20 @@ Ele nao deve:
 9. Preencha as lanes disponiveis: developer(s) recebem implementacao; tester pode
    preparar estrategia/casos em paralelo; especialistas read-only podem investigar
    sem disputar write scope.
-9. Quando houver valor independente, envie planejamento/execucao de testes para
-   o tester. Testes que exigem o diff pronto dependem do dispatch do developer.
-10. Envie o resultado para reviewer independente: primeiro conformidade, depois
+10. Quando houver valor independente, envie planejamento/execucao de testes para
+    o tester. Testes que exigem o diff pronto dependem do dispatch do developer.
+11. Envie o resultado para reviewer independente: primeiro conformidade, depois
     qualidade quando o modo exigir separacao.
-11. Findings bloqueantes viram um novo dispatch de correcao para o developer,
+12. Findings bloqueantes viram um novo dispatch de correcao para o developer,
     preservando o finding e o criterio que o fecha.
-12. Qualquer escolha descoberta passa por `decision-authority-router`.
+13. Qualquer escolha descoberta passa por `decision-authority-router`.
     `user_required` cria `Q-###` no notebook, deixa a tarefa
     `awaiting_decision` e pausa somente seus dependentes.
 14. Depois de registrar uma pergunta, reexecute o scheduler: use outra tarefa da
     fase ou outra spec/fase ja aprovada e independente, quando houver.
-15. Sempre que houver **2 ou mais PRs abertos**, avalie
-    `integration-batch-manager`. PRs compativeis e proximos de integrar devem
-    formar uma branch/worktree de integration batch para CI combinada; se nao
-    houver batch, registre o motivo.
+15. Sempre que houver **2 ou mais PRs abertos**, crie/atualize o registro de
+    `integration-batch-manager`. Quando pelo menos dois heads forem compativeis
+    e integration-ready, monte branch/worktree de batch e rode CI combinada.
 16. Quando dev + testes + review atendem o aceite, use verificacao/Git/release
     existentes para integrar respeitando dependencias entre worktrees e o batch
     ativo, se houver.
