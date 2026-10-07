@@ -61,6 +61,24 @@ A dispatch must define:
 
 The worker must stop when the task requires a change outside the packet.
 
+## Fresh task contexts and token economy
+
+A new task should not inherit a long worker conversation by default.
+
+Before dispatching a different task id, role, spec or worktree:
+
+1. persist the prior structured result and durable state;
+2. reset the agent session/context with the harness-native primitive, or open a
+   fresh session when reset is unavailable;
+3. optionally clear terminal scrollback for human readability;
+4. send only the focused dispatch package.
+
+A shell `clear` is not a model-context reset. Apply
+`kernel/context-budget-policy.md` and `fresh-task-session`.
+
+The orchestrator should minimize repeated context, full logs, irrelevant skills
+and completed-phase prose. Durable artifacts carry continuity.
+
 ## Decision authority
 
 Not every implementation choice is a project decision.
@@ -167,6 +185,16 @@ another eligible lane. A blocked task does not freeze the project.
 
 Serialize work when scopes overlap, dependencies are not landed, or central
 resources such as schema/migrations/lockfiles make concurrent writes unsafe.
+
+## Integration batches
+
+When two or more pull requests are open, create/update an integration batch
+inventory. Compatible integration-ready heads should be composed in an
+ephemeral integration branch/worktree and tested as a combined tree.
+
+If CI requires pull-request events, an ephemeral batch PR may be used. Required
+per-PR checks and branch protection remain authoritative. Any included head SHA
+change invalidates the previous batch.
 
 ## Maestri mapping
 
