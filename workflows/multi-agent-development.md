@@ -85,8 +85,9 @@ User goal
 8. **Integrate / batch**
    - rode goal coverage/verificacao aplicavel;
    - use `git-decision-router` e gates existentes;
-   - se houver 2+ PRs abertos, avalie `integration-batch-manager`;
-   - crie integration batch para candidatos compativeis e valide a arvore
+   - se houver 2+ PRs abertos, crie/atualize o registro de
+     `integration-batch-manager`;
+   - monte a composicao executavel dos candidatos compativeis e valide a arvore
      combinada antes dos merges quando isso reduzir CI/latencia;
    - integre somente com aceite e evidencias suficientes;
    - required checks/branch protection de cada PR continuam valendo.
@@ -142,7 +143,8 @@ contexto longo entre tarefas independentes e excecao, nao default.
 
 ## Integration batches
 
-Com 2 ou mais PRs abertos, o orquestrador avalia um batch. PRs prontos/proximos
-de integrar e compativeis entram numa branch/worktree efemera; a CI da uniao dos
-impactos valida conflitos/regressoes combinados. O batch nunca substitui checks
-que a protecao do repositorio exige especificamente em cada PR.
+Com 2 ou mais PRs abertos, o orquestrador sempre mantem um batch inventory. PRs
+integration-ready e compativeis entram numa branch/worktree efemera; a CI da
+uniao dos impactos valida conflitos/regressoes combinados. Drafts/incompativeis
+ficam registrados com motivo. O batch nunca substitui checks que a protecao do
+repositorio exige especificamente em cada PR.
