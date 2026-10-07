@@ -41,6 +41,47 @@ class CompatibilityTests(unittest.TestCase):
             self.assertIn("framework-next", content, name)
             self.assertIn("workflow-runner", content, name)
 
+    def test_multi_agent_router_exposes_maestri_control_plane(self) -> None:
+        router = (
+            FRAMEWORK_ROOT / "skills" / "agent-framework-router" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        for asset in (
+            "team-orchestrator",
+            "worktree-lane-manager",
+            "fresh-task-session",
+            "project-notebook",
+            "integration-batch-manager",
+        ):
+            self.assertIn(asset, router)
+
+    def test_team_orchestrator_keeps_decisions_local_and_work_moving(self) -> None:
+        content = (
+            FRAMEWORK_ROOT / "skills" / "team-orchestrator" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("awaiting_decision", content)
+        self.assertIn("Q-###", content)
+        self.assertIn("fresh-task-session", content)
+        self.assertIn("worktree-lane-manager", content)
+        self.assertIn("integration-batch-manager", content)
+
+    def test_multi_agent_templates_persist_lanes_questions_and_fresh_context(self) -> None:
+        state = (FRAMEWORK_ROOT / "templates" / "orchestration-state.md").read_text(
+            encoding="utf-8"
+        )
+        dispatch = (FRAMEWORK_ROOT / "templates" / "agent-dispatch.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"lanes": []', state)
+        self.assertIn('"integration_batches": []', state)
+        self.assertIn('"awaiting_user": []', state)
+        self.assertIn('"fresh_context_required": true', dispatch)
+        self.assertIn('"kind": "worktree"', dispatch)
+        for name in ("INDEX.md", "QUESTIONS.md", "PROGRESS.md", "PHASES.md"):
+            self.assertTrue(
+                (FRAMEWORK_ROOT / "templates" / "project-notes" / name).is_file(),
+                name,
+            )
+
     def test_installer_syncs_kernel_and_preserves_unrelated_assets(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary) / "codex"

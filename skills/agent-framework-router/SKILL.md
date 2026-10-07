@@ -93,6 +93,11 @@ grave; reducao exige apenas `--reason`.
 | Auditar hardcode em agente | agent-anti-hardcode-auditor | templates/agent-hardcode-report, model-flexibility-auditor, config-surface-auditor |
 | Auditar flexibilidade de modelo | model-flexibility-auditor | templates/model-flexibility-report, model-routing, runtime-qa-audit |
 | Auditar configs/env/gitignore | config-surface-auditor | templates/config-surface-report, security-privacy-audit, docs-sync-auditor |
+| Orquestrar equipe multiagente/Maestri | team-orchestrator | workflows/multi-agent-development.md, decision-authority-router, templates/agent-dispatch |
+| Preparar sessao limpa para nova task | fresh-task-session | kernel/context-budget-policy, templates/agent-dispatch |
+| Gerir writers paralelos em worktrees | worktree-lane-manager | kernel/orchestration-policy, templates/orchestration-state |
+| Manter notas/perguntas/progresso do projeto | project-notebook | templates/project-notes, workflows/decision-pause-and-continue |
+| Agrupar PRs para CI de integracao | integration-batch-manager | workflows/integration-batch, kernel/ci-throughput-policy |
 | Escolher peso da tarefa | task-mode-router | workflow-orchestrator, diff-reviewer, test-strategy-builder |
 | Planejar backend em fatias | backend-slice-planner | templates/backend-slice-plan, api-contract-auditor, test-strategy-builder |
 | Auditar plano antes de executar | plan-quality-checker | templates/plan-quality-report, rubrics/testing, rubrics/api-contract |
