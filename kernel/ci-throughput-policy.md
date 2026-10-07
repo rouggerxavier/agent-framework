@@ -186,6 +186,29 @@ Full regression is not the default for every small change. Critical paths are
 never weakened silently: touching one pulls in the operational tier even under
 `targeted`.
 
+## Integration batches for multiple open PRs
+
+When the project has two or more open pull requests, maintain an integration
+batch inventory and combine compatible integration-ready heads in an ephemeral
+branch/worktree. If CI gates require a pull-request event, use an ephemeral batch
+PR.
+
+The batch runs the CI profile required by the **union** of included impacts. It is
+valid only for the exact base SHA and ordered head SHAs recorded in the batch.
+
+This is throughput optimization, not a bypass:
+
+- branch protection and per-PR required checks still apply;
+- duplicate optional/full validation may move to the combined batch when policy
+  permits;
+- included head changes invalidate the batch and require rebuild;
+- incompatible PRs remain inventoried and are split into another batch/group;
+- after each real merge, confirm remaining composition still matches the tree
+  that was validated.
+
+A project with 2+ open PRs should not run as if every PR were the only change in
+the world. Combined integration risk belongs in a combined tree.
+
 ## Superseded runs
 
 Keep `concurrency` with `cancel-in-progress` for runs of the same unit or pull
