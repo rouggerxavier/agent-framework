@@ -29,6 +29,13 @@
 
 -
 
+## Integration batch
+
+- Open PRs:
+- Active batch:
+- Combined CI:
+- Merge order:
+
 ## Next independent work
 
 -
