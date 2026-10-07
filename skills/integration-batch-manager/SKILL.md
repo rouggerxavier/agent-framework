@@ -1,6 +1,6 @@
 ---
 name: integration-batch-manager
-description: Agrupa multiplos PRs candidatos em uma branch/worktree temporaria de integracao para validar conflitos e CI combinada antes de merges sequenciais.
+description: Use para agrupar multiplos PRs abertos em batches temporarios de integracao, validando a arvore combinada e reduzindo CI redundante antes dos merges.
 ---
 
 # Integration Batch Manager
@@ -102,3 +102,19 @@ Record:
 Remove the ephemeral worktree/branch/batch PR after all included PRs integrate
 or the batch is abandoned. If 2+ PRs remain open afterwards, immediately create
 or refresh the next batch record.
+
+## Saida obrigatoria
+
+- batch inventory de todos os PRs abertos;
+- composicao executavel com base/head SHAs exatos;
+- branch/worktree e batch PR quando necessario;
+- perfil/resultado de CI combinada;
+- ordem de merge e motivos de exclusao/rebuild.
+
+## Criterios de aceite
+
+- 2+ PRs abertos sempre geram/atualizam um batch inventory.
+- CI combinada nunca e usada para fingir que required checks individuais passaram.
+- Mudanca de qualquer SHA invalida o batch anterior.
+- PR excluido permanece visivel com motivo.
+- Falha combinada e roteada ao menor owner acionavel.
