@@ -2,10 +2,15 @@
 
 ## Single control plane
 
-Exactly one workflow runner owns a phase at a time. Subagents are executors or
-reviewers, not competing orchestrators. A delegated actor cannot change
-`STATE.md`, the plan, or task ownership unless the runner explicitly grants that
-operation.
+Exactly one control plane owns a phase at a time. In the ordinary single-agent
+flow that control plane is the workflow runner. In an explicit multi-agent flow
+it is the team orchestrator, which may delegate lifecycle operations to the
+workflow runner while retaining scheduling authority.
+
+Subagents are executors, testers, reviewers or specialists, not competing
+orchestrators. A delegated actor cannot change `STATE.md`, orchestration state,
+the plan, accepted decisions or task ownership unless the control plane
+explicitly grants that operation.
 
 ## When to use clean context
 
@@ -17,7 +22,9 @@ verification ownership.
 
 ## Required context package
 
-Every implementer receives content, not merely paths:
+Every delegated worker receives content, not merely paths. Multi-agent runs use
+the dispatch contract in `templates/agent-dispatch.md`; ordinary delegated
+implementers receive the equivalent focused package:
 
 - complete task contract;
 - relevant project context and spec excerpts;
@@ -42,4 +49,7 @@ transitions.
 
 Delegated claims are untrusted until backed by direct evidence under
 `evidence-policy.md`.
+
+For multi-agent scheduling, decision authority and Maestri-style lanes, also
+apply `orchestration-policy.md`.
 
