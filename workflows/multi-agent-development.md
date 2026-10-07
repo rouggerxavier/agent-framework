@@ -54,10 +54,15 @@ User goal
    - escolha o bundle de skills de cada role;
    - mantenha uma fila de trabalho elegivel alem da tarefa atualmente visivel.
 
-4. **Dispatch developer lanes**
+4. **Reset and dispatch developer lanes**
+   - antes de task nova, persista o resultado anterior e use
+     `fresh-task-session`;
+   - resete o contexto do agente ou abra sessao nova; `clear` do shell sozinho
+     nao conta como reset;
    - gere `agent-dispatch`;
    - inclua task contract, read-first, allowed files, acceptance, tests e
      workspace/lane;
+   - envie somente contexto relevante para economizar tokens;
    - limite autoridade a `local_only` por default;
    - writers paralelos usam branches/worktrees distintas e scopes disjuntos.
 
@@ -77,10 +82,14 @@ User goal
    - reviewer reavalia apenas diff/criterios invalidados;
    - repita ate passar ou bloquear.
 
-8. **Integrate**
+8. **Integrate / batch**
    - rode goal coverage/verificacao aplicavel;
    - use `git-decision-router` e gates existentes;
-   - integre somente com aceite e evidencias suficientes.
+   - se houver 2+ PRs abertos, avalie `integration-batch-manager`;
+   - crie integration batch para candidatos compativeis e valide a arvore
+     combinada antes dos merges quando isso reduzir CI/latencia;
+   - integre somente com aceite e evidencias suficientes;
+   - required checks/branch protection de cada PR continuam valendo.
 
 9. **Continue**
    - selecione todas as proximas tarefas elegiveis, nao apenas uma;
@@ -124,3 +133,16 @@ O orquestrador para o dispatch afetado quando houver:
 Nao pare todo o time se outras tarefas independentes ainda puderem avancar.
 Registre a pergunta no notebook, preserve a lane bloqueada e recalcule o
 scheduler imediatamente.
+
+## Contexto e tokens
+
+Cada mudanca de task id deve preferir uma sessao limpa. O orquestrador persiste o
+que importa, descarta conversa concluida e manda o dispatch minimo. Reutilizar
+contexto longo entre tarefas independentes e excecao, nao default.
+
+## Integration batches
+
+Com 2 ou mais PRs abertos, o orquestrador avalia um batch. PRs prontos/proximos
+de integrar e compativeis entram numa branch/worktree efemera; a CI da uniao dos
+impactos valida conflitos/regressoes combinados. O batch nunca substitui checks
+que a protecao do repositorio exige especificamente em cada PR.
