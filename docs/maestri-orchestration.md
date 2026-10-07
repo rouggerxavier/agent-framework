@@ -61,7 +61,9 @@ Novos assets:
 6. O Revisor inspeciona spec + diff + testes.
 7. Finding real volta ao Dev.
 8. Quando passa, o orquestrador integra e escolhe a proxima tarefa.
-9. O ciclo continua sem pedir permissao para detalhes locais.
+9. Se nao houver outra operacao imediatamente acionavel, ele persiste
+   `waiting_for_event` e faz yield.
+10. O ciclo retoma por evento sem pedir permissao para detalhes locais.
 
 ## Worktrees e paralelismo
 
@@ -94,6 +96,27 @@ continuar. Quando voce responde, ela aponta para a decisao formal em
 `PROGRESS.md` explica o que foi feito; `PHASES.md` resume cada fase/spec
 implementada; `INDEX.md` mostra lanes, perguntas, ultima entrega e proximo
 trabalho.
+
+## Espera sem polling
+
+O orquestrador permanece responsavel pelo objetivo mesmo quando encerra o turno
+ativo. Depois de despachar todas as lanes elegiveis, ele nao deve ficar
+assistindo terminal, `git diff` ou CI em loop.
+
+O comportamento normal e:
+
+```text
+dispatch -> esgotou trabalho acionavel -> waiting_for_event -> yield
+         -> resultado/falha/finding/decisao/CI relevante -> retoma
+```
+
+`maestri check` (ou equivalente) serve como diagnostico pontual apos um
+timeout significativo, suspeita de travamento ou ausencia inesperada de evento.
+Nao deve virar `sleep -> check -> repeat`. Se o worker continua saudavel, o
+orquestrador volta a fazer yield.
+
+Atualizar o usuario sobre o estado conhecido tambem nao exige consultar o worker
+novamente.
 
 ## Sessao limpa e economia de tokens
 
