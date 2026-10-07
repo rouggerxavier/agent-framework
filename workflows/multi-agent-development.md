@@ -46,15 +46,20 @@ User goal
    - transforme comportamento ambiguo em aceite verificavel;
    - classifique lacunas com `decision-authority-router`.
 
-3. **Plan**
+3. **Plan and schedule**
    - crie tarefas pequenas com dependencias;
-   - defina quais podem ser lidas/testadas em paralelo;
-   - escolha o bundle de skills de cada role.
+   - classifique write scopes e recursos compartilhados;
+   - defina quais podem rodar em paralelo;
+   - use `worktree-lane-manager` para writers independentes;
+   - escolha o bundle de skills de cada role;
+   - mantenha uma fila de trabalho elegivel alem da tarefa atualmente visivel.
 
-4. **Dispatch developer**
+4. **Dispatch developer lanes**
    - gere `agent-dispatch`;
-   - inclua task contract, read-first, allowed files, acceptance e tests;
-   - limite autoridade a `local_only` por default.
+   - inclua task contract, read-first, allowed files, acceptance, tests e
+     workspace/lane;
+   - limite autoridade a `local_only` por default;
+   - writers paralelos usam branches/worktrees distintas e scopes disjuntos.
 
 5. **Dispatch tester**
    - antes do codigo: pode produzir estrategia, casos e gaps;
@@ -78,28 +83,37 @@ User goal
    - integre somente com aceite e evidencias suficientes.
 
 9. **Continue**
-   - selecione proxima tarefa elegivel;
-   - mantenha workers independentes ocupados quando nao houver conflito;
+   - selecione todas as proximas tarefas elegiveis, nao apenas uma;
+   - preencha lanes independentes quando nao houver conflito;
+   - se uma tarefa precisar do usuario, use
+     `decision-pause-and-continue.md`, registre `Q-###` e deixe-a
+     `awaiting_decision`;
+   - continue outra tarefa da fase ou outra spec/fase ja aprovada quando suas
+     dependencias estiverem satisfeitas;
    - finalize apenas quando o objetivo global estiver coberto.
 
 ## Paralelismo seguro
 
-A V1 prioriza seguranca:
+O default e ocupar capacidade disponivel quando o trabalho for realmente
+independente:
 
-- um writer de produto por escopo;
-- tester pode trabalhar em estrategia antes do diff;
-- reviewer pode revisar apenas depois de resultado implementado;
-- pesquisa/analise read-only pode ocorrer em paralelo;
-- dois writers so quando worktrees e allowed_files forem disjuntos.
+- cada writer usa branch + worktree propria;
+- `allowed_files`/write scopes devem ser disjuntos;
+- dependencia entre tasks serializa as lanes afetadas;
+- schema/migration/lockfile/config central podem exigir serializacao;
+- tester pode preparar estrategia antes do diff e validar depois;
+- reviewer so revisa resultado materializado e nunca o proprio trabalho;
+- pesquisa/analise read-only pode ocorrer em paralelo sem worktree exclusiva.
 
-O suporte de kernel a multiplos claims ativos deve ser implementado antes de
-tratar paralelismo de writers como garantia formal.
+O runtime legado nao possui multi-claim canonico. Enquanto isso, a camada de
+orquestracao mantem os claims por dispatch/lane e serializa as transicoes formais
+do kernel na integracao. Isso nao autoriza dois workers a editar o mesmo escopo.
 
 ## Stop conditions
 
 O orquestrador para o dispatch afetado quando houver:
 
-- decisao `user_required`;
+- decisao `user_required` para aquele dispatch;
 - conflito de escopo/arquivos;
 - dependencia nao satisfeita;
 - teste obrigatorio falhando sem correcao autorizada;
@@ -108,3 +122,5 @@ O orquestrador para o dispatch afetado quando houver:
 - estado Git inseguro.
 
 Nao pare todo o time se outras tarefas independentes ainda puderem avancar.
+Registre a pergunta no notebook, preserve a lane bloqueada e recalcule o
+scheduler imediatamente.
