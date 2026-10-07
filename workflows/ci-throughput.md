@@ -78,6 +78,15 @@ Validating before the rebase validates a base that no longer exists.
 
 **`wait`** — a named condition holds. Say which one; "CI is running" is not one.
 
+## Multiple open PRs
+
+With two or more open PRs, run `workflows/integration-batch.md`. Maintain the
+batch inventory even if fewer than two heads are ready to compose. When two or
+more compatible heads are integration-ready, validate their combined tree in the
+batch rather than waiting for a sequence of redundant optional full runs.
+
+Required per-PR checks continue to run when branch protection demands them.
+
 ## Superseded runs
 
 A new head replaces the previous one: the previous run is no longer a gate, and
