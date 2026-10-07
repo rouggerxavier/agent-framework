@@ -64,18 +64,32 @@ A localizacao fisica da worktree e escolha do ambiente/Maestri.
 1. Calcule dispatches elegiveis.
 2. Detecte sobreposicao de `allowed_files` e contratos compartilhados.
 3. Para cada writer independente, reserve uma lane.
-4. Crie branch/worktree a partir da base correta.
-5. Registre lane + branch + base commit em `ORCHESTRATION.md` e no notebook.
-6. Entregue ao worker o dispatch e a lane; ele nao troca de branch/worktree.
-7. Ao retornar:
+4. Crie branch/worktree a partir da base correta. Em Git puro, a forma esperada
+   e equivalente a:
+
+```bash
+git worktree add <runtime-path> -b agent/<run-id>/<task-id>-<slug> <base-sha>
+```
+
+   O caminho e escolhido no runtime e nao e persistido.
+5. Valide `git status --short --branch` dentro da nova worktree antes de
+   despachar.
+6. Registre lane + branch + base commit em `ORCHESTRATION.md` e no notebook.
+7. Entregue ao worker o dispatch e a lane; ele nao troca de branch/worktree.
+8. Ao retornar:
    - valide resultado, diff e branch;
    - rode testes/review previstos;
    - marque a lane `ready_to_integrate`, `changes_required`,
      `awaiting_decision` ou `blocked`.
-8. Integre na ordem de dependencias. Antes de integrar uma lane tardia, atualize-a
+9. Integre na ordem de dependencias. Antes de integrar uma lane tardia, atualize-a
    contra a base resultante quando necessario e revalide o que foi afetado.
-9. So depois de integracao/abandono limpe branch/worktree; nao remova worktree
-   ambigua ou com mudancas nao preservadas.
+10. So depois de integracao/abandono limpe branch/worktree; nao remova worktree
+    ambigua ou com mudancas nao preservadas. A limpeza e equivalente a:
+
+```bash
+git worktree remove <runtime-path>
+git branch -d <lane-branch>   # somente quando integrada/segura
+```
 
 ## Decisoes durante uma lane
 
