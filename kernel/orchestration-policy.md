@@ -107,7 +107,28 @@ meaningful external consequences, including:
 - conflicting requirements where either interpretation is plausible;
 - architecture with major lock-in or migration cost.
 
-Only the dependent dispatches pause. Independent work may continue.
+Only the dependent dispatches pause. Independent work must continue when an
+eligible lane exists. The orchestrator records the question in the project
+notebook, marks the affected dispatch/task `awaiting_decision`, and immediately
+re-runs scheduling for unrelated tasks, specs or already-approved phases.
+
+## Project notebook
+
+Multi-agent projects keep a human-readable notebook under `.agent/notes/`.
+
+- `INDEX.md` is the dashboard;
+- `QUESTIONS.md` is the queue of user-required decisions;
+- `PROGRESS.md` explains what was completed and what happens next;
+- `PHASES.md` summarizes active and completed phases/specs.
+
+The notebook is not a second source of truth. Accepted choices still live in
+`DECISIONS.md`; lifecycle state remains in kernel/orchestration state; evidence
+stays in the evidence ledger.
+
+When a user-required choice appears, create a `Q-###` note before asking. Keep
+the branch/worktree intact, block only dependent dispatches, and name which
+independent work can proceed. After the answer, link the question to the formal
+Decision ID and resume the dependent queue.
 
 ## Results are untrusted until inspected
 
@@ -118,19 +139,34 @@ A worker claim is not evidence by itself. Test output, diff inspection, runtime
 observations and reviewer findings remain subject to the framework evidence
 policy.
 
-## Concurrency
+## Concurrency and worktree lanes
 
-The orchestration layer may dispatch independent work concurrently when:
+The orchestrator should prefer useful parallelism instead of waiting when work is
+independent.
+
+Writable dispatches may run concurrently when:
 
 - dependencies are satisfied;
-- write scopes do not overlap;
+- write scopes do not overlap, including shared generated/config artifacts;
 - shared mutable contracts are not being edited concurrently;
-- each writer has an isolated branch/worktree;
+- each writer has its own branch and Git worktree;
+- every lane records its base commit and logical owner;
 - integration order is explicit.
 
-Until the kernel supports multiple active task claims natively, parallel product
-writers are advisory/experimental. The safe V1 is one product writer plus
-concurrent read-only research/testing/review where the environment permits it.
+Use `worktree-lane-manager` to allocate lanes. Persist the lane id, branch, base
+commit and write scope; keep absolute worktree paths runtime-only.
+
+The legacy kernel still exposes one canonical `current_task`. Therefore
+multi-writer concurrency is owned by the orchestration layer: do not pretend each
+parallel writer independently owns the kernel lifecycle. Before integration,
+serialize/reconcile the formal lifecycle transitions and preserve evidence per
+dispatch/task.
+
+If a lane becomes `awaiting_decision`, preserve its branch/worktree and schedule
+another eligible lane. A blocked task does not freeze the project.
+
+Serialize work when scopes overlap, dependencies are not landed, or central
+resources such as schema/migrations/lockfiles make concurrent writes unsafe.
 
 ## Maestri mapping
 
