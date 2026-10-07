@@ -9,3 +9,4 @@ export HYPERFRAMES_NO_TELEMETRY=1 DO_NOT_TRACK=1
 
 bash "$SCRIPT_DIR/install-codex.sh"
 bash "$SCRIPT_DIR/install-claude.sh"
+bash "$SCRIPT_DIR/install-antigravity.sh"

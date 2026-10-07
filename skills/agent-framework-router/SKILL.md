@@ -122,15 +122,20 @@ grave; reducao exige apenas `--reason`.
 | Segredo hardcoded, chave, hash fraco, TLS sem verificacao | crypto-secrets-auditor | rubrics/crypto-secrets, env-gitignore-auditor |
 | Debug em producao, CORS, portas, Docker root, IaC, pipeline | infra-security-auditor | rubrics/infra-security, dependency-risk-auditor |
 | UI/UX | ui-ux-pro-max-audit | rubrics/ui-ux, workflows/frontend-refactor |
-| Video em motion (direcao, determinismo, render 60 FPS) | motion-video-director | rubrics/motion-video, hyperframes, remotion-motion-graphics |
+| Refatorar frontend preservando contratos e rotas | frontend-refactor-contract-guardian | rubrics/ui-ux, workflows/frontend-refactor, ui-ux-pro-max-audit |
+| Video em motion e pipeline HyperFrames | motion-video-director, hyperframes | rubrics/motion-video, hyperframes-core, hyperframes-studio, hyperframes-creative, hyperframes-animation, hyperframes-audio, hyperframes-cli, hyperframes-keyframes, hyperframes-registry |
+| Diagnosticar campanhas e trafego pago (Google Ads) | ads-performance-auditor | rubrics/ads-performance, templates/ads-performance-audit-report |
+| Sincronizar CRM e audiencias com Ads (Customer Match) | crm-ad-sync-planner | templates/crm-ad-sync-plan, authn-authz-auditor, security-privacy-audit |
 | QA app rodando | runtime-qa-audit | — |
 | Release | release-verifier | workflows/release, templates/release-checklist |
+| Implantar e operar agente em nuvem (Cloud Run/GCP) | agent-cloud-deployer | templates/agent-cloud-deploy-spec, backend-release-packager, infra-security-auditor |
 | Handoff entre agentes | handoff-builder | workflows/agent-handoff, templates/handoff-summary |
 | Conversa longa / contexto cheio | context-compressor | workflows/long-conversation-handoff |
 | Refinar pedido cru | prompt-refiner | templates/prompt-package |
 | Refinar prompt por acao | prompt-refiner | templates/action-prompt-package |
 | Refinar prompt de agente | agent-prompt-refiner | templates/action-prompt-package, agent-builder, agent-anti-hardcode-auditor |
 | Desenhar tool de agente | agent-tool-designer | templates/agent-tool-design, agent-builder, security-privacy-audit |
+| Streaming bidirecional realtime (audio/visao) | agent-realtime-multimodal | templates/multimodal-streaming-design, architecture-decision, agent-builder |
 | Auditar contrato de tool | tool-contract-auditor | templates/tool-contract-report, api-contract-auditor, security-privacy-audit |
 | Validar tool em runtime | tool-runtime-validator | templates/tool-runtime-validation, runtime-qa-audit, test-confidence-mapper |
 | Implementar guardrails de agente | agent-guardrails-implementer | templates/agent-guardrails-plan, agent-security-auditor, tool-contract-auditor |
@@ -138,6 +143,7 @@ grave; reducao exige apenas `--reason`.
 | Auditar env/gitignore/secrets | env-gitignore-auditor | templates/env-gitignore-report, config-surface-auditor, docs-sync-auditor |
 | QA runtime de agente | agent-runtime-qa | templates/agent-runtime-qa-report, runtime-qa-audit, tool-runtime-validator |
 | Planejar evals de agente | agent-eval-planner | templates/agent-eval-plan, test-strategy-builder, test-confidence-mapper |
+| Ciclo fechado de avaliacao (Eval Flywheel) | agent-eval-flywheel | templates/agent-eval-flywheel-report, agent-eval-planner, skill-evolution-loop |
 | Auditar observabilidade de agente | agent-observability-auditor | templates/agent-observability-report, persistent-debug-session, agent-security-auditor |
 | Planejar logs de feature | feature-logging-planner | templates/feature-logging-plan, runtime-qa-audit, security-privacy-audit |
 | Decidir gate de code review | code-review-gate | templates/code-review-gate-report, diff-reviewer, agent-code-reviewer |

@@ -1,7 +1,7 @@
 # agent-framework
 
 Framework pessoal e versionavel de skills, rubrics, workflows, templates e docs
-para Codex e Claude Code.
+para Codex, Claude Code e Antigravity CLI.
 
 ## Objetivo
 
@@ -9,6 +9,7 @@ Manter `~/agent-framework` como fonte principal das suas skills reutilizaveis. O
 
 - Codex: `~/.agents/skills`
 - Claude Code: `~/.claude/skills`
+- Antigravity CLI: `~/.gemini/config/skills`
 
 O framework e seguro para Git privado quando usado sem secrets, tokens, senhas, `.env`, chaves privadas ou dados sensiveis.
 
