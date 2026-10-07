@@ -13,24 +13,29 @@ sequenciais.
 
 ## Trigger
 
-Avalie um integration batch sempre que existirem **2 ou mais PRs abertos** do
-mesmo projeto.
+Com **2 ou mais PRs abertos** do mesmo projeto, o orquestrador deve criar ou
+atualizar um registro de integration batch.
 
-Crie o batch quando pelo menos dois PRs:
+O batch inventaria todos os PRs abertos. Para executar CI combinada, inclua o
+maior conjunto compativel de heads que:
 
-- estao prontos ou proximos de integrar;
-- compartilham a mesma base de integracao;
-- podem coexistir segundo dependencias e scopes;
-- ganham valor real com teste combinado.
+- compartilha a mesma base de integracao;
+- pode coexistir segundo dependencias e scopes;
+- nao e mutuamente exclusivo.
 
-Nao force batch para PRs experimentais, mutuamente exclusivos ou claramente
-distantes de merge.
+PRs ainda draft/experimentais podem ficar inventariados como `not_ready` sem
+entrar na composicao executavel. PR incompatível deve ser separado em outro batch
+ou marcado com motivo explicito; nunca some silenciosamente da fila.
 
 ## Batch shape
 
 Use uma branch/worktree efemera, por exemplo:
 
 `integration/<run-id>/<batch-id>`
+
+Se os checks combinados do repositorio so disparam em evento `pull_request`,
+abra um PR efemero de integration batch contra a base. Esse PR existe para
+validacao combinada e nao substitui os PRs reais.
 
 A partir da base atual:
 
@@ -85,12 +90,15 @@ continues.
 Record:
 
 - batch id;
-- branch;
+- all open PRs inventoried;
+- branch and optional batch PR;
 - base SHA;
 - included PRs + exact head SHAs;
+- excluded/not-ready PRs + reason;
 - CI profile and result;
 - exclusion/rebuild reason;
 - integration order.
 
-Remove the ephemeral worktree/branch after all included PRs integrate or the
-batch is abandoned.
+Remove the ephemeral worktree/branch/batch PR after all included PRs integrate
+or the batch is abandoned. If 2+ PRs remain open afterwards, immediately create
+or refresh the next batch record.
