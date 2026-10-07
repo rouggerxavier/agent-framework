@@ -93,6 +93,7 @@ grave; reducao exige apenas `--reason`.
 | Auditar hardcode em agente | agent-anti-hardcode-auditor | templates/agent-hardcode-report, model-flexibility-auditor, config-surface-auditor |
 | Auditar flexibilidade de modelo | model-flexibility-auditor | templates/model-flexibility-report, model-routing, runtime-qa-audit |
 | Auditar configs/env/gitignore | config-surface-auditor | templates/config-surface-report, security-privacy-audit, docs-sync-auditor |
+| Orquestrar equipe multiagente/Maestri | team-orchestrator | workflows/multi-agent-development.md, decision-authority-router, templates/agent-dispatch |
 | Escolher peso da tarefa | task-mode-router | workflow-orchestrator, diff-reviewer, test-strategy-builder |
 | Planejar backend em fatias | backend-slice-planner | templates/backend-slice-plan, api-contract-auditor, test-strategy-builder |
 | Auditar plano antes de executar | plan-quality-checker | templates/plan-quality-report, rubrics/testing, rubrics/api-contract |
