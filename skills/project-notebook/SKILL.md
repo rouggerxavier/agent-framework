@@ -26,6 +26,17 @@ Instancie em:
   PHASES.md
 ```
 
+## Workflow
+
+1. Instancie `.agent/notes/` quando o projeto entrar em orquestracao multiagente.
+2. Atualize `INDEX.md` a cada mudanca relevante de fase, lane, pergunta ou batch.
+3. Registre perguntas `user_required` em `QUESTIONS.md` antes de perguntar.
+4. Acrescente eventos resumidos em `PROGRESS.md` depois de implementacao,
+   review, integracao ou correcao relevante.
+5. Atualize `PHASES.md` em abertura/fechamento de fase ou spec.
+6. Ao responder pergunta, vincule a decisao formal e recoloque dependentes na fila.
+7. Mantenha notas curtas e apontando para as fontes formais.
+
 ## Responsabilidades
 
 ### INDEX.md
@@ -116,6 +127,14 @@ Quando o usuario responder:
 - Atualizacoes devem ser curtas e navegaveis; detalhes ficam nos artefatos
   referenciados.
 - O orquestrador e o unico writer padrao do notebook.
+
+## Criterios de aceite
+
+- Notebook permite retomar o projeto sem reler conversas antigas.
+- Perguntas abertas mostram exatamente o que bloqueiam e o que pode continuar.
+- Fases concluidas ficam resumidas sem duplicar evidence bruto.
+- Decisoes aceitas continuam em `DECISIONS.md`, nao apenas nas notas.
+- Nenhum secret/token e salvo no notebook.
 
 ## Saida obrigatoria
 
