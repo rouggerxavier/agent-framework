@@ -1,6 +1,6 @@
 ---
 name: worktree-lane-manager
-description: Cria e coordena lanes paralelas em Git worktrees para dispatches independentes, evitando conflito de arquivos e preservando ordem segura de integracao.
+description: Use para criar e coordenar lanes paralelas em Git worktrees para dispatches independentes, evitando conflitos e preservando ordem segura de integracao.
 ---
 
 # Worktree Lane Manager
@@ -101,6 +101,13 @@ Se surgir `user_required`:
 - libere o agente/lane logica para outro trabalho apenas se o estado local estiver
   preservado com seguranca;
 - preencha outra lane com trabalho independente.
+
+## Saida obrigatoria
+
+- lanes criadas ou recusadas com motivo;
+- branch/base/write scope de cada writer;
+- status e ordem de integracao;
+- worktrees seguras para dispatch ou limpeza.
 
 ## Criterios de aceite
 
