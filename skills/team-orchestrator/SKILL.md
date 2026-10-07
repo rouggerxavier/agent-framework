@@ -1,6 +1,6 @@
 ---
 name: team-orchestrator
-description: Coordena uma equipe de agentes de desenvolvimento, testes e review por dispatches, mantendo um unico control plane e escalando apenas decisoes materiais.
+description: Use para coordenar equipes de agentes em Maestri ou ambientes multi-terminal, com dispatches, worktrees, decisoes, testes, review e integracao sob um unico control plane.
 ---
 
 # Team Orchestrator
