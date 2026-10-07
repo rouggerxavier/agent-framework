@@ -1,6 +1,6 @@
 ---
 name: project-notebook
-description: Mantem notas persistentes do projeto com indice, perguntas pendentes, progresso e historico de fases sem duplicar evidence ou decisoes formais.
+description: Use para manter notas persistentes do projeto com indice, perguntas pendentes, progresso e historico de fases sem duplicar evidence ou decisoes formais.
 ---
 
 # Project Notebook
