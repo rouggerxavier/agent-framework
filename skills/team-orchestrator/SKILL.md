@@ -125,6 +125,16 @@ A cada ciclo, o orquestrador deve conseguir responder:
 - qual integration batch esta ativo ou por que nao foi criado;
 - qual e o proximo trabalho independente autorizado.
 
+## Criterios de aceite
+
+- Existe exatamente um control plane por run.
+- Task nova usa fresh session/contexto minimo antes do dispatch.
+- Writers paralelos so rodam em worktrees/scopes independentes.
+- `user_required` bloqueia apenas dependentes e gera `Q-###`.
+- Trabalho independente continua enquanto houver lane elegivel.
+- Com 2+ PRs abertos existe integration batch inventory atualizado.
+- Developer nunca aprova o proprio trabalho como reviewer independente.
+
 ## Arquivos de apoio
 
 - Politica: ../../kernel/orchestration-policy.md
