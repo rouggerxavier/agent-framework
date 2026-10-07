@@ -1,6 +1,6 @@
 ---
 name: fresh-task-session
-description: Prepara uma lane para tarefa nova salvando o resultado anterior, resetando a sessao/contexto quando possivel e enviando somente o dispatch minimo.
+description: Use para preparar uma lane para tarefa nova, persistindo o resultado anterior, resetando sessao/contexto e enviando somente o dispatch minimo.
 ---
 
 # Fresh Task Session
@@ -31,6 +31,13 @@ carregue raciocinio, logs e instrucoes de tarefas anteriores.
    contexto.
 7. Envie o novo `agent-dispatch` e somente os artefatos aplicaveis.
 8. O worker confirma task id, lane/worktree e write scope antes de editar.
+
+## Saida obrigatoria
+
+- tarefa anterior persistida;
+- sessao nova/resetada ou fallback explicitado;
+- lane/worktree confirmada;
+- novo dispatch minimo entregue.
 
 ## Criterios de aceite
 
