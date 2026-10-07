@@ -17,6 +17,8 @@ Preservar o estado essencial de uma conversa longa para outro agente, modelo, ch
 - Para documentacao permanente detalhada.
 - Quando o estado atual cabe em poucas frases.
 - Para esconder falhas, bloqueios ou incertezas.
+- Para carregar contexto de uma task encerrada para uma task diferente em
+  multiagente; nesse caso prefira `fresh-task-session`.
 
 ## Entradas esperadas
 - Conversa, notas, diff, logs ou resumo parcial.
@@ -52,6 +54,8 @@ Siga `../../workflows/long-conversation-handoff.md`. Especifico desta skill:
 Nao copie estes checklists na skill; aplique-os a partir daqui.
 - Workflow: ../../workflows/long-conversation-handoff.md
 - Template: ../../templates/handoff-summary.md
+- Nova task/contexto limpo: ../fresh-task-session/SKILL.md
+- Token budget: ../../kernel/context-budget-policy.md
 
 ## Exemplos de uso
 - Codex: `$context-compressor Comprima esta conversa para continuar em outro agente.`
