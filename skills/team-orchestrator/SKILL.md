@@ -26,7 +26,10 @@ Ele pode:
 - aceitar resultados e findings;
 - devolver correcoes ao developer;
 - registrar decisoes classificadas como `record`;
-- continuar trabalho independente enquanto uma lane esta bloqueada.
+- manter o notebook persistente do projeto;
+- criar/gerir lanes em worktrees para writers independentes;
+- continuar trabalho independente enquanto uma lane esta bloqueada ou aguarda
+  uma decisao do usuario.
 
 Ele nao deve:
 
@@ -44,22 +47,31 @@ Ele nao deve:
 3. Converta o pedido em spec verificavel. Use `workflow-planner` e as skills de
    planejamento adequadas; registre apenas decisoes materiais.
 4. Crie/atualize o estado de orquestracao a partir de
-   `templates/orchestration-state.md`.
+   `templates/orchestration-state.md` e instancie/atualize o notebook com
+   `project-notebook`.
 5. Quebre o plano em trabalho delegavel e crie um dispatch por operacao.
-6. Para cada dispatch, inclua somente as skills/workflows relevantes, contexto,
-   arquivos, aceite, testes e stop conditions.
-7. Envie implementacao para o developer.
-8. Quando houver valor independente, envie planejamento/execucao de testes para
+6. Calcule quais dispatches podem rodar em paralelo. Para writers independentes,
+   use `worktree-lane-manager` e reserve branch/worktree por lane.
+7. Para cada dispatch, inclua somente as skills/workflows relevantes, contexto,
+   arquivos, aceite, testes, workspace e stop conditions.
+8. Preencha as lanes disponiveis: developer(s) recebem implementacao; tester pode
+   preparar estrategia/casos em paralelo; especialistas read-only podem investigar
+   sem disputar write scope.
+9. Quando houver valor independente, envie planejamento/execucao de testes para
    o tester. Testes que exigem o diff pronto dependem do dispatch do developer.
-9. Envie o resultado para reviewer independente: primeiro conformidade, depois
-   qualidade quando o modo exigir separacao.
-10. Findings bloqueantes viram um novo dispatch de correcao para o developer,
+10. Envie o resultado para reviewer independente: primeiro conformidade, depois
+    qualidade quando o modo exigir separacao.
+11. Findings bloqueantes viram um novo dispatch de correcao para o developer,
     preservando o finding e o criterio que o fecha.
-11. Qualquer escolha descoberta passa por `decision-authority-router`.
-12. Quando dev + testes + review atendem o aceite, use verificacao/Git/release
-    existentes para integrar.
-13. Atualize o estado, registre evidencias e escolha a proxima operacao. Continue
-    o ciclo ate concluir, bloquear ou precisar do usuario.
+12. Qualquer escolha descoberta passa por `decision-authority-router`.
+    `user_required` cria `Q-###` no notebook, deixa a tarefa
+    `awaiting_decision` e pausa somente seus dependentes.
+13. Depois de registrar uma pergunta, reexecute o scheduler: use outra tarefa da
+    fase ou outra spec/fase ja aprovada e independente, quando houver.
+14. Quando dev + testes + review atendem o aceite, use verificacao/Git/release
+    existentes para integrar respeitando dependencias entre worktrees.
+15. Atualize notebook, estado e evidencias; escolha a proxima operacao e continue
+    ate o objetivo global terminar ou nao existir trabalho autorizado independente.
 
 ## Bundles padrao
 
@@ -85,7 +97,8 @@ Use `decision-authority-router`.
 
 - `local`: worker resolve e segue.
 - `record`: orquestrador decide/registra e segue.
-- `user_required`: pergunta ao usuario e pausa so o que depende da resposta.
+- `user_required`: registre `Q-###`, pergunte ao usuario e pause so o que
+  depende da resposta; continue preenchendo lanes independentes.
 
 ## Saida obrigatoria
 
@@ -97,7 +110,9 @@ A cada ciclo, o orquestrador deve conseguir responder:
 - quais resultados foram aceitos;
 - quais findings ainda bloqueiam;
 - quais decisoes foram tomadas ou aguardam usuario;
-- qual e a proxima operacao autorizada.
+- quais perguntas `Q-###` estao abertas;
+- quais lanes/worktrees estao ocupadas, prontas ou pausadas;
+- qual e o proximo trabalho independente autorizado.
 
 ## Arquivos de apoio
 
@@ -106,4 +121,7 @@ A cada ciclo, o orquestrador deve conseguir responder:
 - Dispatch: ../../templates/agent-dispatch.md
 - Estado: ../../templates/orchestration-state.md
 - Decisoes: ../decision-authority-router/SKILL.md
+- Notebook: ../project-notebook/SKILL.md
+- Worktrees: ../worktree-lane-manager/SKILL.md
+- Pausa/continuidade: ../../workflows/decision-pause-and-continue.md
 - Delegacao: ../../kernel/delegation-policy.md
