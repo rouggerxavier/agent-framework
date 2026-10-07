@@ -27,6 +27,19 @@ PRs ainda draft/experimentais podem ficar inventariados como `not_ready` sem
 entrar na composicao executavel. PR incompatível deve ser separado em outro batch
 ou marcado com motivo explicito; nunca some silenciosamente da fila.
 
+## Workflow
+
+1. Inventarie todos os PRs abertos e seus head SHAs.
+2. Calcule dependencias, compatibilidade e readiness.
+3. Crie/atualize o batch record.
+4. Se houver pelo menos dois heads compativeis e integration-ready, crie
+   branch/worktree efemera e componha os heads na ordem correta.
+5. Abra/atualize batch PR somente quando o CI precisar de evento de PR.
+6. Rode CI pelo impacto combinado.
+7. Continue trabalho independente enquanto o batch roda.
+8. Em green, integre PRs reais em ordem e valide equivalencia da composicao.
+9. Rebuild ao mudar base/head; limpe o batch quando exaurido.
+
 ## Batch shape
 
 Use uma branch/worktree efemera, por exemplo:
