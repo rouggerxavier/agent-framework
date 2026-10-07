@@ -33,6 +33,8 @@ User goal
 - Tester e reviewer nao expandem escopo.
 - Toda escolha nova passa pelo `decision-authority-router`.
 - Pergunte ao usuario apenas por `user_required`.
+- Ownership do objetivo nao implica manter um turno ativo enquanto workers
+  executam; quando so restarem eventos futuros, persista estado e faca yield.
 
 ## Sequencia
 
@@ -100,7 +102,11 @@ User goal
      `awaiting_decision`;
    - continue outra tarefa da fase ou outra spec/fase ja aprovada quando suas
      dependencias estiverem satisfeitas;
-   - finalize apenas quando o objetivo global estiver coberto.
+   - se nao houver operacao imediatamente acionavel e so restarem workers,
+     CI ou dependencias externas em andamento, marque `waiting_for_event`,
+     persista o proximo gate e faca yield;
+   - retome ao receber um evento relevante; finalize somente quando o objetivo
+     global estiver coberto.
 
 ## Paralelismo seguro
 
@@ -134,6 +140,33 @@ O orquestrador para o dispatch afetado quando houver:
 Nao pare todo o time se outras tarefas independentes ainda puderem avancar.
 Registre a pergunta no notebook, preserve a lane bloqueada e recalcule o
 scheduler imediatamente.
+
+## Espera orientada a eventos
+
+Quando todas as tarefas elegiveis ja foram despachadas, aguardar e uma operacao
+valida. O orquestrador continua dono do objetivo sem precisar manter o turno
+ativo.
+
+Default de espera:
+
+```text
+dispatch all actionable work
+  -> independent work exists? yes -> dispatch/process it
+  -> no
+     -> persist waiting_for_event + expected wake-up event
+     -> yield
+     -> worker/result/failure/decision/CI event arrives
+     -> resume scheduling
+```
+
+Nao transforme espera em polling. Evite ciclos como
+`sleep -> terminal check -> git diff -> repeat`. Uma consulta pontual ao
+terminal/status pode ocorrer apenas apos timeout significativo, suspeita concreta
+de travamento, ausencia inesperada de evento ou quando a consulta for necessaria
+para decidir a proxima acao. Se o worker estiver saudavel, faca yield novamente.
+
+Mensagens de progresso para o usuario podem ser emitidas a partir do estado ja
+conhecido; nao exigem nova leitura do terminal.
 
 ## Contexto e tokens
 
