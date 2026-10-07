@@ -37,10 +37,19 @@ Novos assets:
 
 - `skills/team-orchestrator`
 - `skills/decision-authority-router`
+- `skills/project-notebook`
+- `skills/worktree-lane-manager`
+- `skills/fresh-task-session`
+- `skills/integration-batch-manager`
 - `workflows/multi-agent-development.md`
+- `workflows/decision-pause-and-continue.md`
+- `workflows/integration-batch.md`
 - `kernel/orchestration-policy.md`
+- `kernel/context-budget-policy.md`
 - `templates/agent-dispatch.md`
 - `templates/orchestration-state.md`
+- `templates/project-notes/*`
+- `templates/integration-batch.md`
 
 ### Ciclo
 
@@ -53,6 +62,58 @@ Novos assets:
 7. Finding real volta ao Dev.
 8. Quando passa, o orquestrador integra e escolhe a proxima tarefa.
 9. O ciclo continua sem pedir permissao para detalhes locais.
+
+## Worktrees e paralelismo
+
+Quando duas tarefas escreviveis forem independentes, o orquestrador deve usar
+branches/worktrees separadas e manter lanes simultaneas. Dependencia, overlap de
+arquivos, migration/schema, lockfile ou contrato compartilhado podem serializar
+as lanes.
+
+Se uma lane ficar aguardando uma decisao sua, ela preserva sua worktree e o
+scheduler procura outro trabalho independente — inclusive outra spec/fase ja
+aprovada.
+
+## Notebook do projeto
+
+Projetos multiagente ganham:
+
+```text
+.agent/notes/
+  INDEX.md
+  QUESTIONS.md
+  PROGRESS.md
+  PHASES.md
+```
+
+`QUESTIONS.md` funciona como sua caixa de decisoes. Uma pergunta `Q-###`
+registra contexto, opcoes, recomendacao, o que esta bloqueado e o que pode
+continuar. Quando voce responde, ela aponta para a decisao formal em
+`DECISIONS.md` e a task volta para a fila.
+
+`PROGRESS.md` explica o que foi feito; `PHASES.md` resume cada fase/spec
+implementada; `INDEX.md` mostra lanes, perguntas, ultima entrega e proximo
+trabalho.
+
+## Sessao limpa e economia de tokens
+
+Toda task nova prefere contexto novo. Antes de reutilizar uma lane, o
+orquestrador persiste o resultado anterior, reseta a sessao do agente (ou abre
+uma nova), limpa o terminal visual e manda somente o dispatch necessario.
+
+`clear` no shell sozinho nao reduz tokens. A economia real vem de nao carregar
+conversas antigas, logs completos, skills irrelevantes ou historico de fases ja
+persistido.
+
+## Integration batch
+
+Com 2+ PRs abertos, existe um batch inventory. Heads compativeis e prontos para
+integracao sao combinados numa branch/worktree efemera e recebem CI da arvore
+combinada. Se o CI depende de evento de PR, o orquestrador pode abrir um batch PR
+efemero.
+
+O batch agiliza validacao combinada, mas nao ignora required checks ou branch
+protection dos PRs reais.
 
 ## O que vira decisao
 
