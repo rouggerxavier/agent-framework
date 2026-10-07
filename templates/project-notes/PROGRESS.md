@@ -11,6 +11,7 @@ their formal artifacts.
 - Result:
 - Validation/review:
 - Integrated branch/worktree:
+- Integration batch/PR:
 - Decisions/questions:
 - Next eligible work:
 
