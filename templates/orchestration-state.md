@@ -10,15 +10,22 @@
     "spec": null,
     "plan": null,
     "tasks": null,
-    "decisions": ".agent/DECISIONS.md"
+    "decisions": ".agent/DECISIONS.md",
+    "notes_index": ".agent/notes/INDEX.md",
+    "questions": ".agent/notes/QUESTIONS.md",
+    "progress": ".agent/notes/PROGRESS.md",
+    "phases": ".agent/notes/PHASES.md"
   },
   "agents": {
     "developer": {"agent_id": "dev-1", "status": "idle"},
     "tester": {"agent_id": "test-1", "status": "idle"},
     "reviewer": {"agent_id": "review-1", "status": "idle"}
   },
+  "lanes": [],
+  "integration_batches": [],
   "dispatches": [],
   "awaiting_user": [],
+  "eligible_work": [],
   "blockers": [],
   "next_action": null
 }
@@ -61,9 +68,66 @@ Recommended dispatch statuses:
 
 `queued -> assigned -> running -> returned -> accepted`
 
-Alternative terminal states:
+Alternative states:
 
-`changes_required | blocked | cancelled`
+`changes_required | awaiting_decision | blocked | cancelled`
+
+## Lane record shape
+
+Writable parallel work is tracked independently from the legacy kernel's single
+`current_task`:
+
+```json
+{
+  "id": "lane-dev-1",
+  "role": "developer",
+  "agent_id": "dev-1",
+  "dispatch_id": "D-001",
+  "task_id": "P1-T01",
+  "workspace": {
+    "kind": "worktree",
+    "branch": "agent/ORCH-001/P1-T01-normalize",
+    "base_commit": "<sha>"
+  },
+  "write_scope": ["app/example.py", "tests/test_example.py"],
+  "status": "running",
+  "blocked_on_question": null
+}
+```
+
+Do not persist absolute worktree paths.
+
+## Waiting-user record shape
+
+```json
+{
+  "question_id": "Q-001",
+  "phase_id": "P1",
+  "task_ids": ["P1-T02"],
+  "dispatch_ids": ["D-004"],
+  "note": ".agent/notes/QUESTIONS.md#q-001",
+  "status": "open"
+}
+```
+
+A waiting-user record is not a global stop condition. Recompute
+`eligible_work` and fill any independent lane.
+
+## Integration batch record shape
+
+```json
+{
+  "id": "IB-001",
+  "branch": "integration/ORCH-001/IB-001",
+  "base_commit": "<sha>",
+  "pull_requests": [
+    {"number": 101, "head_sha": "<sha>"},
+    {"number": 102, "head_sha": "<sha>"}
+  ],
+  "status": "running",
+  "ci_profile": "targeted"
+}
+```
 
 The orchestration state is coordination metadata. Product requirements,
 contracts, decisions and evidence remain in their existing framework artifacts.
