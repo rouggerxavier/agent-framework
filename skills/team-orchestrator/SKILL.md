@@ -52,9 +52,15 @@ Ele nao deve:
 5. Quebre o plano em trabalho delegavel e crie um dispatch por operacao.
 6. Calcule quais dispatches podem rodar em paralelo. Para writers independentes,
    use `worktree-lane-manager` e reserve branch/worktree por lane.
-7. Para cada dispatch, inclua somente as skills/workflows relevantes, contexto,
-   arquivos, aceite, testes, workspace e stop conditions.
-8. Preencha as lanes disponiveis: developer(s) recebem implementacao; tester pode
+7. Antes de entregar **qualquer nova tarefa** a uma lane, use
+   `fresh-task-session`: persista o resultado anterior, resete a sessao/contexto
+   do agente (ou abra sessao nova), limpe o terminal visual e envie somente o
+   pacote minimo necessario.
+8. Para cada dispatch, inclua somente as skills/workflows relevantes, contexto,
+   arquivos, aceite, testes, workspace e stop conditions. Economizar tokens e
+   requisito: nao reenvie conversa antiga, logs completos ou o catalogo inteiro
+   sem necessidade.
+9. Preencha as lanes disponiveis: developer(s) recebem implementacao; tester pode
    preparar estrategia/casos em paralelo; especialistas read-only podem investigar
    sem disputar write scope.
 9. Quando houver valor independente, envie planejamento/execucao de testes para
@@ -66,11 +72,16 @@ Ele nao deve:
 12. Qualquer escolha descoberta passa por `decision-authority-router`.
     `user_required` cria `Q-###` no notebook, deixa a tarefa
     `awaiting_decision` e pausa somente seus dependentes.
-13. Depois de registrar uma pergunta, reexecute o scheduler: use outra tarefa da
+14. Depois de registrar uma pergunta, reexecute o scheduler: use outra tarefa da
     fase ou outra spec/fase ja aprovada e independente, quando houver.
-14. Quando dev + testes + review atendem o aceite, use verificacao/Git/release
-    existentes para integrar respeitando dependencias entre worktrees.
-15. Atualize notebook, estado e evidencias; escolha a proxima operacao e continue
+15. Sempre que houver **2 ou mais PRs abertos**, avalie
+    `integration-batch-manager`. PRs compativeis e proximos de integrar devem
+    formar uma branch/worktree de integration batch para CI combinada; se nao
+    houver batch, registre o motivo.
+16. Quando dev + testes + review atendem o aceite, use verificacao/Git/release
+    existentes para integrar respeitando dependencias entre worktrees e o batch
+    ativo, se houver.
+17. Atualize notebook, estado e evidencias; escolha a proxima operacao e continue
     ate o objetivo global terminar ou nao existir trabalho autorizado independente.
 
 ## Bundles padrao
@@ -112,6 +123,7 @@ A cada ciclo, o orquestrador deve conseguir responder:
 - quais decisoes foram tomadas ou aguardam usuario;
 - quais perguntas `Q-###` estao abertas;
 - quais lanes/worktrees estao ocupadas, prontas ou pausadas;
+- qual integration batch esta ativo ou por que nao foi criado;
 - qual e o proximo trabalho independente autorizado.
 
 ## Arquivos de apoio
@@ -123,5 +135,8 @@ A cada ciclo, o orquestrador deve conseguir responder:
 - Decisoes: ../decision-authority-router/SKILL.md
 - Notebook: ../project-notebook/SKILL.md
 - Worktrees: ../worktree-lane-manager/SKILL.md
+- Sessao/contexto: ../fresh-task-session/SKILL.md
+- Token budget: ../../kernel/context-budget-policy.md
+- Integration batch: ../integration-batch-manager/SKILL.md
 - Pausa/continuidade: ../../workflows/decision-pause-and-continue.md
 - Delegacao: ../../kernel/delegation-policy.md
