@@ -37,7 +37,9 @@ Ele nao deve:
   explicito;
 - aprovar o proprio codigo como reviewer independente;
 - tomar decisao `user_required`;
-- permitir que workers alterem silenciosamente escopo/estado global.
+- permitir que workers alterem silenciosamente escopo/estado global;
+- manter o turno ativo apenas para observar workers que ja estao executando;
+- fazer polling continuo de terminal, Git, CI ou status sem uma razao concreta.
 
 ## Workflow
 
@@ -80,8 +82,39 @@ Ele nao deve:
 16. Quando dev + testes + review atendem o aceite, use verificacao/Git/release
     existentes para integrar respeitando dependencias entre worktrees e o batch
     ativo, se houver.
-17. Atualize notebook, estado e evidencias; escolha a proxima operacao e continue
-    ate o objetivo global terminar ou nao existir trabalho autorizado independente.
+17. Atualize notebook, estado e evidencias e escolha a proxima operacao
+    **imediatamente acionavel**.
+18. Enquanto existir trabalho autorizado que possa ser despachado ou processado
+    agora, continue coordenando. Se todo trabalho elegivel ja foi despachado e
+    restarem somente workers em execucao, CI/dependencias externas ou eventos
+    futuros, persista o estado como `waiting_for_event` e faca **yield**.
+19. Retome somente quando chegar resultado/evento de worker, finding, falha,
+    decisao do usuario, mudanca relevante de CI/Git, timeout significativo com
+    suspeita concreta de travamento ou nova entrada do usuario. Ownership do
+    objetivo continua com o orquestrador mesmo quando o turno ativo terminou.
+
+## Yield e espera orientada a eventos
+
+Responsabilidade persistente nao exige um turno continuamente ativo.
+
+Depois de despachar todas as operacoes imediatamente elegiveis:
+
+- nao use `sleep -> check -> sleep -> check` para manter a execucao viva;
+- nao consulte repetidamente terminal, `git diff`, status de worker ou CI so
+  para confirmar que "ainda esta rodando";
+- prefira o retorno por evento/mensagem do harness quando o worker ja foi
+  instruido a reportar conclusao, falha ou bloqueio;
+- uma atualizacao ao usuario nao exige uma nova consulta de terminal;
+- `maestri check` ou equivalente e diagnostico excepcional, nao heartbeat do
+  orquestrador.
+
+Uma consulta pontual de status e aceitavel quando houver timeout significativo,
+suspeita concreta de travamento, ausencia inesperada de um evento prometido ou
+quando o resultado daquela consulta mudar a proxima acao. Se a consulta mostrar
+que o worker continua saudavel, persista `waiting_for_event` e faca yield em
+vez de iniciar outro ciclo de polling.
+
+**Ownership pode durar horas; o turno ativo do modelo nao precisa durar horas.**
 
 ## Bundles padrao
 
@@ -123,7 +156,8 @@ A cada ciclo, o orquestrador deve conseguir responder:
 - quais perguntas `Q-###` estao abertas;
 - quais lanes/worktrees estao ocupadas, prontas ou pausadas;
 - qual integration batch esta ativo ou por que nao foi criado;
-- qual e o proximo trabalho independente autorizado.
+- qual e o proximo trabalho independente autorizado;
+- se esta em `waiting_for_event`, qual evento deve acordar o orquestrador.
 
 ## Criterios de aceite
 
@@ -132,6 +166,9 @@ A cada ciclo, o orquestrador deve conseguir responder:
 - Writers paralelos so rodam em worktrees/scopes independentes.
 - `user_required` bloqueia apenas dependentes e gera `Q-###`.
 - Trabalho independente continua enquanto houver lane elegivel.
+- Sem operacao imediatamente acionavel, o orquestrador faz yield em
+  `waiting_for_event` em vez de fazer polling.
+- Polling repetitivo de terminal/Git/CI nao e usado como mecanismo de espera.
 - Com 2+ PRs abertos existe integration batch inventory atualizado.
 - Developer nunca aprova o proprio trabalho como reviewer independente.
 

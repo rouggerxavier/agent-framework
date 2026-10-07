@@ -64,6 +64,30 @@ class CompatibilityTests(unittest.TestCase):
         self.assertIn("worktree-lane-manager", content)
         self.assertIn("integration-batch-manager", content)
 
+    def test_team_orchestrator_yields_instead_of_polling_workers(self) -> None:
+        orchestrator = (
+            FRAMEWORK_ROOT / "skills" / "team-orchestrator" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        workflow = (
+            FRAMEWORK_ROOT / "workflows" / "multi-agent-development.md"
+        ).read_text(encoding="utf-8")
+        policy = (
+            FRAMEWORK_ROOT / "kernel" / "orchestration-policy.md"
+        ).read_text(encoding="utf-8")
+        state = (
+            FRAMEWORK_ROOT / "templates" / "orchestration-state.md"
+        ).read_text(encoding="utf-8")
+
+        for content in (orchestrator, workflow, policy):
+            self.assertIn("waiting_for_event", content)
+            self.assertIn("yield", content.lower())
+
+        self.assertIn("sleep -> check", orchestrator)
+        self.assertIn("sleep -> terminal check", workflow)
+        self.assertIn("sleep -> check", policy)
+        self.assertIn('"waiting_for_events": []', state)
+        self.assertIn("`waiting_for_event`", state)
+
     def test_multi_agent_templates_persist_lanes_questions_and_fresh_context(self) -> None:
         state = (FRAMEWORK_ROOT / "templates" / "orchestration-state.md").read_text(
             encoding="utf-8"

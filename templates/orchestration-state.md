@@ -27,6 +27,7 @@
   "awaiting_user": [],
   "eligible_work": [],
   "blockers": [],
+  "waiting_for_events": [],
   "next_action": null
 }
 ---
@@ -43,6 +44,7 @@ This file is owned by the orchestrator. Workers may read it but must not edit it
 - `reviewing`
 - `verifying`
 - `awaiting_user`
+- `waiting_for_event`
 - `ready_to_integrate`
 - `completed`
 - `blocked`
@@ -112,6 +114,26 @@ Do not persist absolute worktree paths.
 
 A waiting-user record is not a global stop condition. Recompute
 `eligible_work` and fill any independent lane.
+
+## Waiting-event record shape
+
+Use this when there is no immediately actionable orchestration work but the run
+still owns unfinished work:
+
+```json
+{
+  "kind": "worker_result",
+  "dispatch_id": "D-001",
+  "agent_id": "dev-1",
+  "expected_event": "result | failure | blocker",
+  "since": "<timestamp>",
+  "diagnostic_check_after": null
+}
+```
+
+`waiting_for_event` means **yield**, not periodic polling. A diagnostic check
+is exceptional and should only be scheduled for a meaningful timeout or concrete
+stall suspicion.
 
 ## Integration batch record shape
 
