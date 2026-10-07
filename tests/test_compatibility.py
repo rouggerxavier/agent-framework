@@ -83,7 +83,7 @@ class CompatibilityTests(unittest.TestCase):
             self.assertIn("yield", content.lower())
 
         self.assertIn("sleep -> check", orchestrator)
-        self.assertIn("sleep -> check", workflow)
+        self.assertIn("sleep -> terminal check", workflow)
         self.assertIn("sleep -> check", policy)
         self.assertIn('"waiting_for_events": []', state)
         self.assertIn("`waiting_for_event`", state)
