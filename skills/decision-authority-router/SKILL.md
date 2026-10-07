@@ -1,6 +1,6 @@
 ---
 name: decision-authority-router
-description: Classifica escolhas descobertas durante execucao como locais, registraveis pelo orquestrador ou obrigatorias para o usuario antes de continuar.
+description: Use para classificar escolhas descobertas na execucao como locais, registraveis pelo orquestrador ou obrigatorias para o usuario antes de continuar.
 ---
 
 # Decision Authority Router
