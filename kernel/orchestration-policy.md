@@ -79,6 +79,34 @@ A shell `clear` is not a model-context reset. Apply
 The orchestrator should minimize repeated context, full logs, irrelevant skills
 and completed-phase prose. Durable artifacts carry continuity.
 
+## Ownership, turn lifetime and event-driven waiting
+
+Owning the global objective is a durable responsibility; it does not require the
+orchestrator model to keep an active turn open while workers execute.
+
+After all immediately actionable dispatches are assigned or processed:
+
+1. persist orchestration state, the next gate and expected wake-up events;
+2. set orchestration status to `waiting_for_event`;
+3. yield instead of polling;
+4. resume when a worker result, failure, finding, user decision, relevant
+   CI/Git change, meaningful timeout anomaly or new user input arrives.
+
+Do not use repeated `sleep -> check -> sleep -> check` loops to supervise
+healthy workers. Do not repeatedly inspect terminals, `git diff`, worker
+status or CI merely to learn that work is still running.
+
+A single diagnostic status check is allowed after a meaningful timeout, concrete
+stall suspicion, an unexpectedly missing promised event, or when the check can
+change the next orchestration decision. If the worker is healthy, return to
+`waiting_for_event` and yield.
+
+Harness instructions such as "check after timeout" are diagnostic fallbacks, not
+authorization for periodic polling. User progress updates also do not require a
+fresh terminal/status read when no relevant state has changed.
+
+**Ownership may outlive a model turn. Waiting is not abandonment.**
+
 ## Decision authority
 
 Not every implementation choice is a project decision.
@@ -182,6 +210,10 @@ dispatch/task.
 
 If a lane becomes `awaiting_decision`, preserve its branch/worktree and schedule
 another eligible lane. A blocked task does not freeze the project.
+
+If no independent lane remains immediately actionable, persist
+`waiting_for_event` and yield. Do not keep the control plane busy solely to
+watch an occupied lane.
 
 Serialize work when scopes overlap, dependencies are not landed, or central
 resources such as schema/migrations/lockfiles make concurrent writes unsafe.
