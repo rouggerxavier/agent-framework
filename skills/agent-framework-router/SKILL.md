@@ -76,6 +76,11 @@ grave; reducao exige apenas `--reason`.
 - Se o pedido mencionar prompts por etapa, prompt para proximo agente, pacote de prompts ou delegar execucao, priorize `execution-prompt-builder`.
 - Para esse fluxo, referencie `workflows/execution-brief` e mantenha o router como dispatcher.
 
+## Obrigatorio em frontend
+- Qualquer tarefa que toque frontend (componente, pagina, layout, estilo, animacao, gesto, UI web ou mobile) inclui **sempre** `apple-design` e `impeccable:impeccable`, em qualquer modo (`fast`, `standard`, `critical`) e sem contar no limite de 4 assets.
+- Esses dois sao piso, nao sugestao: entram em `assets_selected` mesmo que o pedido nao cite UI explicitamente.
+- Os demais assets de frontend (tabela abaixo) continuam proporcionais ao pedido.
+
 ## Tabela de roteamento
 | Intencao | Skill | Apoio |
 |---|---|---|
@@ -122,6 +127,21 @@ grave; reducao exige apenas `--reason`.
 | Segredo hardcoded, chave, hash fraco, TLS sem verificacao | crypto-secrets-auditor | rubrics/crypto-secrets, env-gitignore-auditor |
 | Debug em producao, CORS, portas, Docker root, IaC, pipeline | infra-security-auditor | rubrics/infra-security, dependency-risk-auditor |
 | UI/UX | ui-ux-pro-max-audit | rubrics/ui-ux, workflows/frontend-refactor |
+| Frontend obrigatorio (qualquer tarefa de UI) | apple-design, impeccable:impeccable | — |
+| Polimento de UI, decisoes de componente e animacao | emil-design-eng | apple-design, ui-ux-pro-max-audit |
+| Criar animacao do zero na web | animate | animation-performance, emil-design-eng |
+| Animacao em React Native / Expo | animate-expo | animation-performance |
+| Animacao web fora do frame budget (jank, will-change) | animation-performance | animate |
+| Revisar codigo de animacao | review-animations | animation-performance, emil-design-eng |
+| Auditar motion de codebase e gerar plano | improve-animations | review-animations, find-animation-opportunities |
+| Achar onde animar (somente leitura) | find-animation-opportunities | animate |
+| Nomear um efeito de motion (glossario) | animation-vocabulary | — |
+| Toasts com Sonner | ask-sonner | — |
+| Testar UI com dados extremos | break-ui | ui-ux-pro-max-audit |
+| Comparar versoes de componente visualmente | prototype | emil-design-eng |
+| Escolher biblioteca de frontend | pick-ui-library | — |
+| Web app com cara de nativo no celular | mobile-native | apple-design |
+| Swift moderno, concorrencia, testes | write-swift | — |
 | Refatorar frontend preservando contratos e rotas | frontend-refactor-contract-guardian | rubrics/ui-ux, workflows/frontend-refactor, ui-ux-pro-max-audit |
 | Video em motion e pipeline HyperFrames | motion-video-director, hyperframes | rubrics/motion-video, hyperframes-core, hyperframes-studio, hyperframes-creative, hyperframes-animation, hyperframes-audio, hyperframes-cli, hyperframes-keyframes, hyperframes-registry |
 | Diagnosticar campanhas e trafego pago (Google Ads) | ads-performance-auditor | rubrics/ads-performance, templates/ads-performance-audit-report |
@@ -216,7 +236,8 @@ saida pode ainda indicar intencao e primeiro asset.
   grave detectado vira recomendacao, com o dano nomeado.
 - Area sensivel (auth, migration, financeiro, tenant) impede `fast` (piso
   `standard`) mas nunca escala sozinha para `critical`.
-- No maximo 4 assets; sem listar tudo.
+- No maximo 4 assets, sem contar `apple-design` e `impeccable:impeccable` em frontend; sem listar tudo.
+- Qualquer tarefa de frontend retorna `apple-design` e `impeccable:impeccable` em `assets_selected`.
 - Nao duplicar checklist de rubric/workflow aqui; so referenciar.
 - Backend simples nao e automaticamente `critical`.
 - Roteamento nao cria `.agent/` nem instancia templates.
