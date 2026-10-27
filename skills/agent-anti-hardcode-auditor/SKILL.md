@@ -33,8 +33,13 @@ Encontrar acoplamentos rigidos que deixam agentes dificeis de evoluir, testar, p
    - `extract config`: precisa virar config, env, policy, registry ou parametro;
    - `wrap adapter`: precisa de interface para provider/tool/runtime;
    - `remove`: duplicado, morto ou trava comportamento sem motivo.
-4. Priorize por impacto: troca de modelo/provider, seguranca, teste, portabilidade, custo e manutencao.
-5. Recomende patch minimo e verificacao para evitar regressao.
+4. O hardcode mais grave em agente e o de comportamento: frase de resposta,
+   tabela `intencao -> frase`, fluxo fixo de perguntas, lista de termos sobre a fala.
+   Um prompt unico como constante versionada nao e problema.
+5. Priorize por impacto: comportamento engessado, troca de modelo/provider,
+   seguranca, teste, portabilidade.
+6. Nao recomende config, registry ou adapter para valor que ninguem troca.
+7. Recomende patch minimo e verificacao para evitar regressao.
 
 ## Saida obrigatoria
 Preencha `../../templates/agent-hardcode-report.md` com achados, evidencia, decisao e correcao recomendada.

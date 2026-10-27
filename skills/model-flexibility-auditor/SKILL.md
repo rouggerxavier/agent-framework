@@ -36,6 +36,10 @@ Verificar se um agente pode trocar modelo, provider ou tier de forma controlada,
    - `routable`: possui policy por capacidade e fallback verificavel;
    - `portable`: troca segura comprovada por evals/runtime QA.
 6. Recomende mudanca minima, evals e criterio de rollout.
+7. `configurable` (modelo e provider por config, um adapter) basta para a maioria.
+   `routable`/`portable` so quando o produto exigir; fallback silencioso pode
+   mascarar falha. Na troca, ajuste ao tier do modelo novo
+   (`../../rubrics/agent-design.md`).
 
 ## Saida obrigatoria
 Preencha `../../templates/model-flexibility-report.md` com maturidade, riscos, gaps, policy sugerida e verificacao.

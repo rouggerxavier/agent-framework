@@ -50,8 +50,10 @@ Fechar o ciclo de qualidade contínua de agentes de IA através da metodologia *
    - Registrar taxa de aprovação (*pass rate*) da linha de base.
 
 5. **Iteração, mitigação e validação de regressão:**
-   - Ajustar o prompt do agente, guardrails ou Next Action Policy para mitigar a falha identificada.
-   - Reexecutar o benchmark completo:
+   - Mitigar pela escada de correcao de `rubrics/agent-design.md` (descricao de tool,
+     prompt, dado pronto, contrato tipado, verificacao estreita, codigo), uma mudanca
+     por candidata.
+   - Reexecutar o benchmark pareado contra a referencia:
      - Confirmar que a falha foi resolvida.
      - Garantir que nenhum caso de teste anterior quebrou (taxa de regressão zero).
    - Preencher `templates/agent-eval-flywheel-report.md`.

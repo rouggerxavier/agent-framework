@@ -28,9 +28,12 @@ Validar comportamento real de um agente rodando, cobrindo fluxos felizes, falhas
 ## Workflow
 1. Confirme ambiente, versao, config, modelo/provider e dados de teste.
 2. Execute happy path com input minimo e caso representativo.
-3. Execute bad input, prompt ambiguo, falta de contexto e pedido fora de escopo.
-4. Execute falhas: missing env, tool failure, timeout, retry, provider failure e fallback model.
-5. Verifique guardrails: permissao de tool, redacao segura, stop condition, escalacao e logs sem secrets.
+3. Execute conversas de varios turnos: memoria, referencia a item antigo, mudanca de
+   criterio, pedido fora de escopo, pedido de humano, risco (crise, pagamento).
+4. Execute falhas que existem no design: tool com erro, provider fora, timeout. Fallback
+   de modelo so se o design tiver um.
+5. Verifique efeitos e protecoes do design: efeito so no commit, barreira humana,
+   logs sem secrets.
 6. Registre evidencias, bugs, custo/latencia quando observavel e riscos residuais.
 
 ## Saida obrigatoria
@@ -40,7 +43,8 @@ Preencha `../../templates/agent-runtime-qa-report.md` com ambiente, cenarios, pa
 - Nao declarar aprovado sem listar cenarios executados e ambiente.
 - Falhas devem produzir erro util, pergunta, fallback, escalacao ou stop condition.
 - Logs/evidencias nao devem expor secrets, tokens ou dados sensiveis.
-- Se fallback/model routing nao foi testado, marcar explicitamente.
+- Nao exigir fallback, retry ou escalacao que o design nao tem
+  (`../../rubrics/agent-design.md`).
 
 ## Arquivos de apoio
 - Template: ../../templates/agent-runtime-qa-report.md

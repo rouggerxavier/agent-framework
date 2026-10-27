@@ -1,35 +1,34 @@
 # Agent Guardrails Plan
 
+Siga `rubrics/agent-design.md`. Nenhuma linha sem risco nomeado ou falha medida.
+
 ## Verdict
 - Status: ready | changes required | blocked
 - Summary:
 
 ## Scope
 - Agent:
-- Users:
-- Data:
-- Tools:
+- Model:
+- Tools de efeito:
 
-## Guardrails
-| Surface | Guardrail | Implementation | Verification |
-| --- | --- | --- | --- |
-| Input |  |  |  |
-| Tool use |  |  |  |
-| Output |  |  |  |
-| Memory/state |  |  |  |
-| Logs/audit |  |  |  |
-| Escalation/stop |  |  |  |
+## Protections
+| Risco ou falha medida | Lugar (efeito ausente / servidor / entrada / permissao / verificacao estreita) | Implementacao | Caso de teste | Por que nao um degrau mais leve |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
 
 ## Permissions
-| Tool/Action | Allowed? | Conditions | Human Confirmation? |
+| Tool/Action | Allowed? | Server validation | Human Confirmation? |
 | --- | --- | --- | --- |
 |  |  |  |  |
 
-## Stop Conditions
--
+## Rejected Protections
+| Proposta | Motivo |
+| --- | --- |
+|  |  |
 
-## Tests / Runtime QA
--
+## Measurement
+- Referencia:
+- Resultado:
 
 ## Residual Risk
 -

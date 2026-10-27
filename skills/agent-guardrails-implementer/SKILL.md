@@ -1,53 +1,62 @@
 ---
 name: agent-guardrails-implementer
-description: "Use para especificar ou implementar guardrails de agentes: input validation, output constraints, permissions, escalation, stop conditions e audit logs."
+description: Use para colocar protecoes em agentes na entrada, nos efeitos e nas permissoes de tool, sem vetar ou reescrever a fala, cada uma ligada a risco nomeado ou falha medida.
 ---
 
 # Agent Guardrails Implementer
 
 ## Objetivo
-Definir guardrails praticos para agentes, reduzindo uso inseguro de tools, vazamento de dados, saida fora de contrato e falhas sem escalacao.
+Proteger o que nao pode depender do modelo (crise, pagamento, privacidade, efeitos
+irreversiveis) no lugar certo: entrada, efeitos e permissoes. Nunca controlar a
+linguagem. Regra completa em `../../rubrics/agent-design.md`.
 
 ## Quando usar
-- Ao criar ou refatorar agente com tools, memoria, dados sensiveis, usuarios externos ou side effects.
-- Antes de liberar agente recorrente para outras pessoas.
-- Quando prompt, runtime ou tool permission precisam de limites claros.
-- Depois de auditoria que encontrou risco de prompt injection, permissao ampla, logs ruins ou falta de stop condition.
+- Agente com tools de efeito, usuarios externos ou dados sensiveis.
+- Risco nomeado que o prompt sozinho nao cobre (crise, opt-out, pagamento).
+- Falha medida em conversa que a escada de correcao levou ate o degrau 4 ou 5.
 
 ## Quando nao usar
-- Para auditoria sem proposta de guardrail; use `agent-security-auditor`.
-- Para seguranca ampla de app sem agente; use `security-privacy-audit`.
-- Para tool isolada sem agente; use `agent-tool-designer` ou `tool-contract-auditor`.
+- Para "deixar o agente mais seguro" sem risco nomeado nem falha medida.
+- Para corrigir tom, estilo ou frase: use `agent-prompt-refiner`.
+- Para auditoria de ataque: use `agent-security-auditor`.
+- Para tool isolada: use `agent-tool-designer` ou `tool-contract-auditor`.
 
 ## Entradas esperadas
-- Objetivo do agente, usuarios, dados processados e outputs esperados.
-- Tools, permissoes, side effects, memoria/state e runtime.
-- Riscos conhecidos, limites de negocio e requisitos de escalacao.
-- Prompt ou design atual, se existir.
+- Risco nomeado ou falha medida (conversa, caso, frequencia).
+- Tools e efeitos atuais, infra existente do canal.
+- Correcoes ja tentadas nos degraus anteriores da escada.
 
 ## Workflow
-1. Mapeie superficies: input, prompt, tools, memoria, output, logs, configs e integracoes.
-2. Defina guardrails de entrada: schema, tamanho, tipos, origem, conteudo proibido e ambiguidade.
-3. Defina guardrails de tools: allowlist, permissao minima, confirmacao humana, idempotencia, timeout e unsafe requests.
-4. Defina guardrails de saida: schema, redacao segura, dados proibidos, citacao de incerteza e output constraints.
-5. Defina stop conditions e escalacao: quando perguntar, recusar, parar, pedir humano ou abrir handoff.
-6. Defina audit logs seguros: evento, tool, decisao, erro, custo e correlation id sem secrets.
+1. Nomeie o risco ou a falha. Sem isso, pare e nao crie protecao.
+2. Escolha o lugar, nesta ordem:
+   - **efeito ausente**: remova ou nao crie a tool que faria o dano;
+   - **servidor no efeito**: valide argumento, enum fechado, idempotencia, commit
+     unico, so codigos publicaveis;
+   - **entrada**: sinal de alto risco que aciona a equipe ou resposta segura;
+   - **permissao**: menor privilegio, confirmacao humana para efeito irreversivel;
+   - **verificacao estreita pos-fala**: so detecta um caso e da nova tentativa ao
+     modelo com nota interna; nunca troca o texto.
+3. Reuse a infra do canal (barreira humana, outbox, retry) antes de criar outra.
+4. Escreva o caso que falhava antes e passa depois.
+5. Meca contra a referencia (`agent-eval-planner`). Sem ganho, remova.
 
 ## Saida obrigatoria
-Preencha `../../templates/agent-guardrails-plan.md` com guardrails, implementacao, verificacao e riscos residuais.
+Preencha `../../templates/agent-guardrails-plan.md`: risco, lugar, implementacao,
+teste e motivo de nao usar degrau mais leve.
 
 ## Criterios de aceite
-- Guardrails cobrem input, tool, output, memoria, logs e escalacao quando aplicavel.
-- Permissoes de tool seguem menor privilegio e side effects explicitos.
-- Stop conditions sao verificaveis, nao apenas texto generico.
-- Logs ajudam debug sem expor secrets, tokens ou dados sensiveis.
+- Toda protecao aponta um risco nomeado ou uma falha medida.
+- Nenhuma protecao veta, reescreve ou substitui a fala do modelo.
+- Nenhuma regex ou lista de termos sobre a saida sem caso de teste real que a exija.
+- Efeitos irreversiveis exigem tool explicita, validacao no servidor ou humano.
+- Logs sem secrets nem dados pessoais desnecessarios.
 
 ## Arquivos de apoio
+- Rubric: ../../rubrics/agent-design.md
 - Template: ../../templates/agent-guardrails-plan.md
-- Agente: ../../skills/agent-builder/SKILL.md
-- Tools: ../../skills/tool-contract-auditor/SKILL.md
+- Tools: ../../skills/agent-tool-designer/SKILL.md
 - Seguranca: ../../skills/agent-security-auditor/SKILL.md
 
 ## Exemplos de uso
-- Codex: `$agent-guardrails-implementer Especifique guardrails para este agente com tools externas.`
-- Claude Code: `/agent-guardrails-implementer Implemente stop conditions e permissoes de tool.`
+- Codex: `$agent-guardrails-implementer O agente aceita pedido de reserva; impeca isso.`
+- Claude Code: `/agent-guardrails-implementer Crise apos takeover fica sem resposta; proteja.`

@@ -27,11 +27,16 @@ Revisar mudancas em agentes com foco em bugs reais, regressao de comportamento, 
 
 ## Workflow
 1. Entenda objetivo e comportamento prometido do agente.
-2. Revise prompt: escopo, stop conditions, ambiguidades, conflitos, tool instructions e exemplos negativos.
-3. Revise tools: schema, permissao, side effects, erro, retry, idempotencia e unsafe requests.
-4. Revise config/model: hardcode, provider lock, fallback, env vars, defaults e secrets.
-5. Revise guardrails e seguranca: prompt injection, data exfiltration, memoria/state, logs e redaction.
-6. Revise observabilidade e QA: evals, runtime QA, logs, correlation id, custo, regressao e cobertura do objetivo.
+2. Revise excesso de infra contra `../../rubrics/agent-design.md`: chamada de modelo
+   obrigatoria a mais, regex ou veto sobre a fala, resposta pronta, fluxo fixo,
+   camada sem falha medida. Isso e achado, nao estilo.
+3. Revise prompt: curto, sem regra de forma, sem conflito com KB ou tools.
+4. Revise tools: leitura vs efeito, enum fechado, efeito so no commit, erro volta ao
+   modelo.
+5. Revise seguranca: injection via tool/imagem, efeitos indevidos, memoria entre
+   conversas, logs com dados pessoais.
+6. Revise medicao: a mudanca tem caso que falhava antes e regressao contra a
+   referencia? Se nao, marque lacuna.
 7. Reporte achados por severidade antes do resumo, com evidencia e correcao minima.
 
 ## Saida obrigatoria

@@ -37,8 +37,8 @@
 
 ## 4. Mudanças Implementadas
 - **Alterações em Prompts:**
-- **Novos Guardrails / Validadores de Código:**
-- **Ajustes de Next Action Policy:**
+- **Degrau da escada de correção usado (rubrics/agent-design.md):**
+- **Por que não um degrau mais leve:**
 
 ---
 

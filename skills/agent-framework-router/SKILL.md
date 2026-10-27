@@ -1,6 +1,6 @@
 ---
 name: agent-framework-router
-description: Use primeiro para selecionar fast, standard ou critical e escolher poucos assets proporcionais, com standard como padrão e critical apenas por escolha explícita.
+description: Use primeiro em tarefa nova - escolhe fast, standard ou critical e a categoria (agentes de IA, software, testes, revisao, design, seguranca, infra, orquestracao) com poucos assets.
 ---
 
 # Agent Framework Router
@@ -44,7 +44,8 @@ apontar rapidamente os assets certos. Dispatcher leve, nao executor.
 7. Se for retomada ou `critical`, e `.agent/STATE.md` existir, encaminhe para
    `framework-next`. A mera existencia de `.agent/` nao obriga uma nova tarefa a
    usar o kernel.
-8. Classifique a intencao, liste 1-4 assets relevantes e corte o resto.
+8. Identifique a categoria (secao "Roteamento por categoria"), siga a instrucao
+   do bloco, liste 1-4 assets relevantes e corte o resto.
 9. Indique o primeiro asset a invocar.
 10. Se CI, PR, merge ou integracao fizer parte do fluxo, acrescente o perfil de
     CI e as politicas de espera/proxima unidade, e selecione
@@ -71,63 +72,120 @@ classificacao ja registrada, use
 `framework-next set-execution-mode` — escalada exige `--risk` nomeando o dano
 grave; reducao exige apenas `--reason`.
 
-## Prioridade alta
-- Se o pedido mencionar brief, documentacao de feature/refatoracao, plano de execucao, organizar tarefa, quebrar em etapas ou preparar trabalho para outro agente, priorize `execution-plan-builder`.
-- Se o pedido mencionar prompts por etapa, prompt para proximo agente, pacote de prompts ou delegar execucao, priorize `execution-prompt-builder`.
-- Para esse fluxo, referencie `workflows/execution-brief` e mantenha o router como dispatcher.
+## Roteamento por categoria
 
-## Obrigatorio em frontend
-- Qualquer tarefa que toque frontend (componente, pagina, layout, estilo, animacao, gesto, UI web ou mobile) inclui **sempre** `apple-design` e `impeccable:impeccable`, em qualquer modo (`fast`, `standard`, `critical`) e sem contar no limite de 4 assets.
-- Esses dois sao piso, nao sugestao: entram em `assets_selected` mesmo que o pedido nao cite UI explicitamente.
-- Os demais assets de frontend (tabela abaixo) continuam proporcionais ao pedido.
+Como usar:
+1. Identifique a categoria principal do pedido pelos gatilhos de cada bloco.
+2. Siga a instrucao do bloco antes de escolher assets.
+3. Escolha 1-4 assets dentro do bloco. Pisos obrigatorios (agentes e frontend) nao
+   contam no limite.
+4. Pedido que cruza categorias: assets da categoria principal + no maximo 1 de outra.
+5. O modo (`fast`/`standard`/`critical`) vale para todos os blocos; o bloco nao muda
+   o modo.
 
-## Tabela de roteamento
-| Intencao | Skill | Apoio |
+### 1. Agentes de IA
+
+Gatilhos: codigo que chama LLM, system prompt, tools de agente, chatbot/WhatsApp/
+assistente, comportamento de conversa, eval de conversa, troca de modelo.
+
+Instrucao obrigatoria, em qualquer modo e fora do limite de 4: aplique
+`rubrics/agent-design.md`. Comece minimo (um agente, prompt curto, tools); camada
+nova so por falha medida; protecao na entrada e nos efeitos, nunca na fala; corrija
+pela escada (descricao de tool, prompt, dado pronto, contrato tipado, verificacao
+estreita, codigo). Sequencia em `workflows/agent-workflow.md`. Infra de canal
+(fila, outbox, webhook, persistencia) e desenvolvimento de software comum: reuse,
+nao duplique.
+
+| Situacao | Skill | Apoio |
 |---|---|---|
-| Inicializar ou retomar estado persistente | framework-next | kernel/protocol, templates/project-state |
-| Especificar e planejar fase persistente | workflow-planner | execution-plan-builder, plan-quality-checker |
-| Executar plano persistente | workflow-runner | task-runner, kernel/state-machine |
-| Executar contrato de tarefa | task-runner | kernel/test-policy, templates/task-result |
-| Revisar conformidade com spec | spec-compliance-reviewer | templates/spec-compliance-review, workflows/review-application |
-| Revisar qualidade depois da spec | code-quality-reviewer | diff-reviewer, workflows/review-application |
+| Criar ou refatorar agente | agent-builder | templates/agent-design, agent-tool-designer, agent-eval-planner |
+| Corrigir comportamento (encaminha demais, inventa, nao chama tool) | agent-prompt-refiner | agent-eval-planner, agent-builder |
+| Desenhar tool de agente | agent-tool-designer | templates/agent-tool-design, tool-contract-auditor |
+| Auditar contrato de tool | tool-contract-auditor | templates/tool-contract-report, api-contract-auditor |
+| Validar tool em runtime | tool-runtime-validator | templates/tool-runtime-validation, runtime-qa-audit |
+| Protecao para risco nomeado (crise, pagamento, efeito irreversivel) | agent-guardrails-implementer | templates/agent-guardrails-plan, agent-security-auditor |
+| Medir mudanca / regressao pareada | agent-eval-planner | templates/agent-eval-plan, test-confidence-mapper |
+| Ciclo com conversas de producao (Eval Flywheel) | agent-eval-flywheel | templates/agent-eval-flywheel-report, agent-eval-planner, skill-evolution-loop |
+| Trocar modelo/provider | model-flexibility-auditor | templates/model-flexibility-report, agent-eval-planner |
+| Custo, latencia, tokens | agent-optimization-auditor | templates/agent-optimization-report, model-routing |
+| Logs/traces/custo por turno | agent-observability-auditor | templates/agent-observability-report, persistent-debug-session |
+| Seguranca de agente (injection, exfiltracao, tool insegura) | agent-security-auditor | templates/agent-security-report, templates/prompt-injection-eval |
+| Hardcode de comportamento, modelo, provider | agent-anti-hardcode-auditor | templates/agent-hardcode-report, config-surface-auditor |
+| QA do agente rodando | agent-runtime-qa | templates/agent-runtime-qa-report, tool-runtime-validator |
+| Revisar diff de agente | agent-code-reviewer | templates/agent-code-review-report, diff-reviewer |
+| Documentar agente | agent-doc-writer | templates/agent-doc, docs-sync-auditor |
+| Voz/visao em tempo real | agent-realtime-multimodal | templates/multimodal-streaming-design, architecture-decision |
+| Deploy de agente em nuvem (Cloud Run/GCP) | agent-cloud-deployer | templates/agent-cloud-deploy-spec, infra-security-auditor |
+
+### 2. Desenvolvimento de software
+
+Gatilhos: feature, endpoint, bug, refatoracao, backend, plano de implementacao,
+repo novo, ideia aberta.
+
+Instrucao: menor mudanca completa; reuse helpers e padroes do repo antes de criar
+abstracao. Planejamento so na medida do modo. Se o pedido mencionar brief, plano de
+execucao, quebrar em etapas ou preparar trabalho para outro agente, priorize
+`execution-plan-builder` (`workflows/execution-brief`); prompts por etapa ou
+delegacao, `execution-prompt-builder`.
+
+| Situacao | Skill | Apoio |
+|---|---|---|
 | Entrar em repo novo | project-context-loader, repo-map-builder | — |
 | Ideias / objetivo aberto | brainstorm-lab | — |
-| Brief/documentacao/plano de execucao | execution-plan-builder | workflows/execution-brief, brainstorm-lab, plan-quality-checker |
+| Brief/documentacao/plano de execucao | execution-plan-builder | workflows/execution-brief, plan-quality-checker |
 | Prompts por etapa para execucao | execution-prompt-builder | templates/execution-prompt-package, handoff-builder, code-review-gate |
-| Criar/refatorar agente | agent-builder | workflows/agent-workflow, templates/agent-design |
-| Auditar hardcode em agente | agent-anti-hardcode-auditor | templates/agent-hardcode-report, model-flexibility-auditor, config-surface-auditor |
-| Auditar flexibilidade de modelo | model-flexibility-auditor | templates/model-flexibility-report, model-routing, runtime-qa-audit |
-| Auditar configs/env/gitignore | config-surface-auditor | templates/config-surface-report, security-privacy-audit, docs-sync-auditor |
-| Orquestrar equipe multiagente/Maestri | team-orchestrator | workflows/multi-agent-development.md, decision-authority-router, templates/agent-dispatch |
-| Preparar sessao limpa para nova task | fresh-task-session | kernel/context-budget-policy, templates/agent-dispatch |
-| Gerir writers paralelos em worktrees | worktree-lane-manager | kernel/orchestration-policy, templates/orchestration-state |
-| Manter notas/perguntas/progresso do projeto | project-notebook | templates/project-notes, workflows/decision-pause-and-continue |
-| Agrupar PRs para CI de integracao | integration-batch-manager | workflows/integration-batch, kernel/ci-throughput-policy |
-| Escolher peso da tarefa | task-mode-router | workflow-orchestrator, diff-reviewer, test-strategy-builder |
+| Refinar pedido cru ou prompt por acao | prompt-refiner | templates/prompt-package, templates/action-prompt-package |
+| Plano de implementacao | implementation-planner | templates/implementation-plan |
 | Planejar backend em fatias | backend-slice-planner | templates/backend-slice-plan, api-contract-auditor, test-strategy-builder |
 | Auditar plano antes de executar | plan-quality-checker | templates/plan-quality-report, rubrics/testing, rubrics/api-contract |
-| Verificar cobertura do objetivo | goal-coverage-verifier | templates/goal-coverage-report, diff-reviewer, release-verifier |
-| Empacotar release backend | backend-release-packager | templates/backend-release-package, release-verifier, goal-coverage-verifier |
 | Decisao de arquitetura | architecture-decision | rubrics/architecture, templates/adr |
-| Plano de implementacao | implementation-planner | templates/implementation-plan |
+| Aplicar padroes locais antes de codar | coding-standards-enforcer | rubrics/coding-standards, repo-map-builder |
+| Contrato de API | api-contract-auditor | rubrics/api-contract, workflows/api-refactor |
 | Bug | bug-repro-lab | workflows/bugfix, rubrics/testing |
 | Debug persistente | persistent-debug-session | templates/debug-session, bug-repro-lab, handoff-builder |
+| Mapear deadcode/orfaos | deadcode-orphan-mapper | templates/deadcode-orphan-map, repo-map-builder |
+
+### 3. Testes e verificacao
+
+Gatilhos: estrategia de testes, cobertura, "esta pronto?", QA do app rodando.
+
+Instrucao: verificacao proporcional ao modo; teste novo para logica nao trivial.
+Agente: use o bloco 1 (`agent-eval-planner`, `agent-runtime-qa`).
+
+| Situacao | Skill | Apoio |
+|---|---|---|
 | Estrategia de testes | test-strategy-builder | rubrics/testing, templates/test-plan |
-| Mapa de confianca de testes | test-confidence-mapper | templates/test-confidence-map, test-strategy-builder, release-verifier |
+| Mapa de confianca de testes | test-confidence-mapper | templates/test-confidence-map, test-strategy-builder |
+| Verificar cobertura do objetivo | goal-coverage-verifier | templates/goal-coverage-report, diff-reviewer |
+| QA app rodando | runtime-qa-audit | — |
+
+### 4. Revisao
+
+Gatilhos: revisar diff/PR, decidir profundidade de review.
+
+Instrucao: `fast`/`standard` usam uma review integrada; `critical` usa duas
+independentes (spec antes de qualidade). Diff de agente inclui `agent-code-reviewer`.
+
+| Situacao | Skill | Apoio |
+|---|---|---|
 | Revisar diff/PR | diff-reviewer | rubrics/diff-review, templates/audit-report |
-| Aplicar padroes locais antes de codar | coding-standards-enforcer | rubrics/coding-standards, repo-map-builder, diff-reviewer |
-| Contrato de API | api-contract-auditor | rubrics/api-contract, workflows/api-refactor |
-| Auditar dependencia | dependency-risk-auditor | templates/dependency-risk-report, security-privacy-audit, architecture-decision |
-| Auditar migration/dados | data-migration-auditor | templates/data-migration-report, rubrics/data-migration, release-verifier |
-| Sincronizar docs | docs-sync-auditor | templates/docs-sync-report, rubrics/docs-sync, release-verifier |
-| Seguranca/privacidade e dados pessoais | security-privacy-audit | rubrics/security-privacy, workflows/security-review, docs/security-coverage |
-| Auditoria de seguranca completa / pen test do codigo | security-audit | security-privacy-audit, workflows/security-review |
-| SQLi, XSS, RCE, XXE, SSRF, deserializacao, redirect, mass assignment | injection-vulnerability-auditor | rubrics/injection-vulnerabilities, templates/security-audit-report |
-| Auth, JWT, sessao, CSRF, IDOR, papel admin, bypass de fluxo | authn-authz-auditor | rubrics/access-control, templates/security-audit-report |
-| Segredo hardcoded, chave, hash fraco, TLS sem verificacao | crypto-secrets-auditor | rubrics/crypto-secrets, env-gitignore-auditor |
-| Debug em producao, CORS, portas, Docker root, IaC, pipeline | infra-security-auditor | rubrics/infra-security, dependency-risk-auditor |
-| UI/UX | ui-ux-pro-max-audit | rubrics/ui-ux, workflows/frontend-refactor |
+| Decidir gate de code review | code-review-gate | templates/code-review-gate-report, agent-code-reviewer |
+| Revisar conformidade com spec | spec-compliance-reviewer | templates/spec-compliance-review, workflows/review-application |
+| Revisar qualidade depois da spec | code-quality-reviewer | diff-reviewer, workflows/review-application |
+
+### 5. Design e frontend
+
+Gatilhos: componente, pagina, layout, estilo, animacao, gesto, UI web ou mobile.
+
+Instrucao obrigatoria: qualquer tarefa que toque frontend inclui **sempre**
+`apple-design` e `impeccable:impeccable`, em qualquer modo e fora do limite de 4,
+mesmo que o pedido nao cite UI. Os demais assets sao proporcionais.
+
+| Situacao | Skill | Apoio |
+|---|---|---|
 | Frontend obrigatorio (qualquer tarefa de UI) | apple-design, impeccable:impeccable | — |
+| UI/UX | ui-ux-pro-max-audit | rubrics/ui-ux, workflows/frontend-refactor |
+| Refatorar frontend preservando contratos e rotas | frontend-refactor-contract-guardian | rubrics/ui-ux, workflows/frontend-refactor |
 | Polimento de UI, decisoes de componente e animacao | emil-design-eng | apple-design, ui-ux-pro-max-audit |
 | Criar animacao do zero na web | animate | animation-performance, emil-design-eng |
 | Animacao em React Native / Expo | animate-expo | animation-performance |
@@ -142,41 +200,98 @@ grave; reducao exige apenas `--reason`.
 | Escolher biblioteca de frontend | pick-ui-library | — |
 | Web app com cara de nativo no celular | mobile-native | apple-design |
 | Swift moderno, concorrencia, testes | write-swift | — |
-| Refatorar frontend preservando contratos e rotas | frontend-refactor-contract-guardian | rubrics/ui-ux, workflows/frontend-refactor, ui-ux-pro-max-audit |
+
+### 6. Motion e video
+
+Gatilhos: video, MP4, HyperFrames, Remotion, animacao renderizada.
+
+| Situacao | Skill | Apoio |
+|---|---|---|
 | Video em motion e pipeline HyperFrames | motion-video-director, hyperframes | rubrics/motion-video, hyperframes-core, hyperframes-studio, hyperframes-creative, hyperframes-animation, hyperframes-audio, hyperframes-cli, hyperframes-keyframes, hyperframes-registry |
-| Diagnosticar campanhas e trafego pago (Google Ads) | ads-performance-auditor | rubrics/ads-performance, templates/ads-performance-audit-report |
-| Sincronizar CRM e audiencias com Ads (Customer Match) | crm-ad-sync-planner | templates/crm-ad-sync-plan, authn-authz-auditor, security-privacy-audit |
-| QA app rodando | runtime-qa-audit | — |
-| Release | release-verifier | workflows/release, templates/release-checklist |
-| Implantar e operar agente em nuvem (Cloud Run/GCP) | agent-cloud-deployer | templates/agent-cloud-deploy-spec, backend-release-packager, infra-security-auditor |
+
+### 7. Seguranca
+
+Gatilhos: vulnerabilidade, auth, segredo, dados pessoais, pen test.
+
+Instrucao: tocar area sensivel impede `fast`, mas nao escala para `critical`
+sozinho. Escolha o auditor especifico; `security-audit` so para varredura completa.
+Agente: `agent-security-auditor` (bloco 1).
+
+| Situacao | Skill | Apoio |
+|---|---|---|
+| Seguranca/privacidade e dados pessoais | security-privacy-audit | rubrics/security-privacy, workflows/security-review, docs/security-coverage |
+| Auditoria de seguranca completa / pen test do codigo | security-audit | security-privacy-audit, workflows/security-review |
+| SQLi, XSS, RCE, XXE, SSRF, deserializacao, redirect, mass assignment | injection-vulnerability-auditor | rubrics/injection-vulnerabilities, templates/security-audit-report |
+| Auth, JWT, sessao, CSRF, IDOR, papel admin, bypass de fluxo | authn-authz-auditor | rubrics/access-control, templates/security-audit-report |
+| Segredo hardcoded, chave, hash fraco, TLS sem verificacao | crypto-secrets-auditor | rubrics/crypto-secrets, env-gitignore-auditor |
+| Debug em producao, CORS, portas, Docker root, IaC, pipeline | infra-security-auditor | rubrics/infra-security, dependency-risk-auditor |
+
+### 8. Infraestrutura e operacao
+
+Gatilhos: deploy, release, CI, migration, env/config, dependencia, logs, performance.
+
+Instrucao: escolha pela parte da infra tocada. Perfil de CI e eixo separado do
+modo (ver "Saida obrigatoria"). Nao crie infra nova para necessidade futura.
+
+| Parte | Situacao | Skill | Apoio |
+|---|---|---|---|
+| Dados | Auditar migration/dados | data-migration-auditor | templates/data-migration-report, rubrics/data-migration |
+| Config | Auditar configs/env | config-surface-auditor | templates/config-surface-report, docs-sync-auditor |
+| Config | Auditar env/gitignore/secrets | env-gitignore-auditor | templates/env-gitignore-report, config-surface-auditor |
+| Dependencias | Auditar dependencia | dependency-risk-auditor | templates/dependency-risk-report, architecture-decision |
+| CI | Escolher perfil de CI e politica de espera | ci-throughput-controller | kernel/ci-throughput-policy, templates/ci-throughput-decision |
+| CI | Agrupar PRs para CI de integracao | integration-batch-manager | workflows/integration-batch, kernel/ci-throughput-policy |
+| Release | Release | release-verifier | workflows/release, templates/release-checklist |
+| Release | Empacotar release backend | backend-release-packager | templates/backend-release-package, goal-coverage-verifier |
+| Deploy de agente | Implantar e operar agente em nuvem | agent-cloud-deployer | templates/agent-cloud-deploy-spec, infra-security-auditor |
+| Logs | Planejar logs de feature | feature-logging-planner | templates/feature-logging-plan, security-privacy-audit |
+| Performance | Auditar performance budget | performance-budget-auditor | templates/performance-budget-report, rubrics/performance-budget |
+
+### 9. Orquestracao, estado e contexto
+
+Gatilhos: varios agentes, Maestri, worktrees, retomar trabalho, estado persistente,
+contexto cheio, handoff, escolher modelo para a tarefa.
+
+Instrucao: estado persistente so em retomada ou `critical`; a existencia de `.agent/`
+nao obriga o kernel.
+
+| Situacao | Skill | Apoio |
+|---|---|---|
+| Inicializar ou retomar estado persistente | framework-next | kernel/protocol, templates/project-state |
+| Especificar e planejar fase persistente | workflow-planner | execution-plan-builder, plan-quality-checker |
+| Executar plano persistente | workflow-runner | task-runner, kernel/state-machine |
+| Executar contrato de tarefa | task-runner | kernel/test-policy, templates/task-result |
+| Escolher peso da tarefa | task-mode-router | workflow-orchestrator, test-strategy-builder |
+| Orquestrar equipe multiagente/Maestri | team-orchestrator | workflows/multi-agent-development.md, decision-authority-router, templates/agent-dispatch |
+| Preparar sessao limpa para nova task | fresh-task-session | kernel/context-budget-policy, templates/agent-dispatch |
+| Gerir writers paralelos em worktrees | worktree-lane-manager | kernel/orchestration-policy, templates/orchestration-state |
+| Manter notas/perguntas/progresso do projeto | project-notebook | templates/project-notes, workflows/decision-pause-and-continue |
+| Classificar decisao descoberta na execucao | decision-authority-router | workflows/decision-pause-and-continue |
 | Handoff entre agentes | handoff-builder | workflows/agent-handoff, templates/handoff-summary |
 | Conversa longa / contexto cheio | context-compressor | workflows/long-conversation-handoff |
-| Refinar pedido cru | prompt-refiner | templates/prompt-package |
-| Refinar prompt por acao | prompt-refiner | templates/action-prompt-package |
-| Refinar prompt de agente | agent-prompt-refiner | templates/action-prompt-package, agent-builder, agent-anti-hardcode-auditor |
-| Desenhar tool de agente | agent-tool-designer | templates/agent-tool-design, agent-builder, security-privacy-audit |
-| Streaming bidirecional realtime (audio/visao) | agent-realtime-multimodal | templates/multimodal-streaming-design, architecture-decision, agent-builder |
-| Auditar contrato de tool | tool-contract-auditor | templates/tool-contract-report, api-contract-auditor, security-privacy-audit |
-| Validar tool em runtime | tool-runtime-validator | templates/tool-runtime-validation, runtime-qa-audit, test-confidence-mapper |
-| Implementar guardrails de agente | agent-guardrails-implementer | templates/agent-guardrails-plan, agent-security-auditor, tool-contract-auditor |
-| Auditar seguranca de agente | agent-security-auditor | templates/agent-security-report, security-privacy-audit, env-gitignore-auditor |
-| Auditar env/gitignore/secrets | env-gitignore-auditor | templates/env-gitignore-report, config-surface-auditor, docs-sync-auditor |
-| QA runtime de agente | agent-runtime-qa | templates/agent-runtime-qa-report, runtime-qa-audit, tool-runtime-validator |
-| Planejar evals de agente | agent-eval-planner | templates/agent-eval-plan, test-strategy-builder, test-confidence-mapper |
-| Ciclo fechado de avaliacao (Eval Flywheel) | agent-eval-flywheel | templates/agent-eval-flywheel-report, agent-eval-planner, skill-evolution-loop |
-| Auditar observabilidade de agente | agent-observability-auditor | templates/agent-observability-report, persistent-debug-session, agent-security-auditor |
-| Planejar logs de feature | feature-logging-planner | templates/feature-logging-plan, runtime-qa-audit, security-privacy-audit |
-| Decidir gate de code review | code-review-gate | templates/code-review-gate-report, diff-reviewer, agent-code-reviewer |
-| Revisar codigo de agente | agent-code-reviewer | templates/agent-code-review-report, tool-contract-auditor, agent-security-auditor |
+| Escolher Codex/Claude/ChatGPT/modelo para a tarefa | model-routing | — |
+
+### 10. Git, PR e documentacao
+
+| Situacao | Skill | Apoio |
+|---|---|---|
 | Decidir git/commit/PR | git-decision-router | templates/git-decision-report, commit-readiness-checker, pr-description-builder |
-| Escolher perfil de CI e politica de espera | ci-throughput-controller | kernel/ci-throughput-policy, templates/ci-throughput-decision, test-confidence-mapper |
-| Checar commit readiness | commit-readiness-checker | templates/commit-readiness-report, docs-sync-auditor, env-gitignore-auditor |
-| Montar descricao de PR | pr-description-builder | templates/pr-description, backend-release-packager, goal-coverage-verifier |
-| Decidir documentacao | documentation-decision-router | templates/documentation-decision, architecture-decision, docs-sync-auditor |
-| Documentar agente | agent-doc-writer | templates/agent-doc, templates/agent-design, docs-sync-auditor |
-| Mapear deadcode/orfaos | deadcode-orphan-mapper | templates/deadcode-orphan-map, repo-map-builder, test-confidence-mapper |
-| Otimizar agente | agent-optimization-auditor | templates/agent-optimization-report, model-routing, agent-runtime-qa |
-| Auditar performance budget | performance-budget-auditor | templates/performance-budget-report, rubrics/performance-budget, runtime-qa-audit |
+| Checar commit readiness | commit-readiness-checker | templates/commit-readiness-report, env-gitignore-auditor |
+| Montar descricao de PR | pr-description-builder | templates/pr-description, goal-coverage-verifier |
+| Decidir documentacao | documentation-decision-router | templates/documentation-decision, architecture-decision |
+| Sincronizar docs | docs-sync-auditor | templates/docs-sync-report, rubrics/docs-sync |
+
+### 11. Marketing e anuncios
+
+| Situacao | Skill | Apoio |
+|---|---|---|
+| Diagnosticar campanhas e trafego pago (Google Ads) | ads-performance-auditor | rubrics/ads-performance, templates/ads-performance-audit-report |
+| Sincronizar CRM e audiencias com Ads (Customer Match) | crm-ad-sync-planner | templates/crm-ad-sync-plan, authn-authz-auditor, security-privacy-audit |
+
+### 12. Manutencao do framework
+
+| Situacao | Skill | Apoio |
+|---|---|---|
 | Instalar/atualizar framework | agent-framework-installer | docs/portability, docs/maintenance |
 | Evoluir framework por recorrencia | skill-evolution-loop | docs/task-memory, docs/skill-standards |
 | Auditar qualidade de skill | skill-quality-auditor | docs/skill-standards, installers/verify-framework |
@@ -236,7 +351,9 @@ saida pode ainda indicar intencao e primeiro asset.
   grave detectado vira recomendacao, com o dano nomeado.
 - Area sensivel (auth, migration, financeiro, tenant) impede `fast` (piso
   `standard`) mas nunca escala sozinha para `critical`.
-- No maximo 4 assets, sem contar `apple-design` e `impeccable:impeccable` em frontend; sem listar tudo.
+- No maximo 4 assets, sem contar os pisos: `rubrics/agent-design.md` em agentes e
+  `apple-design` + `impeccable:impeccable` em frontend; sem listar tudo.
+- Qualquer tarefa de agente retorna `rubrics/agent-design.md` em `assets_selected`.
 - Qualquer tarefa de frontend retorna `apple-design` e `impeccable:impeccable` em `assets_selected`.
 - Nao duplicar checklist de rubric/workflow aqui; so referenciar.
 - Backend simples nao e automaticamente `critical`.

@@ -32,7 +32,10 @@ Criar ou atualizar documentacao operacional de agente para que outra pessoa cons
 4. Documente config/env, model/provider policy, fallback, memoria/state e dados que nao devem ser armazenados.
 5. Documente guardrails, evals, runtime QA, logs, correlation id, custos e troubleshooting.
 6. Inclua runbook minimo: setup, executar, validar, falhas comuns, rollback/desativacao e quando escalar.
-7. Evite secrets, prompts sensiveis ou exemplos que exponham dados privados.
+7. Inclua "o que nao existe de proposito" e os resultados medidos que sustentam o
+   design, para ninguem reintroduzir camadas removidas
+   (`../../rubrics/agent-design.md`).
+8. Evite secrets, prompts sensiveis ou exemplos que exponham dados privados.
 
 ## Saida obrigatoria
 Preencha `../../templates/agent-doc.md` ou atualize doc existente com as secoes minimas aplicaveis.

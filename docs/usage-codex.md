@@ -20,7 +20,7 @@ $agent-framework-installer Verifique e instale o framework neste computador.
 ```
 
 ```text
-$agent-builder Planeje ou refatore um agente com tools, memoria, guardrails e validacao.
+$agent-builder Crie ou refatore um agente pela versao minima: um agente, prompt curto e tools.
 ```
 
 ```text
