@@ -31,7 +31,10 @@ Verificar se um agente deixa evidencias suficientes para operar, debugar, medir 
 3. Verifique traces/audit: prompt/tool boundary, tool args seguros, output resumido, decisao e usuario/tenant quando aplicavel.
 4. Verifique metricas: latencia, erro, timeout, retry, fallback, custo/tokens e uso de tool.
 5. Verifique debug readiness: reproduzir caso, localizar execucao, comparar versao/config e abrir sessao persistente se necessario.
-6. Classifique gaps e recomende instrumentacao minima.
+6. Classifique gaps e recomende instrumentacao minima. Para agente com tools, o
+   essencial e um registro por turno: chamadas de modelo, tools chamadas com
+   argumentos seguros, efeitos, tokens, custo e latencia. Isso e o que a
+   regressao e o debug usam.
 
 ## Saida obrigatoria
 Preencha `../../templates/agent-observability-report.md` com eventos, gaps, riscos, instrumentacao e verificacao.

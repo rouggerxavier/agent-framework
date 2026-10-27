@@ -42,6 +42,9 @@ Preencha `../../templates/agent-security-report.md` com threat model, achados, e
 - Separar risco exploravel de hardening opcional.
 - Achado precisa de evidencia tecnica ou caminho de ataque plausivel.
 - Mitigacao deve incluir teste, guardrail ou mudanca concreta.
+- Prefira mitigar no efeito (tool ausente, validacao no servidor, texto do cliente e
+  resultado de tool so como dado) a vetar ou reescrever a fala
+  (`../../rubrics/agent-design.md`).
 - Casos PI-03, PI-04 e PI-05 do eval de prompt injection precisam passar antes do release; eval nao executado e lacuna declarada, nao aprovacao.
 
 ## Arquivos de apoio

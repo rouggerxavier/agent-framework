@@ -1,75 +1,61 @@
 # Agent Design
 
+Siga `rubrics/agent-design.md`. Campo sem risco concreto: escreva "nao se aplica".
+
 ## Objective
 
-## Users / Tasks
+## Users / Channel
 -
 
-## Inputs
--
+## Model
+- Modelo e tier (forte / medio / pequeno):
+- Ajustes pelo tier:
+- Config (env/adapter):
+- Fallback: nenhum | decidido pelo produto porque...
 
-## Outputs
--
+## Turn Loop
+- Chamadas obrigatorias por turno: 1
+- Teto de rodadas de tool:
+- Ultima chamada sem tools: sim
 
-## Prompt Contract
-- System/developer instructions:
-- User prompt handling:
-- Output format:
-- Stop conditions:
+## Prompt
+- Identidade e objetivo:
+- Origem dos fatos:
+- Limites comerciais/de dominio:
+- Quando encaminhar:
+- Emergencia:
+- Tamanho (palavras):
 
 ## Tools
-| Tool | Purpose | Inputs | Outputs | Side Effects | Errors / Timeout | Permission | Idempotent? |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-|  |  |  |  |  |  |  |  |
+| Tool | Tipo (leitura/efeito) | Entrada | Saida | Garantia do servidor |
+| --- | --- | --- | --- | --- |
+|  |  |  |  |  |
 
-## State / Memory
-- Session state:
-- Persistent memory:
-- What must not be stored:
+Efeitos que NAO tem tool, de proposito:
+-
 
-## Model / Provider Policy
-- Required capability:
-- Configurable model/provider:
-- Fallback:
-- Cost/latency constraints:
+## Memory
+- Historico (quantas mensagens, filtro):
+- Estado guardado:
+- O que volta pela tool em vez da memoria:
 
-## Guardrails
-- Input validation:
-- Tool permission boundaries:
-- Secret/data handling:
-- Escalation:
-- Refusal/stop conditions:
-- Audit logs:
-- Prompt injection handling:
-
-## Runtime Validation
-- Happy path:
-- Bad input:
-- Tool failure:
-- Missing env/config:
-- Timeout/retry:
-- Fallback model/provider:
-- Escalation/stop:
-- Cost/latency:
-
-## Tests / Evals
-- Eval cases:
-- Blocking level:
-- Regression cases:
-- Allowed variance:
-
-## Observability
-- Logs:
-- Metrics/cost:
-- Trace/audit:
-- Correlation id:
-- Redaction:
-- Debug readiness:
-
-## Failure Modes
-| Failure | Impact | Mitigation | Test |
+## Protections
+| Risco nomeado | Onde (entrada / efeito / infra) | Como | Teste |
 | --- | --- | --- | --- |
 |  |  |  |  |
 
-## Implementation Notes
+## What Does Not Exist On Purpose
+- classificador, extrator, redator, regex sobre a fala, regeneracao por veto:
+
+## Reused Infra
+-
+
+## Measurement
+- Testes offline (contrato):
+- Cenarios de conversa (selados?):
+- Referencia comparada:
+- Eixos e criterio de decisao:
+- Teto de custo:
+
+## Known Risks
 -

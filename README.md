@@ -918,7 +918,7 @@ Use `docs/agent-workflow-roadmap.md` para evoluir skills e workflows de criacao,
 Nucleo inicial para agentes:
 
 ```text
-$agent-builder Planeje ou refatore um agente com tools, memoria, guardrails e validacao.
+$agent-builder Crie ou refatore um agente pela versao minima: um agente, prompt curto e tools.
 ```
 
 Etapa anti-hardcode para agentes:

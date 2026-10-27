@@ -2,33 +2,38 @@
 
 ## Scope
 - Agent:
-- Change/risk:
-- Blocking level: inner loop | PR ready | release
+- Candidata (commit):
+- Referencia (commit):
+- Mudanca e falha que a motivou:
+- Modelo / harness:
 
-## Eval Cases
-| ID | Type | Input | Expected Behavior | Allowed Variance | Forbidden Behavior | Blocking? |
-| --- | --- | --- | --- | --- | --- | --- |
-|  | happy path |  |  |  |  |  |
-|  | bad input |  |  |  |  |  |
-|  | unsafe request |  |  |  |  |  |
-|  | tool failure |  |  |  |  |  |
-|  | fallback |  |  |  |  |  |
-|  | regression |  |  |  |  |  |
+## Scenarios
+| ID | Origem (afetado / controle / novo) | O que mede | Comportamento esperado | Proibido | Repeticoes |
+| --- | --- | --- | --- | --- | --- |
+|  |  |  |  |  |  |
 
-## Evaluation Method
-- Exact/schema:
-- Rubric:
-- Human review:
-- Runtime assertion:
+- Selo (hash dos cenarios):
+- Escritos por quem nao leu o codigo? sim | nao
 
-## Execution
-- Command/harness:
-- Data fixtures:
-- Owner:
+## Judging
+- Juiz (cego a versao):
+- Rubrica por eixo: conversa / fatos / seguranca / confiabilidade / custo
+- Checagens deterministicas:
 
-## Maintenance
-- Update when:
-- Remove when:
+## Decision Rule (declarada antes de rodar)
+- Rejeita se:
+- Promove se:
+- Teto de custo:
+
+## Result
+| Eixo | Referencia | Candidata | Leitura |
+| --- | --- | --- | --- |
+|  |  |  |  |
+
+- Falhas graves lidas na transcricao:
+- Falsos positivos descartados:
+- Custo real:
+- Veredito: BETTER | WORSE | INCONCLUSIVE
 
 ## Residual Risk
 -

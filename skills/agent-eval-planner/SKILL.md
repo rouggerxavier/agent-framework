@@ -1,53 +1,61 @@
 ---
 name: agent-eval-planner
-description: Use para planejar evals simples de agentes com casos, expected behavior, allowed variance, failure modes, regressao e criterios de aceite.
+description: Use para planejar e decidir evals de agentes - cenarios de conversa selados, regressao pareada com a referencia, juiz cego, teto de custo e decisao por eixo.
 ---
 
 # Agent Eval Planner
 
 ## Objetivo
-Criar um conjunto pequeno e verificavel de evals para agentes, cobrindo comportamento esperado, variancia permitida, falhas e regressao.
+Medir se uma mudanca de agente melhora a conversa sem piorar fatos, seguranca,
+confiabilidade ou custo, com comparacao justa contra a referencia. Metodo em
+`../../rubrics/agent-design.md` (secao Medicao).
 
 ## Quando usar
-- Antes de mudar prompt, modelo, provider, tools, guardrails ou memoria de agente.
-- Quando runtime QA mostrou cenarios que devem virar regressao.
-- Para agentes recorrentes que precisam manter padrao sem suite pesada.
-- Ao preparar release ou migracao de modelo/provider.
+- Antes de promover qualquer mudanca de prompt, tool, modelo ou protecao.
+- Ao criar agente: para comparar com o agente antigo ou com o baseline.
+- Quando uma conversa real mostrou falha que deve virar caso.
 
 ## Quando nao usar
-- Para testar tool isolada; use `tool-runtime-validator`.
-- Para QA manual rodando; use `agent-runtime-qa`.
-- Para inventar metricas abstratas sem casos representativos.
+- Teste unitario de tool: use `tool-runtime-validator`.
+- Ciclo continuo com dados de producao: use `agent-eval-flywheel`.
+- Contrato offline (laco, erro, commit): teste comum, sem juiz.
 
 ## Entradas esperadas
-- Objetivo do agente, contrato de saida e tasks principais.
-- Exemplos reais ou sinteticos permitidos.
-- Falhas conhecidas, riscos, guardrails e variancia aceitavel.
-- Como executar evals ou validar outputs, se ja existir.
+- Candidata e referencia (commits), modelo e harness.
+- Falha que motivou a mudanca e cenarios afetados.
+- Orcamento maximo.
 
 ## Workflow
-1. Escolha 5-12 casos proporcionais ao risco: happy path, edge, bad input, unsafe request, tool failure e fallback.
-2. Para cada caso, defina input, contexto minimo, expected behavior, allowed variance e forbidden behavior.
-3. Defina avaliacao: exata, schema, rubric curta, humano, snapshot ou runtime assertion.
-4. Marque casos que bloqueiam release e casos apenas informativos.
-5. Inclua regressao para bugs ja corrigidos e guardrails criticos.
-6. Recomende comando/harness minimo e quando atualizar os evals.
+1. Defina cenarios: os afetados pela mudanca mais uma amostra de controle. Para
+   agente novo, cenarios escritos por quem nao leu o codigo.
+2. Sele os cenarios (hash) antes da primeira execucao.
+3. Rode candidata e referencia na mesma rodada, mesmo modelo, dados e harness;
+   repeticoes suficientes para variancia (>= 3 por cenario).
+4. Juiz cego a versao, com rubrica por eixo: conversa, fatos, seguranca,
+   confiabilidade, custo/latencia. Checagem deterministica onde der.
+5. Declare antes: teto de custo e regra de decisao por eixo (ex.: qualquer falha
+   grave de seguranca rejeita).
+6. Leia as transcricoes das falhas graves; descarte falsos positivos com motivo.
+7. Decida: `BETTER`, `WORSE` ou `INCONCLUSIVE`. So `BETTER` sem piora em eixo
+   critico vai para o dono promover.
 
 ## Saida obrigatoria
-Preencha `../../templates/agent-eval-plan.md` com casos, criterio, execucao, bloqueadores e manutencao.
+Preencha `../../templates/agent-eval-plan.md` com cenarios, selo, referencia,
+regra de decisao, custo e resultado por eixo.
 
 ## Criterios de aceite
-- Cada eval tem comportamento esperado e variancia permitida.
-- Casos unsafe ou fora de escopo incluem o que o agente deve recusar, perguntar ou parar.
-- Nao depender de julgamento subjetivo quando schema/assertion simples resolve.
-- Incluir regressao para bug ou risco critico conhecido.
+- Comparacao na mesma rodada; numero de outra data so como contexto.
+- Decisao por eixo, nunca por media.
+- Custo real registrado contra o teto.
+- Variacao do simulador de cliente ou do juiz apontada quando existir.
+- Nada de afirmar comportamento do modelo antes da regressao.
 
 ## Arquivos de apoio
+- Rubric: ../../rubrics/agent-design.md
 - Template: ../../templates/agent-eval-plan.md
-- Testes: ../../skills/test-strategy-builder/SKILL.md
-- Confianca: ../../skills/test-confidence-mapper/SKILL.md
-- Runtime QA: ../../skills/agent-runtime-qa/SKILL.md
+- Producao: ../../skills/agent-eval-flywheel/SKILL.md
+- Runtime: ../../skills/agent-runtime-qa/SKILL.md
 
 ## Exemplos de uso
-- Codex: `$agent-eval-planner Monte evals simples para migrar este agente de modelo.`
-- Claude Code: `/agent-eval-planner Crie casos de regressao para prompt, tools e guardrails.`
+- Codex: `$agent-eval-planner Monte a regressao pareada da candidata contra a referencia.`
+- Claude Code: `/agent-eval-planner Planeje os cenarios para medir o novo encaminhamento.`

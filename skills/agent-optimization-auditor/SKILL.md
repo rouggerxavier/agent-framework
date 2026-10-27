@@ -27,7 +27,10 @@ Reduzir custo, latencia e complexidade de agentes sem degradar qualidade, segura
 
 ## Workflow
 1. Estabeleca baseline: latencia, custo/tokens, tool calls, retries, contexto e qualidade observada.
-2. Procure desperdicio: prompt longo, contexto irrelevante, tool call redundante, retry ruidoso, modelo caro demais, cache ausente ou fallback mal usado.
+2. Procure desperdicio, comecando pelo maior: chamadas de modelo obrigatorias a mais
+   por turno (classificador, extrator, redator), regeneracao por veto, prompts por
+   etapa. Depois: prompt longo, contexto irrelevante, tool call redundante, retry
+   ruidoso, modelo caro demais.
 3. Classifique otimizacoes:
    - `safe`: remove ruido sem mudar comportamento;
    - `needs eval`: pode mudar qualidade;
@@ -39,8 +42,10 @@ Reduzir custo, latencia e complexidade de agentes sem degradar qualidade, segura
 Preencha `../../templates/agent-optimization-report.md` com baseline, achados, recomendacoes, risco e verificacao.
 
 ## Criterios de aceite
-- Nao otimizar removendo guardrail, validacao ou logs essenciais.
-- Toda troca de modelo/tier precisa criterio de qualidade e fallback.
+- Remover camada (guardrail de fala, etapa de modelo) e otimizacao valida quando a
+  regressao pareada mostra que nao piora (`../../rubrics/agent-design.md`).
+- Nunca remover protecao de entrada ou de efeito ligada a risco nomeado.
+- Toda troca de modelo/tier precisa regressao pareada.
 - Diferenciar economia real de micro-otimizacao.
 - Recomendacao de alto risco precisa eval/runtime QA antes de aceitar.
 

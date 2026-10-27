@@ -1,59 +1,69 @@
 ---
 name: agent-builder
-description: Use para criar ou refatorar agentes com objetivo, prompt, tools, memoria, modelo configuravel, runtime, guardrails, testes e validacao.
+description: Use para criar ou refatorar agentes (chat, WhatsApp, tools, assistente) comecando pela versao minima - um agente, prompt curto, tools - e so adicionando camadas por falha medida.
 ---
 
 # Agent Builder
 
 ## Objetivo
-Planejar e orientar criacao ou refatoracao de agentes modulares, configuraveis e verificaveis, evitando hardcode, prompt fragil e ausencia de guardrails.
+Construir ou refatorar agentes pela menor arquitetura que faz o trabalho: um agente,
+prompt curto, tools de leitura e efeitos executados pelo servidor. Camadas extras so
+entram quando uma falha medida as justifica. Regra completa em
+`../../rubrics/agent-design.md`.
 
 ## Quando usar
-- Ao criar agente novo, subagente, assistente, workflow agentico ou skill com comportamento operacional.
-- Ao refatorar agente existente com prompt, tools, memoria, runtime ou modelo acoplado.
-- Quando a tarefa envolve model routing, tool use, guardrails, env vars, runtime validation ou evals.
-- Antes de implementar agente que sera usado por outras pessoas ou em fluxo recorrente.
+- Ao criar agente novo, subagente, assistente conversacional ou workflow agentico.
+- Ao refatorar agente com pipeline de varias chamadas, vetos sobre a fala ou fluxo
+  rigido.
+- Ao decidir onde colocar uma protecao nova num agente existente.
 
 ## Quando nao usar
-- Para prompt simples sem tools, estado ou runtime.
-- Para auditoria sem criacao/refatoracao; use `agent-anti-hardcode-auditor` ou `diff-reviewer`.
-- Para agente ja implementado que so precisa QA runtime; use `runtime-qa-audit`.
+- Prompt simples sem tools, estado ou runtime.
+- Ajuste pontual de comportamento ja medido: use `agent-prompt-refiner` ou a escada
+  de correcao da rubric.
+- Auditoria sem mudanca: use `agent-code-reviewer`.
 
 ## Entradas esperadas
-- Objetivo do agente e tarefas que ele deve realizar.
-- Usuario-alvo, ambiente e restricoes.
-- Tools disponiveis ou desejadas, com permissoes e efeitos colaterais.
-- Requisitos de modelo/provider, memoria, configs, guardrails e validacao.
+- Objetivo do agente e quem conversa com ele.
+- Fontes de fatos (catalogo, KB, API) e efeitos permitidos (handoff, envio, registro).
+- Riscos que nao podem depender do modelo (crise, pagamento, privacidade).
+- Modelo previsto, custo e latencia aceitaveis.
 
 ## Workflow
-Siga `../../workflows/agent-workflow.md`. Especifico desta skill:
-1. Refinar o pedido com foco em objetivo, limites, inputs, outputs e falhas esperadas.
-2. Preencher `../../templates/agent-design.md`.
-3. Definir fronteiras: prompt, tools, memoria/state, configs, runtime e observabilidade.
-4. Evitar hardcode de modelo, provider, paths, env vars, tool names e prompt snippets.
-5. Definir guardrails: validacao de entrada, permissao de tools, stop conditions, escalacao e logs.
-6. Definir validacao: testes, evals simples, runtime QA, code review e criterios de release.
+1. Leia `../../rubrics/agent-design.md` e reuse a infra existente do projeto (canal,
+   persistencia, fila, auth). Nao reescreva infra operacional.
+2. Preencha `../../templates/agent-design.md`. Secoes sem risco concreto ficam
+   "nao se aplica"; nao invente protecao para preencher campo.
+3. Liste as tools: leitura devolve fatos; efeito so prepara, o servidor valida e
+   executa no commit. O que nao pode acontecer nao vira tool.
+4. Escreva o prompt curto (identidade, objetivo, tom, origem dos fatos, limites,
+   quando encaminhar, emergencia). Sem frases obrigatorias.
+5. Ajuste pelo modelo (tabela "Adaptacao por modelo" da rubric).
+6. Coloque protecoes so na entrada e nos efeitos. Nada le ou reescreve a fala.
+7. Teste offline o contrato (laco limitado, tool com erro, isolamento, efeitos no
+   commit). Depois rode conversas reais com `agent-eval-planner`.
+8. Cada falha vira caso de teste e recebe o menor degrau da escada de correcao.
 
 ## Saida obrigatoria
-- Agent design preenchido ou resumo equivalente.
-- Lista de arquivos/modulos provaveis.
-- Guardrails e configuracoes obrigatorias.
-- Plano de implementacao e validacao.
-- Riscos, tradeoffs e perguntas bloqueantes.
+- Design minimo preenchido, com a lista do que nao existe de proposito.
+- Tools com tipo (leitura/efeito) e contrato.
+- Protecoes de entrada e de efeito, cada uma ligada a um risco nomeado.
+- Plano de medicao e criterio de decisao por eixo.
 
 ## Criterios de aceite
-- O agente tem contrato claro de entrada, saida e stop conditions.
-- Modelo/provider sao configuraveis ou a decisao de fixar esta justificada.
-- Tools tem permissao, erro, timeout, idempotencia e side effects definidos.
-- Ha validacao runtime e code review antes de declarar pronto.
+- Uma chamada obrigatoria de modelo por turno (+1 por rodada de tool).
+- Nenhuma frase de resposta previsivel lendo o codigo.
+- Nenhuma camada sem falha observada que a justifique.
+- Infra operacional reaproveitada, nao duplicada.
+- Modelo/provider por config; fallback so com decisao do produto.
 
 ## Arquivos de apoio
-- Workflow: ../../workflows/agent-workflow.md
+- Rubric: ../../rubrics/agent-design.md
 - Template: ../../templates/agent-design.md
-- Prompt: ../../skills/prompt-refiner/SKILL.md
-- Plano backend: ../../skills/backend-slice-planner/SKILL.md
-- Testes: ../../skills/test-strategy-builder/SKILL.md
+- Workflow: ../../workflows/agent-workflow.md
+- Tools: ../../skills/agent-tool-designer/SKILL.md
+- Medicao: ../../skills/agent-eval-planner/SKILL.md
 
 ## Exemplos de uso
-- Codex: `$agent-builder Planeje um agente para triagem de issues com tools e guardrails.`
-- Claude Code: `/agent-builder Refatore este agente para remover hardcode de modelo e validar runtime.`
+- Codex: `$agent-builder Crie um agente de atendimento com busca no catalogo e handoff.`
+- Claude Code: `/agent-builder Este agente tem classificador, extrator e redator; reduza ao minimo.`

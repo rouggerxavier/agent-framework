@@ -26,12 +26,18 @@ Projetar tools de agente antes da implementacao, com contrato claro, permissao m
 - Ambiente de runtime, timeout, retry e observabilidade desejada.
 
 ## Workflow
-1. Defina nome com verbo claro, escopo estreito e sem provider hardcoded se houver alternativa.
-2. Especifique schema: campos obrigatorios, tipos, enums, limites, defaults e exemplos.
-3. Defina permissao e side effects: leitura/escrita, rede, arquivos, dados, rate limit e confirmacao humana.
-4. Modele erros: validacao, auth, not found, timeout, provider failure, partial success e unsafe request.
-5. Decida idempotencia, retry, timeout, cache e rollback quando houver escrita.
-6. Defina observabilidade minima: logs seguros, correlation id, custo, latencia e auditoria.
+1. Classifique: **leitura** (devolve fatos) ou **efeito** (o modelo pede, o servidor
+   valida e executa no commit da fala). O que nao deve acontecer nao vira tool
+   (`../../rubrics/agent-design.md`).
+2. Defina nome com verbo claro e escopo estreito.
+3. Especifique schema: tipos, enums fechados para motivos de efeito, limites e
+   defaults. Argumento invalido volta ao modelo como `{"erro": ...}`.
+4. Escreva a descricao como alavanca de comportamento: quando chamar, quando nao
+   chamar e o que cada opcao do enum cobre.
+5. Saida: fatos compactos, campo ausente fica ausente. Calcule no servidor contas e
+   comparacoes que o modelo erraria.
+6. Para efeito: idempotencia no turno, validacao no servidor, confirmacao humana se
+   irreversivel. Timeout, retry e cache so quando houver rede ou custo medido.
 
 ## Saida obrigatoria
 Preencha `../../templates/agent-tool-design.md` com contrato, permissoes, erros, exemplos e validacao.
@@ -42,6 +48,7 @@ Preencha `../../templates/agent-tool-design.md` com contrato, permissoes, erros,
 - Side effects e permissoes estao explicitos antes da implementacao.
 - Erros e timeout tem contrato previsivel para o agente.
 - Ha pelo menos um exemplo feliz, um invalido e um de falha externa.
+- Tool de efeito nao executa nada fora do commit do turno.
 
 ## Arquivos de apoio
 - Template: ../../templates/agent-tool-design.md
