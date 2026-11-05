@@ -52,6 +52,13 @@ O resto                      → standard
 | `standard` | focused grounding → short plan → implement → tests → integrated review | estado opcional, uma review integrada, sem seal nem reviews separadas |
 | `critical` | lifecycle persistente completo | P0/P1 integral, duas reviews independentes |
 
+Toda alteracao de software inclui `test-strategy-builder`, em qualquer modo.
+A skill inspeciona a cobertura existente e decide criar, ampliar, reaproveitar
+ou justificar nenhum teste novo. Cada teste novo precisa proteger comportamento
+relevante e detectar uma falha plausivel ainda nao coberta. A qualidade segue
+`rubrics/testing.md`; quantidade e percentual de cobertura nao bastam. A decisao
+de nao criar testes novos nao dispensa verificacao nem gates contratuais.
+
 Calibracao esperada, como referencia e nao como cota: `fast` ~30%, `standard`
 ~65-70%, `critical` ~1-5%.
 

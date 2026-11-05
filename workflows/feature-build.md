@@ -2,6 +2,11 @@
 
 Use para construir feature com caminho proporcional ao modo selecionado.
 
+Em qualquer modo, aplique `test-strategy-builder` antes de implementar: inspecione
+cobertura existente e decida criar, ampliar, reaproveitar ou justificar nenhum
+teste novo conforme `rubrics/testing.md`. Na revisao final, avalie a utilidade dos
+testes criados ou afetados. Preserve gates do contrato em `critical`.
+
 ## Fast
 
 ```text
@@ -28,8 +33,8 @@ compliance → code quality → evidence → goal/runtime/release verification.
 
 ## Saidas
 
-- `fast`: mudanca, teste direcionado e diff revisado.
-- `standard`: plano curto, testes e review integrado.
+- `fast`: mudanca, decisao de testes, verificacao direcionada e diff revisado.
+- `standard`: plano curto, decisao de testes, resultados e review integrado.
 - `critical`: todos os artefatos, gates e reviews P0/P1.
 
 ## Gates

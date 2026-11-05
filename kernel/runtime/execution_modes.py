@@ -108,6 +108,7 @@ MODE_POLICIES: Dict[str, Dict[str, Any]] = {
 
 ASSETS_BY_MODE = {
     "fast": [
+        "skills/test-strategy-builder/SKILL.md",
         "skills/diff-reviewer/SKILL.md",
     ],
     "standard": [
@@ -120,6 +121,7 @@ ASSETS_BY_MODE = {
         "skills/workflow-planner/SKILL.md",
         "skills/workflow-runner/SKILL.md",
         "skills/code-review-gate/SKILL.md",
+        "skills/test-strategy-builder/SKILL.md",
     ],
 }
 

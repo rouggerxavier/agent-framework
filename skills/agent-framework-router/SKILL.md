@@ -45,7 +45,9 @@ apontar rapidamente os assets certos. Dispatcher leve, nao executor.
    `framework-next`. A mera existencia de `.agent/` nao obriga uma nova tarefa a
    usar o kernel.
 8. Identifique a categoria (secao "Roteamento por categoria"), siga a instrucao
-   do bloco, liste 1-4 assets relevantes e corte o resto.
+   do bloco, liste 1-4 assets relevantes e corte o resto. Toda alteracao de
+   software inclui `test-strategy-builder`, em qualquer modo e fora desse limite:
+   decidir sobre testes e obrigatorio; criar testes novos depende de lacuna real.
 9. Indique o primeiro asset a invocar.
 10. Se CI, PR, merge ou integracao fizer parte do fluxo, acrescente o perfil de
     CI e as politicas de espera/proxima unidade, e selecione
@@ -77,8 +79,8 @@ grave; reducao exige apenas `--reason`.
 Como usar:
 1. Identifique a categoria principal do pedido pelos gatilhos de cada bloco.
 2. Siga a instrucao do bloco antes de escolher assets.
-3. Escolha 1-4 assets dentro do bloco. Pisos obrigatorios (agentes e frontend) nao
-   contam no limite.
+3. Escolha 1-4 assets dentro do bloco. Pisos obrigatorios (testes em alteracoes de
+   software, agentes e frontend) nao contam no limite.
 4. Pedido que cruza categorias: assets da categoria principal + no maximo 1 de outra.
 5. O modo (`fast`/`standard`/`critical`) vale para todos os blocos; o bloco nao muda
    o modo.
@@ -149,7 +151,9 @@ delegacao, `execution-prompt-builder`.
 
 Gatilhos: estrategia de testes, cobertura, "esta pronto?", QA do app rodando.
 
-Instrucao: verificacao proporcional ao modo; teste novo para logica nao trivial.
+Instrucao: aplique `test-strategy-builder` e `rubrics/testing.md`; verifique a
+cobertura existente antes de criar testes e justifique lacunas ou nenhum teste
+novo. Escolha o menor nivel que detecta a falha relevante, proporcional ao modo.
 Agente: use o bloco 1 (`agent-eval-planner`, `agent-runtime-qa`).
 
 | Situacao | Skill | Apoio |
@@ -352,7 +356,10 @@ saida pode ainda indicar intencao e primeiro asset.
 - Area sensivel (auth, migration, financeiro, tenant) impede `fast` (piso
   `standard`) mas nunca escala sozinha para `critical`.
 - No maximo 4 assets, sem contar os pisos: `rubrics/agent-design.md` em agentes e
-  `apple-design` + `impeccable:impeccable` em frontend; sem listar tudo.
+  `apple-design` + `impeccable:impeccable` em frontend, alem de
+  `test-strategy-builder` em toda alteracao de software; sem listar tudo.
+- Alteracoes de software retornam `test-strategy-builder` em `assets_selected`
+  em qualquer modo, inclusive quando a decisao for nenhum teste novo.
 - Qualquer tarefa de agente retorna `rubrics/agent-design.md` em `assets_selected`.
 - Qualquer tarefa de frontend retorna `apple-design` e `impeccable:impeccable` em `assets_selected`.
 - Nao duplicar checklist de rubric/workflow aqui; so referenciar.

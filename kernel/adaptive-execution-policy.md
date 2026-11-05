@@ -22,6 +22,11 @@ than the feature costs to build.
 
 Persistence is never the thing to cut. What scales with the mode is *ceremony*.
 
+Every software change includes `test-strategy-builder`, in all three modes.
+Evaluate existing coverage before creating tests; reuse sufficient coverage or
+explain why no new test adds value. Apply `rubrics/testing.md` to the tests created
+or affected. This does not waive required verification or critical contract gates.
+
 ## Selection rule
 
 ```text

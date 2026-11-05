@@ -14,9 +14,11 @@
 - Stop condition:
 
 ## Risk → Coverage
-| Area | Risk | Test type | Why |
-| --- | --- | --- | --- |
-|  |  | unit/integration/e2e/manual |  |
+| Behavior | Plausible failure | Existing coverage / gap | Decision | Test type / observable assertion |
+| --- | --- | --- | --- | --- |
+|  |  |  | reuse/extend/create/no-new-test + reason | unit/integration/e2e/manual + expected result |
+
+No new test does not waive required verification or contractual gates.
 
 ## Commands
 | Stage/type | Command | Expected result | Evidence target |
@@ -27,6 +29,8 @@
 -
 
 ## Gaps / Accepted Risk
+- Tests not run and reason:
+- Missing RED/GREEN evidence and alternative verification:
 
 ## Test Waiver
 - Required: no

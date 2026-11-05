@@ -21,6 +21,19 @@ from tests.helpers import FRAMEWORK_ROOT
 
 
 class AdaptiveRoutingTests(unittest.TestCase):
+    def test_test_strategy_is_selected_once_in_every_execution_mode(self) -> None:
+        for mode in ("fast", "standard", "critical"):
+            with self.subTest(mode=mode):
+                decision = route_execution(
+                    "Ajuste o helper de datas.", requested_mode=mode
+                )
+                self.assertEqual(
+                    1,
+                    decision["assets_selected"].count(
+                        "skills/test-strategy-builder/SKILL.md"
+                    ),
+                )
+
     def test_simple_task_defaults_to_fast_without_creating_agent_state(self) -> None:
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

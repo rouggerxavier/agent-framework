@@ -32,9 +32,13 @@ proporcionais ao modo.
 ## Workflow
 
 1. Leia os arquivos relevantes e confirme objetivo, invariantes e limites.
-2. Aplique `kernel/test-policy.yaml` proporcionalmente e registre comandos.
+2. Aplique `test-strategy-builder` em qualquer modo: inspecione cobertura
+   existente e decida criar, ampliar, reaproveitar ou justificar nenhum teste
+   novo conforme `rubrics/testing.md`. Preserve `kernel/test-policy.yaml`
+   proporcionalmente e registre comandos.
 3. Implemente apenas o escopo; rode testes direcionados/proporcionais.
-4. Inspecione o diff e faca self-review integrado.
+4. Inspecione o diff e faca self-review integrado, incluindo a utilidade dos
+   testes criados ou afetados conforme a rubric de testes.
 5. Em `fast`, retorne arquivos, testes, resultado e riscos; nao crie contrato,
    spec, ledger ou task result formal.
 6. Em `standard`, o ciclo e `start-task` -> implementacao -> testes
@@ -55,9 +59,12 @@ proporcionais ao modo.
 ## Criterios de aceite
 
 - Nenhuma expansao silenciosa e alguma evidencia antes de declarar sucesso.
-- `fast` exige teste direcionado e diff review, nao contrato.
-- `standard` exige testes direcionados; o review integrado e recomendado e nao
-  bloqueia `finish-task`. Um veredito `BLOCKED`/`CHANGES_REQUIRED` fica como
+- `fast` exige verificacao direcionada e diff review, nao contrato. Reaproveite
+  testes existentes suficientes; nao criar teste novo exige motivo e verificacao
+  alternativa quando testes automatizados nao se aplicarem.
+- `standard` exige verificacao proporcional com testes direcionados quando
+  aplicaveis, sem duplicar cobertura suficiente; o review integrado e recomendado
+  e nao bloqueia `finish-task`. Um veredito `BLOCKED`/`CHANGES_REQUIRED` fica como
   registro do que o reviewer achou: o que bloqueia e o finding em aberto, e ele
   se fecha com `resolve-finding` depois da correcao.
 - `critical` preserva contrato, waiver, ledger e dois reviewers.
@@ -66,6 +73,8 @@ proporcionais ao modo.
 
 - Execucao: ../../kernel/execution-policy.md
 - Testes: ../../kernel/test-policy.yaml
+- Decisao e criacao de testes: ../../skills/test-strategy-builder/SKILL.md
+- Qualidade dos testes: ../../rubrics/testing.md
 - Evidencia: ../../kernel/evidence-policy.md
 - Resultado: ../../templates/task-result.md
 
