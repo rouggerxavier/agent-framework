@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# SessionStart hook: reminds the agent that the router exists. Text only.
+cat <<'EOF'
+agent-framework: em tarefa nova que altera codigo, agente de IA ou frontend,
+invoque a skill `agent-framework-router` antes de agir. Ela escolhe o modo
+(fast/standard/critical), a categoria e os pisos obrigatorios. Pule quando a
+skill alvo ja for obvia ou o pedido for so uma pergunta.
+EOF

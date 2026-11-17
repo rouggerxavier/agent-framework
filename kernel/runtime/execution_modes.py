@@ -14,6 +14,7 @@ import re
 import unicodedata
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
+from .categories import route_category
 from .ci_policy import (
     CI_CONTEXT_DEFAULTS,
     CI_PROFILES,
@@ -568,6 +569,10 @@ def route_execution(
     # change whose CI profile had already said otherwise.
     ci["local_verification"] = verification_for_ci(selected, ci, pull_request=True)
 
+    category = route_category(clean)
+    assets = list(ASSETS_BY_MODE[selected])
+    assets += [item for item in category["required"] if item not in assets]
+
     policy = deepcopy(MODE_POLICIES[selected])
     policy["verification_budget"] = deepcopy(VERIFICATION_BUDGETS[selected])
     policy["review_rounds"] = deepcopy(REVIEW_ROUNDS[selected])
@@ -589,7 +594,9 @@ def route_execution(
         "sensitive_areas": sensitive_areas,
         "fast_factors": fast_factors,
         "complexity_factors": complexity_factors,
-        "assets_selected": list(ASSETS_BY_MODE[selected]),
+        "category": category["category"],
+        "category_file": category["category_file"],
+        "assets_selected": assets,
         "assets_skipped": list(SKIPPED_BY_MODE[selected]),
         "requested_mode": explicit,
         "escalated": escalated,
@@ -1314,6 +1321,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     for key in (
         "selected_mode",
         "reason",
+        "category",
+        "category_file",
         "risk_factors",
         "sensitive_areas",
         "fast_factors",

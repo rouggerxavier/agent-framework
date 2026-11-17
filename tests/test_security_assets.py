@@ -5,7 +5,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 
-from tests.helpers import FRAMEWORK_ROOT
+from tests.helpers import FRAMEWORK_ROOT, router_text
 
 
 SECURITY_SKILLS = (
@@ -71,7 +71,7 @@ class SecuritySkillTests(unittest.TestCase):
                 )
 
     def test_router_offers_every_security_auditor(self) -> None:
-        router = skill_text("agent-framework-router")
+        router = router_text()
         for name in SECURITY_SKILLS + ("dependency-risk-auditor",):
             self.assertIn(name, router, name)
 

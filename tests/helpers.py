@@ -12,6 +12,13 @@ from kernel.runtime.state_machine import compute_plan_fingerprint
 FRAMEWORK_ROOT = Path(__file__).resolve().parents[1]
 
 
+def router_text() -> str:
+    """Router core plus every category file: the full routing map."""
+    router = FRAMEWORK_ROOT / "skills" / "agent-framework-router"
+    paths = [router / "SKILL.md", *sorted((router / "categories").glob("*.md"))]
+    return "\n".join(path.read_text(encoding="utf-8") for path in paths)
+
+
 def initialized_project(root: Path, *, with_phase: bool = False) -> Dict[str, Any]:
     initialize_project(
         root, FRAMEWORK_ROOT, project_name="test-project", mode="full"
