@@ -10,7 +10,9 @@ No Claude Code, chame skills com `/skill-name`.
 /agent-framework-router --critical Altere autenticacao e faca a migration.
 ```
 
-Sem flag, `--auto` prefere `fast`. Use `framework-next` para retomar trabalho
+Sem flag, `--auto` usa `standard`; `fast` exige evidencia de trabalho curto e
+contido. O router le um arquivo de categoria por pedido
+(`skills/agent-framework-router/categories/`). Use `framework-next` para retomar trabalho
 persistente, nao como entrada obrigatoria de tarefa comum.
 
 ## Exemplos
@@ -144,5 +146,7 @@ Inicializacao e validacao executavel:
 ## Dica
 
 Nova tarefa comum começa pelo `/agent-framework-router` e normalmente usa
-`fast`. Use `/framework-next` somente para retomar ou inicializar persistencia
+`standard`. O `install-claude.sh` registra um hook `SessionStart` em
+`~/.claude/settings.json` que lembra o agente disso a cada sessao
+(`AGENT_FRAMEWORK_SKIP_HOOK=1` desliga; backup em `settings.json.agent-framework.bak`). Use `/framework-next` somente para retomar ou inicializar persistencia
 intencional.

@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from kernel.runtime.execution_modes import state_execution_mode
-from tests.helpers import FRAMEWORK_ROOT
+from tests.helpers import FRAMEWORK_ROOT, router_text
 
 
 class CompatibilityTests(unittest.TestCase):
@@ -42,9 +42,7 @@ class CompatibilityTests(unittest.TestCase):
             self.assertIn("workflow-runner", content, name)
 
     def test_multi_agent_router_exposes_maestri_control_plane(self) -> None:
-        router = (
-            FRAMEWORK_ROOT / "skills" / "agent-framework-router" / "SKILL.md"
-        ).read_text(encoding="utf-8")
+        router = router_text()
         for asset in (
             "team-orchestrator",
             "worktree-lane-manager",

@@ -53,14 +53,15 @@ for skill in "$SKILLS_DIR"/*; do
     problems=$((problems + 1))
   fi
 
-  for heading in "## Objetivo" "## Workflow" "## Saida"; do
-    if ! grep -Eq "^$heading" "$skill_file"; then
+  # Accepts Portuguese or English section names.
+  for heading in "Objetivo|Objective" "Workflow" "Saida|Required output"; do
+    if ! grep -Eq "^## ($heading)" "$skill_file"; then
       echo "  problem: missing required heading prefix: $heading"
       problems=$((problems + 1))
     fi
   done
 
-  if ! grep -Eq '^## Criterios' "$skill_file"; then
+  if ! grep -Eq '^## (Criterios|Acceptance criteria)' "$skill_file"; then
     echo "  problem: missing criteria heading"
     problems=$((problems + 1))
   fi

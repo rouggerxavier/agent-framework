@@ -51,6 +51,29 @@ AGENT_FRAMEWORK_TARGET_ROOT="$(dirname "$TARGET_DIR")" \
 AGENT_FRAMEWORK_SHARED_BACKUP_DIR="$BACKUP_DIR/shared" \
   bash "$FRAMEWORK_DIR/installers/install-shared-assets.sh"
 
+# Registers the SessionStart reminder so the router is used without being asked.
+# Idempotent; AGENT_FRAMEWORK_SKIP_HOOK=1 opts out. Never fatal: skills are
+# already installed by this point.
+if [ "${AGENT_FRAMEWORK_SKIP_HOOK:-0}" != "1" ]; then
+  CLAUDE_ROOT="$(dirname "$TARGET_DIR")"
+  python3 - "$CLAUDE_ROOT/settings.json" "\"$CLAUDE_ROOT/scripts/agent-framework-session-hint\"" <<'PY' || echo "warn: could not register SessionStart hook; add it to settings.json by hand" >&2
+import json, shutil, sys
+from pathlib import Path
+
+path, command = Path(sys.argv[1]), sys.argv[2]
+data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+entries = data.setdefault("hooks", {}).setdefault("SessionStart", [])
+if any(h.get("command") == command for e in entries for h in e.get("hooks", [])):
+    print("hook: SessionStart already registered")
+else:
+    if path.exists():
+        shutil.copy2(path, str(path) + ".agent-framework.bak")
+    entries.append({"hooks": [{"type": "command", "command": command}]})
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print("hook: SessionStart registered in {}".format(path))
+PY
+fi
+
 echo "done: copied=$copied replaced=$replaced skipped=$skipped target=$TARGET_DIR"
 if [ -d "$BACKUP_DIR" ]; then
   echo "backup: previous same-name skills moved to $BACKUP_DIR"
